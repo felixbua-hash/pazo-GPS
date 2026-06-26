@@ -1,4 +1,4 @@
-Pazo Baion GPS - BETA 0.3
+Pazo Baion GPS - BETA 0.4
 Fecha de generación: 2026-06-27
-Base cartográfica: Parcelas_Baion.zip / PARCELAS.geojson
-Objetivo: actualización visual basada en la pantalla de carga aprobada y en la pantalla de trabajo en parcela fijada como modelo base para la estética general.
+Pantalla de carga: imagen aprobada incrustada directamente en index.html para evitar fallos de ruta en GitHub Pages.
+Base visual: pantalla de Registro de trabajo aportada como modelo.

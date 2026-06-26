@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'BETA 0.3';
+  const VERSION = 'BETA 0.4';
   const DEFAULT_CATALOGS = {
     operarios: ['Operario 1', 'Operario 2', 'Operario 3'],
     tractores: ['Tractor 1', 'Tractor 2'],

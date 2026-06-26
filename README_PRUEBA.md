@@ -1,4 +1,4 @@
-# Pazo Baion GPS · BETA 0.3
+# Pazo Baion GPS · BETA 0.4
 
 # Pazo Baion GPS · Beta funcional 0.1
 
@@ -100,3 +100,11 @@ http://localhost:8000
 - El punto final es único.
 - Puede haber varias recargas/continuaciones.
 - Si el GPS no tiene precisión suficiente, la app permite comenzar igualmente y lo registra.
+
+
+## BETA 0.4
+
+- Pantalla de carga aprobada incrustada directamente en `index.html`.
+- No depende de carpeta `assets` para evitar imagen rota en GitHub Pages.
+- Duración de carga: 3 segundos.
+- Versión visible en pantalla de carga: BETA 0.4.

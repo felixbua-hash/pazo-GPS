@@ -135,3 +135,35 @@ textarea{border:1px solid var(--border);background:var(--paper);border-radius:20
   #screenReport{display:block!important}
   .report-card,.report-top-stats>div,.report-status-wrap,.map-card{box-shadow:none}
 }
+
+
+/* BETA 0.4: pantalla de carga exacta, incrustada en index.html para evitar imagen rota en GitHub Pages */
+.splash-exact{
+  position:fixed;
+  inset:0;
+  z-index:9999;
+  background:#f6f1e8;
+  overflow:hidden;
+  display:block;
+}
+.splash-exact-image{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.splash-version{
+  position:absolute;
+  right:18px;
+  bottom:18px;
+  z-index:2;
+  background:rgba(19,61,39,.86);
+  color:#fff;
+  padding:8px 13px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.06em;
+}
