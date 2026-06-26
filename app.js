@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = 'BETA 0.1';
+  const VERSION = 'BETA 0.2';
   const DEFAULT_CATALOGS = {
     operarios: ['Operario 1', 'Operario 2', 'Operario 3'],
     tractores: ['Tractor 1', 'Tractor 2'],
@@ -50,7 +50,7 @@
       } else {
         showScreen('screenConfig');
       }
-    }, 4000);
+    }, 3000);
   }
 
   function bindEvents() {
@@ -136,6 +136,7 @@
       obs: $('txtJornadaObs').value.trim()
     };
     save('pb_day', state.day);
+    $('btnUseDay').classList.remove('hidden');
     showScreen('screenSelect');
   }
   function fillDayFromState() {
@@ -144,6 +145,7 @@
     setSelectIfExists('selTractor', state.day.tractor);
     setSelectIfExists('selAtomizador', state.day.atomizador);
     $('txtJornadaObs').value = state.day.obs || '';
+    $('btnUseDay').classList.remove('hidden');
   }
   function setSelectIfExists(id, value) {
     const sel = $(id); if ([...sel.options].some(o => o.value === value)) sel.value = value;
@@ -209,6 +211,13 @@
     state.selectedFeature = feature;
     state.selectedName = feature.properties.NAME;
     $('selectedParcelName').textContent = state.selectedName;
+    $('selectedParcelLabel').textContent = state.selectedName;
+    $('workTypeParcelLabel').textContent = state.selectedName;
+    $('calibrationContext').textContent = `${state.selectedName}${state.workType ? ' • ' + state.workType : ''}`;
+    const areaHa = Number(feature.properties.AREA || 0) / 10000;
+    const perimeterM = Number(feature.properties.LENGTH || 0);
+    $('parcelArea').textContent = areaHa ? `${areaHa.toFixed(2).replace('.',',')} ha` : '—';
+    $('parcelPerimeter').textContent = perimeterM ? `${Math.round(perimeterM).toLocaleString('es-ES')} m` : '—';
     showScreen('screenParcel');
   }
 
@@ -222,27 +231,48 @@
   }
   function fitCurrentParcelOrAll() { state.selectedName ? fitSelectedParcel() : fitAllParcels(); }
 
+  function placeMapForScreen(id) {
+    const mapCard = $('mapCard');
+    const slotMap = {
+      screenSelect: 'mapSlotSelect',
+      screenParcel: 'mapSlotParcel',
+      screenCalibration: 'mapSlotCalibration',
+      screenWork: 'mapSlotWork',
+      screenReport: 'mapSlotReport'
+    };
+    const slotId = slotMap[id];
+    if (!slotId) {
+      mapCard.classList.add('hidden');
+      return;
+    }
+    const slot = $(slotId);
+    if (slot && mapCard.parentElement !== slot) slot.appendChild(mapCard);
+    mapCard.classList.remove('hidden');
+  }
+
   function showScreen(id) {
     state.screen = id;
     screens.forEach(s => $(s).classList.toggle('hidden', s !== id));
     $('btnBack').classList.toggle('hidden', id === 'screenConfig' || id === 'screenSelect');
-    const mapVisible = !['screenConfig','screenHistory'].includes(id);
-    $('mapCard').classList.toggle('hidden', !mapVisible);
+    placeMapForScreen(id);
     const subtitles = {
       screenConfig: 'Configuración de jornada',
-      screenSelect: 'Seleccionar parcela',
+      screenSelect: 'Selección de parcela',
       screenParcel: state.selectedName ? `Parcela: ${state.selectedName}` : 'Parcela seleccionada',
-      screenWorkType: 'Elegir tipo de trabajo',
-      screenCalibration: 'Comprobación previa del GPS',
-      screenWork: 'Registro GPS de trabajo',
-      screenReport: 'Informe generado',
-      screenHistory: 'Consulta posterior'
+      screenWorkType: 'Tipo de trabajo',
+      screenCalibration: 'Calibración GPS',
+      screenWork: 'Registro de trabajo',
+      screenReport: 'Informe de trabajo',
+      screenHistory: 'Historial'
     };
     $('screenSubtitle').textContent = subtitles[id] || VERSION;
     setTimeout(() => { if (state.map) state.map.invalidateSize(); }, 120);
     if (id === 'screenSelect') { state.selectedName=null; state.selectedFeature=null; drawParcels('all'); setTimeout(fitAllParcels, 160); }
     if (['screenParcel','screenWorkType','screenCalibration','screenWork','screenReport'].includes(id) && state.selectedFeature) { drawParcels('selected'); setTimeout(fitSelectedParcel, 160); }
-    if (id === 'screenWork') refreshWorkUi();
+    if (id === 'screenWorkType') $('workTypeParcelLabel').textContent = state.selectedName || '—';
+    if (id === 'screenCalibration') $('calibrationContext').textContent = `${state.selectedName || '—'}${state.workType ? ' • ' + state.workType : ''}`;
+    if (id === 'screenWork') { refreshWorkUi(); refreshRoute(); }
+    if (id === 'screenReport' && state.lastRenderedReport) renderStaticReportMap(state.lastRenderedReport);
     updateBadges();
   }
 
@@ -264,14 +294,24 @@
     if (state.workType) badges.push(state.workType);
     if (state.currentWork) badges.push(`Estado: ${labelStatus(state.currentWork.status)}`);
     $('mapBadges').innerHTML = badges.map(b => `<div class="badge">${escapeHtml(b)}</div>`).join('');
+    $('mapBadges').classList.toggle('hidden', badges.length === 0);
   }
 
   function resetCalibration() {
     state.calibration = null;
-    $('gpsPanel').className = 'gps-panel';
-    $('gpsPanel').innerHTML = '<div class="gps-value">GPS: —</div><div class="gps-quality">Pendiente de comprobar</div>';
-    $('gpsAdvice').className = 'notice';
-    $('gpsAdvice').textContent = 'Pulsa “Comprobar GPS”.';
+    $('gpsPanel').className = 'gps-panel refined-gps-panel';
+    $('gpsPanel').innerHTML = `
+      <div class="gps-mini-icon">◔</div>
+      <div class="gps-caption">Precisión actual</div>
+      <div class="gps-value">—</div>
+      <div class="gps-quality">Pendiente</div>
+      <div class="gps-divider"><span></span><i></i><span></span></div>
+      <div id="gpsAdvice" class="notice inline-notice">Pulsa “Comprobar GPS”.</div>`;
+    $('gpsStateLabel').textContent = 'Pendiente';
+    $('gpsStateSub').textContent = 'Señal no comprobada';
+    $('gpsDecisionLabel').textContent = 'En espera';
+    $('gpsDecisionSub').textContent = 'Aún sin validar';
+    $('gpsTimeLabel').textContent = new Date().toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' });
     $('btnEnterWork').classList.add('hidden');
     $('btnForceWork').classList.add('hidden');
     $('btnRetryGps').classList.add('hidden');
@@ -279,7 +319,8 @@
   }
 
   function checkGps() {
-    $('gpsAdvice').textContent = 'Comprobando y estabilizando señal GPS…';
+    const advice = $('gpsAdvice');
+    advice.textContent = 'Comprobando y estabilizando señal GPS…';
     $('btnCheckGps').classList.add('hidden');
     $('btnRetryGps').classList.add('hidden');
     getPosition({ timeout:15000 }).then(pos => {
@@ -294,19 +335,39 @@
         forced: false,
         device: navigator.userAgent
       };
-      $('gpsPanel').innerHTML = `<div class="gps-value">GPS: ±${acc.toFixed(0)} m</div><div class="gps-quality">${quality.label}</div>`;
-      $('gpsAdvice').className = `notice ${quality.ok ? 'good' : 'bad'}`;
+      $('gpsPanel').querySelector('.gps-value').textContent = `±${acc.toFixed(0)} m`;
+      $('gpsPanel').querySelector('.gps-quality').textContent = quality.label;
+      $('gpsPanel').querySelector('.gps-quality').style.background = quality.ok ? '#a8b47a' : '#9e7a52';
       if (quality.ok) {
-        $('gpsAdvice').textContent = 'Precisión suficiente para iniciar el registro.';
+        advice.className = 'notice inline-notice good';
+        advice.textContent = 'Precisión adecuada para iniciar el trabajo.';
+        $('gpsStateLabel').textContent = 'Activa';
+        $('gpsStateSub').textContent = 'Señal estable';
+        $('gpsDecisionLabel').textContent = 'Apta';
+        $('gpsDecisionSub').textContent = 'Lista para trabajar';
         $('btnEnterWork').classList.remove('hidden');
       } else {
-        $('gpsAdvice').textContent = 'Precisión insuficiente o mala. Se recomienda esperar, recolocar el teléfono o reintentar. Puedes comenzar igualmente, quedará registrado en el informe.';
+        advice.className = 'notice inline-notice bad';
+        advice.textContent = 'Precisión insuficiente o mala. Puedes reintentar o comenzar igualmente. Quedará reflejado en el informe.';
+        $('gpsStateLabel').textContent = 'Activa';
+        $('gpsStateSub').textContent = 'Señal débil';
+        $('gpsDecisionLabel').textContent = 'Forzada';
+        $('gpsDecisionSub').textContent = 'Recomendable reintentar';
         $('btnForceWork').classList.remove('hidden');
       }
+      $('gpsTimeLabel').textContent = new Date().toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' });
       $('btnRetryGps').classList.remove('hidden');
     }).catch(err => {
-      $('gpsAdvice').className = 'notice bad';
-      $('gpsAdvice').textContent = 'No se pudo leer el GPS: ' + err.message;
+      advice.className = 'notice inline-notice bad';
+      advice.textContent = 'No se pudo leer el GPS: ' + err.message;
+      $('gpsPanel').querySelector('.gps-value').textContent = '—';
+      $('gpsPanel').querySelector('.gps-quality').textContent = 'No disponible';
+      $('gpsPanel').querySelector('.gps-quality').style.background = '#9e7a52';
+      $('gpsStateLabel').textContent = 'Error';
+      $('gpsStateSub').textContent = 'No disponible';
+      $('gpsDecisionLabel').textContent = 'Manual';
+      $('gpsDecisionSub').textContent = 'Comienzo forzado posible';
+      $('gpsTimeLabel').textContent = new Date().toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' });
       $('btnRetryGps').classList.remove('hidden');
       $('btnForceWork').classList.remove('hidden');
       state.calibration = { time: new Date().toISOString(), accuracy: null, quality:'No disponible', forced:true, device:navigator.userAgent, error:err.message };
@@ -558,6 +619,9 @@
     $('statDistance').textContent = w.distanceM < 1000 ? `${Math.round(w.distanceM)} m` : `${(w.distanceM/1000).toFixed(2).replace('.',',')} km`;
     $('statAccuracy').textContent = last && last.accuracy != null ? `±${Math.round(last.accuracy)} m` : (w.calibration?.accuracy ? `±${Math.round(w.calibration.accuracy)} m` : '—');
     $('statReloads').textContent = w.recargas;
+    $('statAvgSpeed').textContent = `${avgSpeed(w).toFixed(1).replace('.',',')} km/h`;
+    $('statStart').textContent = w.startTime ? formatTime(w.startTime).slice(0,5) : '—';
+    $('statStopped').textContent = formatDuration(computePausedMs(w));
     const avgAcc = avg(w.rawPoints.map(p=>p.accuracy).filter(x=>typeof x === 'number'));
     const worstAcc = max(w.rawPoints.map(p=>p.accuracy).filter(x=>typeof x === 'number'));
     $('extendedStats').innerHTML = `
@@ -644,40 +708,40 @@
   }
 
   function renderReport(r) {
+    state.lastRenderedReport = r;
+    $('reportContext').textContent = `${r.parcela} • ${r.workType}`;
+    $('reportStatusWrap').innerHTML = `<div class="state-pill">Finalizado</div>`;
+    $('reportStatCards').innerHTML = `
+      <div><small>Tiempo total</small><strong>${formatDuration(r.totalMs)}</strong></div>
+      <div><small>Distancia</small><strong>${r.distanceM < 1000 ? Math.round(r.distanceM)+' m' : (r.distanceM/1000).toFixed(2).replace('.',',')+' km'}</strong></div>
+      <div><small>Recargas</small><strong>${r.recargas}</strong></div>
+      <div><small>Media</small><strong>${r.avgSpeedKmh.toFixed(1).replace('.',',')} km/h</strong></div>
+      <div><small>Inicio</small><strong>${formatTime(r.startTime).slice(0,5)}</strong></div>
+      <div><small>Tiempo parado</small><strong>${formatDuration(r.pausedMs)}</strong></div>`;
     $('reportContent').innerHTML = reportHtml(r);
+    renderStaticReportMap(r);
   }
   function reportHtml(r) {
     const gpsWarning = (r.calibration?.forced || (r.avgAccuracy && r.avgAccuracy > WARN_ACCURACY_M) || r.discarded > 0)
-      ? '<div class="notice bad"><strong>Aviso GPS:</strong> El trazado contiene puntos de baja precisión o inicio forzado. Interpretar como aproximado.</div>' : '';
+      ? '<div class="report-card"><div class="notice bad"><strong>Aviso GPS:</strong> El trazado contiene puntos de baja precisión o inicio forzado. Interpretar como aproximado.</div></div>' : '';
     return `
-      <div class="report-card">
-        <div class="report-title">Pazo Baion GPS</div>
-        <strong>Informe de trabajo en parcela</strong><br>
-        <span class="muted">${escapeHtml(r.parcela)} · ${escapeHtml(r.workType)}</span>
-        ${gpsWarning}
-      </div>
-      <div class="report-card">
-        <h3>Datos generales</h3>
-        <table class="report-table">
-          <tr><th>Campo</th><th>Valor</th></tr>
-          <tr><td>Parcela</td><td>${escapeHtml(r.parcela)}</td></tr>
-          <tr><td>Trabajo</td><td>${escapeHtml(r.workType)}</td></tr>
-          <tr><td>Operario</td><td>${escapeHtml(r.day?.operario || '—')}</td></tr>
-          <tr><td>Tractor</td><td>${escapeHtml(r.day?.tractor || '—')}</td></tr>
-          <tr><td>Atomizador/cisterna</td><td>${escapeHtml(r.day?.atomizador || '—')}</td></tr>
-          <tr><td>Inicio</td><td>${formatDateTime(r.startTime)}</td></tr>
-          <tr><td>Fin</td><td>${formatDateTime(r.endTime)}</td></tr>
-        </table>
-      </div>
+      ${gpsWarning}
       <div class="report-card">
         <h3>Resumen operativo</h3>
         <table class="report-table">
-          <tr><td>Tiempo total</td><td>${formatDuration(r.totalMs)}</td></tr>
+          <tr><td>Fecha</td><td>${formatDateTime(r.startTime).split(',')[0]}</td></tr>
+          <tr><td>Operador</td><td>${escapeHtml(r.day?.operario || '—')}</td></tr>
+          <tr><td>Equipo</td><td>${escapeHtml(r.day?.atomizador || '—')}</td></tr>
+          <tr><td>Tractor</td><td>${escapeHtml(r.day?.tractor || '—')}</td></tr>
+          <tr><td>Trabajo</td><td>${escapeHtml(r.workType)}</td></tr>
+          <tr><td>Superficie tratada</td><td>${selectedAreaText(r.parcela)}</td></tr>
+        </table>
+      </div>
+      <div class="report-card">
+        <h3>Control GPS y tiempos</h3>
+        <table class="report-table">
           <tr><td>Tiempo efectivo</td><td>${formatDuration(r.effectiveMs)}</td></tr>
           <tr><td>Tiempo parado</td><td>${formatDuration(r.pausedMs)}</td></tr>
-          <tr><td>Distancia recorrida</td><td>${r.distanceM < 1000 ? Math.round(r.distanceM)+' m' : (r.distanceM/1000).toFixed(2).replace('.',',')+' km'}</td></tr>
-          <tr><td>Velocidad media</td><td>${r.avgSpeedKmh.toFixed(1).replace('.',',')} km/h</td></tr>
-          <tr><td>Recargas</td><td>${r.recargas}</td></tr>
           <tr><td>Precisión GPS media</td><td>${r.avgAccuracy ? '±'+r.avgAccuracy.toFixed(0)+' m' : '—'}</td></tr>
           <tr><td>Peor precisión</td><td>${r.worstAccuracy ? '±'+r.worstAccuracy.toFixed(0)+' m' : '—'}</td></tr>
           <tr><td>Puntos dudosos / descartados</td><td>${r.doubtful} / ${r.discarded}</td></tr>
@@ -687,16 +751,12 @@
       <div class="report-card">
         <h3>Eventos registrados</h3>
         <table class="report-table"><tr><th>Hora</th><th>Evento</th><th>Motivo</th></tr>
-          ${r.events.map(ev => `<tr><td>${formatTime(ev.time)}</td><td>${escapeHtml(ev.type)}</td><td>${escapeHtml(ev.motive || '')}</td></tr>`).join('')}
+          ${r.events.map(ev => `<tr><td>${formatTime(ev.time).slice(0,5)}</td><td>${escapeHtml(ev.type)}</td><td>${escapeHtml(ev.motive || '')}</td></tr>`).join('')}
         </table>
       </div>
       <div class="report-card">
-        <h3>Tratamiento / trabajo</h3>
-        <p class="muted">Beta: aquí se vincularán productos fitosanitarios, dosis, volumen de caldo, plaga/objetivo y observaciones específicas cuando se integre el módulo de tratamientos.</p>
-      </div>
-      <div class="report-card">
         <h3>Incidencias</h3>
-        ${r.incidences.length ? `<table class="report-table"><tr><th>Hora</th><th>Tipo</th><th>Observación</th></tr>${r.incidences.map(i => `<tr><td>${formatTime(i.createdAt)}</td><td>${escapeHtml(i.type)}</td><td>${escapeHtml(i.obs || '')}</td></tr>`).join('')}</table>` : '<p class="muted">Sin incidencias registradas durante este trabajo.</p>'}
+        ${r.incidences.length ? `<table class="report-table"><tr><th>Hora</th><th>Tipo</th><th>Observación</th></tr>${r.incidences.map(i => `<tr><td>${formatTime(i.createdAt).slice(0,5)}</td><td>${escapeHtml(i.type)}</td><td>${escapeHtml(i.obs || '')}</td></tr>`).join('')}</table>` : '<p class="muted">Sin incidencias registradas durante este trabajo.</p>'}
       </div>`;
   }
 
@@ -715,6 +775,35 @@
     document.querySelectorAll('.open-report').forEach(btn => btn.addEventListener('click', () => {
       const r = state.reports[Number(btn.dataset.idx)]; renderReport(r); showScreen('screenReport');
     }));
+  }
+
+  function selectedAreaText(parcelName) {
+    const feature = window.PARCELAS_GEOJSON.features.find(f => f.properties.NAME === parcelName);
+    if (!feature) return '—';
+    return `${(Number(feature.properties.AREA || 0) / 10000).toFixed(2).replace('.',',')} ha`;
+  }
+
+  function renderStaticReportMap(r) {
+    if (!state.map) return;
+    if (state.routeLayer) state.map.removeLayer(state.routeLayer);
+    if (state.eventLayer) state.map.removeLayer(state.eventLayer);
+    if (state.tractorMarker) state.map.removeLayer(state.tractorMarker);
+    const latlngs = (r.correctedPoints || []).map(p => [p.lat, p.lng]);
+    if (latlngs.length >= 2) state.routeLayer = L.polyline(latlngs, { color:'#184f32', weight:4, opacity:.95 }).addTo(state.map);
+    const group = L.layerGroup();
+    (r.events || []).forEach(ev => {
+      if (!ev.point) return;
+      const color = ev.type === 'Comienzo' ? '#39934a' : ev.type === 'Fin' ? '#b73f34' : ev.type === 'Continuar' ? '#286aa1' : '#ba7b2c';
+      group.addLayer(L.circleMarker([ev.point.lat, ev.point.lng], { radius:9, color:'#fff', weight:3, fillColor:color, fillOpacity:1 }));
+    });
+    group.addTo(state.map);
+    state.eventLayer = group;
+    const last = r.correctedPoints?.[r.correctedPoints.length-1];
+    if (last) state.tractorMarker = L.circleMarker([last.lat,last.lng], { radius:11, color:'#fff', weight:3, fillColor:'#205fbd', fillOpacity:1 }).addTo(state.map);
+    if (latlngs.length >= 2) {
+      const bounds = L.latLngBounds(latlngs);
+      state.map.fitBounds(bounds.pad(0.15));
+    } else fitCurrentParcelOrAll();
   }
 
   function openIncidentModal() {
