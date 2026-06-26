@@ -3,29 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#1d3f2b" />
-  <title>Pazo Baion GPS · Beta 0.2</title>
+  <meta name="theme-color" content="#173f28" />
+  <title>Pazo Baion GPS · BETA 0.3</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <section id="splash" class="splash">
-    <div class="splash-topography"></div>
-    <div class="splash-pin">⌖</div>
-    <div class="splash-brand-wrap">
-      <div class="brand-mark brand-mark-splash">B</div>
-      <h1>PAZO BAION GPS</h1>
-      <div class="splash-divider"><span></span><i></i><span></span></div>
-      <p class="splash-subtitle">Control de viñedo</p>
-    </div>
-    <div class="splash-landscape">
-      <div class="splash-target"></div>
-    </div>
-    <div class="splash-footer">
-      <div class="leaf-icon">❦</div>
-      <div class="splash-loading">Iniciando...</div>
-    </div>
+  <section id="splash" class="splash splash-exact" aria-label="Pantalla de carga Pazo Baion GPS">
+    <img class="splash-exact-image" src="assets/splash_carga.png" alt="Pantalla de carga Pazo Baion GPS" />
+    <div class="splash-version">BETA 0.3</div>
   </section>
 
   <main id="app" class="app hidden">
@@ -35,7 +22,7 @@
         <div class="brand-mark brand-mark-mini">B</div>
         <div>
           <div class="app-name">Pazo Baion GPS</div>
-          <div id="screenSubtitle" class="screen-subtitle">Configuración de jornada</div>
+          <div id="screenSubtitle" class="screen-subtitle">BETA 0.3</div>
         </div>
       </div>
       <button id="btnConfig" class="icon-btn profile-btn" type="button" aria-label="Configuración">◌</button>
@@ -44,19 +31,17 @@
     <section id="mapCard" class="map-card hidden">
       <div id="map"></div>
       <div id="mapBadges" class="map-badges hidden"></div>
-      <div class="map-tools">
-        <button id="btnFitParcel" class="map-tool" type="button" aria-label="Ver parcela completa">N ↑</button>
-        <button id="btnFollow" class="map-tool" type="button" aria-label="Seguir posición">◎</button>
-      </div>
+      <button id="btnFitParcel" class="map-tool north-tool" type="button" aria-label="Ver parcela completa">N<span>↑</span></button>
+      <button id="btnFollow" class="map-tool layers-tool" type="button" aria-label="Seguir posición">▤</button>
     </section>
 
     <section id="screenConfig" class="screen">
-      <div class="screen-heading">
+      <div class="screen-heading center">
         <h2>Configuración de jornada</h2>
         <p class="muted lead">Define operario, tractor y atomizador/cisterna</p>
       </div>
 
-      <label class="select-card"> 
+      <label class="select-card">
         <span class="select-icon">◌</span>
         <span class="select-copy">
           <small>Operario</small>
@@ -84,11 +69,6 @@
         <textarea id="txtJornadaObs" rows="2" placeholder="Opcional"></textarea>
       </label>
 
-      <div class="info-note">
-        <span>ⓘ</span>
-        <p>Esta configuración se mantendrá durante toda la jornada salvo cambio expreso.</p>
-      </div>
-
       <div class="button-row config-main-actions">
         <button id="btnStartDay" class="primary large" type="button">Continuar</button>
         <button id="btnUseDay" class="secondary hidden" type="button">Usar jornada actual</button>
@@ -114,7 +94,7 @@
         <div class="instruction-icon">☞</div>
         <div>
           <strong>Toca una parcela para seleccionarla</strong>
-          <p class="muted">Se mostrará la información de la parcela seleccionada.</p>
+          <p class="muted">La parcela elegida pasará a la pantalla de trabajo o incidencia.</p>
         </div>
       </div>
       <div id="parcelList" class="parcel-list hidden"></div>
@@ -126,18 +106,16 @@
         <p id="selectedParcelName" class="selected-name">—</p>
       </div>
       <div id="mapSlotParcel" class="map-slot"></div>
-      <div class="parcel-summary-card">
-        <div class="parcel-summary-block parcel-title-block">
-          <div class="summary-icon">≋</div>
-          <div>
-            <div class="summary-title" id="selectedParcelLabel">—</div>
-          </div>
+      <div class="three-col-card parcel-summary-card">
+        <div>
+          <small>Parcela</small>
+          <strong id="selectedParcelLabel">—</strong>
         </div>
-        <div class="parcel-summary-block">
+        <div>
           <small>Superficie</small>
           <strong id="parcelArea">—</strong>
         </div>
-        <div class="parcel-summary-block">
+        <div>
           <small>Perímetro aprox.</small>
           <strong id="parcelPerimeter">—</strong>
         </div>
@@ -162,21 +140,15 @@
       <div class="choice-list refined-choice-list">
         <button class="choice work-choice" data-worktype="Aplicación de fitosanitarios" type="button">
           <span class="choice-icon">⚗</span>
-          <span>
-            <strong>Aplicación de fitosanitarios</strong>
-          </span>
+          <span><strong>Aplicación de fitosanitarios</strong></span>
         </button>
         <button class="choice work-choice" data-worktype="Desbroce" type="button">
           <span class="choice-icon">〰</span>
-          <span>
-            <strong>Desbroce</strong>
-          </span>
+          <span><strong>Desbroce</strong></span>
         </button>
         <button class="choice work-choice" data-worktype="Otro" type="button">
           <span class="choice-icon">⌂</span>
-          <span>
-            <strong>Otro</strong>
-          </span>
+          <span><strong>Otro</strong></span>
         </button>
       </div>
     </section>
@@ -187,10 +159,10 @@
         <p id="calibrationContext" class="muted lead">—</p>
       </div>
       <div id="gpsPanel" class="gps-panel refined-gps-panel">
-        <div class="gps-mini-icon">◔</div>
+        <div class="gps-mini-icon">⌖</div>
         <div class="gps-caption">Precisión actual</div>
-        <div class="gps-value">GPS: —</div>
-        <div class="gps-quality">Pendiente de comprobar</div>
+        <div class="gps-value">—</div>
+        <div class="gps-quality">Pendiente</div>
         <div class="gps-divider"><span></span><i></i><span></span></div>
         <div id="gpsAdvice" class="notice inline-notice">Pulsa “Comprobar GPS”.</div>
       </div>
@@ -209,36 +181,56 @@
     </section>
 
     <section id="screenWork" class="screen hidden">
-      <div class="screen-heading center">
+      <div class="screen-heading center work-title">
         <h2>Registro de trabajo</h2>
-        <p id="workContext" class="muted lead">—</p>
+        <p id="workContext" class="muted work-subtitle">—</p>
       </div>
-      <div class="stats-grid refined-stats">
-        <div><small>Velocidad</small><strong id="statSpeed">0,0 km/h</strong></div>
-        <div><small>Parcial</small><strong id="statPartial">00:00:00</strong></div>
-        <div><small>Total</small><strong id="statTotal">00:00:00</strong></div>
-        <div><small>Distancia</small><strong id="statDistance">0 m</strong></div>
-        <div><small>GPS</small><strong id="statAccuracy">—</strong></div>
-        <div><small>Recargas</small><strong id="statReloads">0</strong></div>
+
+      <div class="stats-grid metrics-grid top-metrics">
+        <div class="metric-card"><small>Velocidad</small><strong id="statSpeed">0,0 km/h</strong></div>
+        <div class="metric-card"><small>Parcial</small><strong id="statPartial">00:00:00</strong></div>
+        <div class="metric-card"><small>Total</small><strong id="statTotal">00:00:00</strong></div>
+        <div class="metric-card"><small>Distancia</small><strong id="statDistance">0 m</strong></div>
       </div>
-      <div id="workState" class="state-pill">Preparado</div>
+
+      <div class="stats-grid metrics-grid second-metrics">
+        <div class="metric-card"><small>GPS</small><strong id="statAccuracy">—</strong></div>
+        <div class="metric-card"><small>Estado</small><strong id="workStateValue">Preparado</strong></div>
+        <div class="metric-card"><small>Recargas</small><strong id="statReloads">0</strong></div>
+      </div>
+
+      <div id="workState" class="state-pill hidden">Preparado</div>
+
       <div id="mapSlotWork" class="map-slot work-map-slot"></div>
-      <div class="three-col-card bottom-stats">
+
+      <div class="three-col-card bottom-stats work-bottom-stats">
         <div><small>Media</small><strong id="statAvgSpeed">0,0 km/h</strong></div>
         <div><small>Inicio</small><strong id="statStart">—</strong></div>
         <div><small>Tiempo parado</small><strong id="statStopped">00:00:00</strong></div>
       </div>
+
       <div class="management-controls single-row-controls">
         <button id="btnReturnParcel" class="secondary" type="button">Regresar</button>
         <button id="btnCancelWork" class="secondary" type="button">Cancelar</button>
         <button id="btnDeleteWork" class="secondary" type="button">Borrar</button>
         <button id="btnReport" class="secondary disabled" type="button" disabled>Generar informe</button>
       </div>
-      <div class="work-controls docked-controls">
-        <button id="btnBegin" class="primary" type="button">Comienzo</button>
-        <button id="btnStop" class="danger hidden" type="button">Parada</button>
-        <button id="btnContinue" class="primary hidden" type="button">Continuar</button>
+
+      <div class="work-controls refined-work-controls">
+        <button id="btnBegin" class="work-main-action primary" type="button">
+          <span class="action-circle">▶</span>
+          <span class="action-copy"><strong>Comienzo</strong><small>Iniciar registro de trabajo</small></span>
+        </button>
+        <button id="btnStop" class="work-main-action warning hidden" type="button">
+          <span class="action-circle stop">■</span>
+          <span class="action-copy"><strong>Parada</strong><small>Registrar motivo de parada</small></span>
+        </button>
+        <button id="btnContinue" class="work-main-action primary hidden" type="button">
+          <span class="action-circle">▶</span>
+          <span class="action-copy"><strong>Continuar</strong><small>Reanudar registro de trabajo</small></span>
+        </button>
       </div>
+
       <details class="details-box">
         <summary>Datos ampliados</summary>
         <div id="extendedStats" class="extended-stats"></div>
@@ -251,7 +243,7 @@
         <p id="reportContext" class="muted lead">—</p>
       </div>
       <div id="reportStatusWrap" class="report-status-wrap"></div>
-      <div class="stats-grid refined-stats report-top-stats" id="reportStatCards"></div>
+      <div class="stats-grid report-top-stats" id="reportStatCards"></div>
       <div id="mapSlotReport" class="map-slot compact-map-slot"></div>
       <div id="reportContent"></div>
       <div class="button-row wrap report-actions">

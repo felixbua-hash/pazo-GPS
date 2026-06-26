@@ -1,3 +1,5 @@
+# Pazo Baion GPS · BETA 0.3
+
 # Pazo Baion GPS · Beta funcional 0.1
 
 Primera beta para pruebas internas de flujo y registro GPS.
