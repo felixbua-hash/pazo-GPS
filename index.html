@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1d3f2b" />
+  <title>Pazo Baion GPS · Beta 0.1</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <section id="splash" class="splash">
+    <div class="brand-mark">B</div>
+    <h1>Pazo Baion GPS</h1>
+    <p>Control de parcelas, recorridos e incidencias</p>
+  </section>
+
+  <main id="app" class="app hidden">
+    <header class="topbar">
+      <button id="btnBack" class="icon-btn hidden" type="button" aria-label="Regresar">‹</button>
+      <div>
+        <div class="app-name">Pazo Baion GPS</div>
+        <div id="screenSubtitle" class="screen-subtitle">Beta funcional 0.1</div>
+      </div>
+      <button id="btnConfig" class="icon-btn" type="button" aria-label="Configuración">⚙</button>
+    </header>
+
+    <section id="mapCard" class="map-card hidden">
+      <div id="map"></div>
+      <div id="mapBadges" class="map-badges"></div>
+      <div class="map-tools">
+        <button id="btnFitParcel" class="map-tool" type="button">Parcela completa</button>
+        <button id="btnFollow" class="map-tool" type="button">◎ Tractor</button>
+      </div>
+    </section>
+
+    <section id="screenConfig" class="screen">
+      <h2>Configuración de jornada</h2>
+      <p class="muted">Estos datos se aplicarán por defecto a todos los trabajos del día, salvo cambio expreso.</p>
+      <label>Operario
+        <select id="selOperario"></select>
+      </label>
+      <label>Tractor
+        <select id="selTractor"></select>
+      </label>
+      <label>Atomizador / cisterna
+        <select id="selAtomizador"></select>
+      </label>
+      <label>Observaciones de jornada
+        <textarea id="txtJornadaObs" rows="2" placeholder="Opcional"></textarea>
+      </label>
+      <div class="button-row">
+        <button id="btnStartDay" class="primary" type="button">Iniciar jornada</button>
+        <button id="btnUseDay" class="secondary" type="button">Usar jornada actual</button>
+      </div>
+      <details class="details-box">
+        <summary>Editar nombres base</summary>
+        <p class="muted">Beta: edita listas separadas por comas.</p>
+        <label>Operarios <input id="inpOperarios" type="text" /></label>
+        <label>Tractores <input id="inpTractores" type="text" /></label>
+        <label>Atomizadores <input id="inpAtomizadores" type="text" /></label>
+        <button id="btnSaveCatalogs" class="secondary" type="button">Guardar listas</button>
+      </details>
+    </section>
+
+    <section id="screenSelect" class="screen hidden">
+      <h2>Seleccionar parcela</h2>
+      <p class="muted">Toca una parcela del mapa para elegir sobre cuál vas a actuar.</p>
+      <div id="parcelList" class="parcel-list"></div>
+    </section>
+
+    <section id="screenParcel" class="screen hidden">
+      <h2>Parcela seleccionada</h2>
+      <p id="selectedParcelName" class="selected-name">—</p>
+      <div class="action-grid">
+        <button id="btnWork" class="action-card dark" type="button">
+          <span>Trabajar en parcela</span>
+          <small>Aplicación, desbroce u otro</small>
+        </button>
+        <button id="btnIncident" class="action-card light" type="button">
+          <span>Señalizar incidencia</span>
+          <small>Tipo, foto/observación y punto GPS</small>
+        </button>
+      </div>
+    </section>
+
+    <section id="screenWorkType" class="screen hidden">
+      <h2>Tipo de trabajo</h2>
+      <p class="muted">Selecciona la labor que vas a registrar en esta parcela.</p>
+      <div class="choice-list">
+        <button class="choice" data-worktype="Aplicación de fitosanitarios" type="button">Aplicación de fitosanitarios</button>
+        <button class="choice" data-worktype="Desbroce" type="button">Desbroce</button>
+        <button class="choice" data-worktype="Otro" type="button">Otro</button>
+      </div>
+    </section>
+
+    <section id="screenCalibration" class="screen hidden">
+      <h2>Calibración GPS</h2>
+      <p class="muted">Antes de comenzar, la app comprueba la precisión del GPS del teléfono.</p>
+      <div id="gpsPanel" class="gps-panel">
+        <div class="gps-value">GPS: —</div>
+        <div class="gps-quality">Pendiente de comprobar</div>
+      </div>
+      <div id="gpsAdvice" class="notice">Pulsa “Comprobar GPS”.</div>
+      <div class="button-row wrap">
+        <button id="btnCheckGps" class="secondary" type="button">Comprobar GPS</button>
+        <button id="btnEnterWork" class="primary hidden" type="button">Entrar en registro</button>
+        <button id="btnForceWork" class="warning hidden" type="button">Comenzar de todos modos</button>
+        <button id="btnRetryGps" class="secondary hidden" type="button">Reintentar</button>
+      </div>
+    </section>
+
+    <section id="screenWork" class="screen hidden">
+      <h2>Registro de trabajo</h2>
+      <p id="workContext" class="muted">—</p>
+      <div class="stats-grid">
+        <div><small>Velocidad</small><strong id="statSpeed">0,0 km/h</strong></div>
+        <div><small>Parcial</small><strong id="statPartial">00:00:00</strong></div>
+        <div><small>Total</small><strong id="statTotal">00:00:00</strong></div>
+        <div><small>Distancia</small><strong id="statDistance">0 m</strong></div>
+        <div><small>GPS</small><strong id="statAccuracy">—</strong></div>
+        <div><small>Recargas</small><strong id="statReloads">0</strong></div>
+      </div>
+      <div id="workState" class="state-pill">Preparado</div>
+      <div class="work-controls">
+        <button id="btnBegin" class="primary" type="button">Comienzo</button>
+        <button id="btnStop" class="danger hidden" type="button">Parada</button>
+        <button id="btnContinue" class="primary hidden" type="button">Continuar</button>
+      </div>
+      <div class="management-controls">
+        <button id="btnCancelWork" class="secondary" type="button">Cancelar</button>
+        <button id="btnDeleteWork" class="secondary" type="button">Borrar</button>
+        <button id="btnReturnParcel" class="secondary" type="button">Regresar</button>
+        <button id="btnReport" class="primary disabled" type="button" disabled>Generar informe</button>
+      </div>
+      <details class="details-box">
+        <summary>Datos ampliados</summary>
+        <div id="extendedStats" class="extended-stats"></div>
+      </details>
+    </section>
+
+    <section id="screenReport" class="screen hidden report-screen">
+      <h2>Informe de trabajo</h2>
+      <div id="reportContent"></div>
+      <div class="button-row wrap">
+        <button id="btnPrintReport" class="primary" type="button">Ver / imprimir PDF</button>
+        <button id="btnShareReport" class="secondary" type="button">Compartir resumen</button>
+        <button id="btnExportJson" class="secondary" type="button">Exportar JSON</button>
+        <button id="btnExportCsv" class="secondary" type="button">Exportar CSV</button>
+        <button id="btnHistory" class="secondary" type="button">Historial</button>
+      </div>
+    </section>
+
+    <section id="screenHistory" class="screen hidden">
+      <h2>Historial de trabajos</h2>
+      <p class="muted">Informes guardados en este dispositivo.</p>
+      <div id="historyList" class="history-list"></div>
+    </section>
+  </main>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <h3 id="modalTitle">—</h3>
+      <div id="modalBody"></div>
+      <div id="modalActions" class="button-row wrap"></div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

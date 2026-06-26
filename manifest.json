@@ -1,0 +1,9 @@
+{
+  "name": "Pazo Baion GPS Beta",
+  "short_name": "Baion GPS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f6f2e8",
+  "theme_color": "#1d3f2b",
+  "icons": []
+}

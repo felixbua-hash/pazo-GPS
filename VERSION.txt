@@ -1,0 +1,4 @@
+Pazo Baion GPS - BETA 0.1
+Fecha de generación: 2026-06-26
+Base cartográfica: Parcelas_Baion.zip / PARCELAS.geojson
+Objetivo: primera beta funcional para pruebas de flujo, mapa satelital, selección de parcela, GPS, paradas, continuación e informe.
