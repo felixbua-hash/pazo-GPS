@@ -1,4 +1,0 @@
-Pazo Baion GPS - BETA 0.4
-Fecha de generación: 2026-06-27
-Pantalla de carga: imagen aprobada incrustada directamente en index.html para evitar fallos de ruta en GitHub Pages.
-Base visual: pantalla de Registro de trabajo aportada como modelo.
