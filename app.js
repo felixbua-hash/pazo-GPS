@@ -1,15 +1,15 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 0.7 Profesional Privada Corregida";
+  const VERSION = "Beta 0.8 Profesional Privada · Mapa reprogramado";
   const LS = {
-    map: "pbgps_parcel_geojson_v07",
-    incidentLayer: "pbgps_incident_layer_geojson_v07",
-    lists: "pbgps_lists_v07",
-    day: "pbgps_day_config_v07",
-    history: "pbgps_history_v07",
-    incidents: "pbgps_incidents_v07",
-    active: "pbgps_active_work_v07"
+    map: "pbgps_parcel_geojson_v08",
+    incidentLayer: "pbgps_incident_layer_geojson_v08",
+    lists: "pbgps_lists_v08",
+    day: "pbgps_day_config_v08",
+    history: "pbgps_history_v08",
+    incidents: "pbgps_incidents_v08",
+    active: "pbgps_active_work_v08"
   };
 
   const state = {
@@ -43,17 +43,27 @@
     remove(key){ localStorage.removeItem(key); }
   };
 
+  function setAppHeight(){
+    document.documentElement.style.setProperty("--app-height", `${window.innerHeight}px`);
+  }
+
+  function afterLayoutStable(fn){
+    // iPhone/Safari necesita que la pantalla activa tenga tamaño real antes de crear Leaflet.
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(fn, 40)));
+  }
+
   function show(screenId){
+    setAppHeight();
     qsa(".screen").forEach(s => s.classList.remove("active"));
     const screen = $(screenId);
     screen.classList.add("active");
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    afterLayoutStable(() => {
       if(screenId === "screen-parcel-select") setupAllMap();
       if(screenId === "screen-parcel-detail") setupParcelMap();
       if(screenId === "screen-work") setupWorkMap();
       if(screenId === "screen-report") renderReport();
       if(screenId === "screen-history") renderHistory();
-    }));
+    });
   }
 
   function toast(msg){ alert(msg); }
@@ -237,33 +247,80 @@
     return true;
   }
 
-  function makeMap(id){
-    if(!ensureLeaflet()) return null;
+  function destroyMap(key, id){
+    const existing = state.maps[key];
+    if(existing){
+      try { existing.off(); existing.remove(); } catch(err) { console.warn("No se pudo destruir mapa", key, err); }
+      state.maps[key] = null;
+    }
     const el = $(id);
-    const map = L.map(el, { zoomControl: false, attributionControl: true, trackResize: true, preferCanvas: true });
-    L.control.zoom({ position: "bottomright" }).addTo(map);
+    if(el){
+      el.innerHTML = "";
+      // Leaflet bloquea reutilizar un contenedor con _leaflet_id. Se limpia de forma explícita.
+      try { delete el._leaflet_id; } catch {}
+    }
+  }
+
+  function containerReady(id){
+    const el = $(id);
+    if(!el) return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 120 && r.height > 120;
+  }
+
+  function makeMap(id, key, options={}){
+    if(!ensureLeaflet()) return null;
+    setAppHeight();
+    destroyMap(key, id);
+    const el = $(id);
+    if(!el || !containerReady(id)){
+      console.warn(`Contenedor de mapa sin tamaño estable: ${id}`);
+    }
+    const map = L.map(el, {
+      zoomControl: false,
+      attributionControl: true,
+      trackResize: false,
+      preferCanvas: true,
+      fadeAnimation: false,
+      zoomAnimation: false,
+      markerZoomAnimation: false,
+      inertia: true,
+      ...options
+    });
     const tile = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 20,
       attribution: "Tiles © Esri",
-      keepBuffer: 4,
+      keepBuffer: 6,
       updateWhenIdle: false,
-      updateWhenZooming: false
+      updateWhenZooming: false,
+      crossOrigin: false
     }).addTo(map);
     map._pbgpsTile = tile;
+    state.maps[key] = map;
     return map;
   }
 
   function stabilizeMap(map, bounds=null, padding=[25,25]){
     if(!map) return;
-    const apply = () => {
+    const apply = (withFit=true) => {
       try{
-        map.invalidateSize({pan:false});
-        if(bounds && bounds.isValid && bounds.isValid()) map.fitBounds(bounds, { padding, animate:false, maxZoom: 19 });
+        setAppHeight();
+        map.invalidateSize({pan:false, debounceMoveend:false});
+        if(withFit && bounds && bounds.isValid && bounds.isValid()) {
+          map.fitBounds(bounds, { padding, animate:false, maxZoom: 19 });
+        }
         if(map._pbgpsTile) map._pbgpsTile.redraw();
       }catch(err){ console.warn("Ajuste de mapa", err); }
     };
-    requestAnimationFrame(() => requestAnimationFrame(apply));
-    [80, 220, 500, 900].forEach(ms => setTimeout(apply, ms));
+    apply(true);
+    requestAnimationFrame(() => apply(true));
+    requestAnimationFrame(() => requestAnimationFrame(() => apply(true)));
+    [120, 300, 700, 1200].forEach((ms, i) => setTimeout(() => apply(i < 2), ms));
+  }
+
+  function waitForMapContainer(id, callback, tries=0){
+    if(containerReady(id) || tries > 20){ callback(); return; }
+    setTimeout(() => waitForMapContainer(id, callback, tries + 1), 50);
   }
 
   function parcelStyle(selected=false){
@@ -308,28 +365,25 @@
 
   function setupAllMap(){
     if(!state.parcelsGeoJSON) return;
-    if(!state.maps.all){
-      state.maps.all = makeMap("mapAll");
-    }
-    const map = state.maps.all;
-    if(!map) return;
-
-    if(state.layers.all) state.layers.all.remove();
-    state.layers.all = L.geoJSON(state.parcelsGeoJSON, {
-      filter: feature => feature.geometry && ["Polygon","MultiPolygon"].includes(feature.geometry.type),
-      style: parcelStyle(false),
-      interactive: true,
-      onEachFeature: (feature, layer) => {
-        const name = featureName(feature);
-        layer.bindTooltip(name, { permanent: true, direction: "center", className: "parcel-label" });
-        layer.on("click", () => selectParcel(feature));
-      }
-    }).addTo(map).bringToFront();
-    drawImportedIncidents(map, "allImportedIncidents");
-    if(state.layers.allImportedIncidents) state.layers.allImportedIncidents.bringToFront();
-
-    const bounds = getBoundsFromGeoJSON(state.parcelsGeoJSON);
-    if(bounds) stabilizeMap(map, bounds, [28,28]);
+    waitForMapContainer("mapAll", () => {
+      const map = makeMap("mapAll", "all");
+      if(!map) return;
+      state.layers.all = L.geoJSON(state.parcelsGeoJSON, {
+        filter: feature => feature.geometry && ["Polygon","MultiPolygon"].includes(feature.geometry.type),
+        style: parcelStyle(false),
+        interactive: true,
+        onEachFeature: (feature, layer) => {
+          const name = featureName(feature);
+          layer.bindTooltip(name, { permanent: true, direction: "center", className: "parcel-label" });
+          layer.on("click", () => selectParcel(feature));
+        }
+      }).addTo(map).bringToFront();
+      drawImportedIncidents(map, "allImportedIncidents");
+      if(state.layers.allImportedIncidents) state.layers.allImportedIncidents.bringToFront();
+      const bounds = state.layers.all.getBounds && state.layers.all.getBounds().isValid() ? state.layers.all.getBounds() : getBoundsFromGeoJSON(state.parcelsGeoJSON);
+      if(bounds) stabilizeMap(map, bounds, [34,34]);
+      $("parcelSelectInfo").textContent = "Mapa cargado. Selecciona una parcela.";
+    });
   }
 
   function selectParcel(feature){
@@ -342,21 +396,20 @@
 
   function setupParcelMap(){
     if(!state.selectedFeature) return;
-    if(!state.maps.parcel) state.maps.parcel = makeMap("mapParcel");
-    const map = state.maps.parcel;
-    if(!map) return;
-
-    if(state.layers.parcelAll) state.layers.parcelAll.remove();
-    if(state.layers.parcelSelected) state.layers.parcelSelected.remove();
-
-    state.layers.parcelAll = L.geoJSON(state.parcelsGeoJSON, { filter: feature => feature.geometry && ["Polygon","MultiPolygon"].includes(feature.geometry.type), style: { color:"#ffffff", weight:1, fillOpacity:.06, opacity:.35 } }).addTo(map);
-    state.layers.parcelSelected = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
-    state.layers.parcelSelected.bindTooltip(state.selectedParcelName, { permanent:true, direction:"center", className:"parcel-label selected" });
-
-    drawImportedIncidents(map, "parcelImportedIncidents");
-    drawParcelIncidentMarkers(map);
-    const b = state.layers.parcelSelected.getBounds();
-    if(b.isValid()) stabilizeMap(map, b, [38,38]);
+    waitForMapContainer("mapParcel", () => {
+      const map = makeMap("mapParcel", "parcel");
+      if(!map) return;
+      state.layers.parcelAll = L.geoJSON(state.parcelsGeoJSON, {
+        filter: feature => feature.geometry && ["Polygon","MultiPolygon"].includes(feature.geometry.type),
+        style: { color:"#ffffff", weight:1, fillOpacity:.06, opacity:.35 }
+      }).addTo(map);
+      state.layers.parcelSelected = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
+      state.layers.parcelSelected.bindTooltip(state.selectedParcelName, { permanent:true, direction:"center", className:"parcel-label selected" });
+      drawImportedIncidents(map, "parcelImportedIncidents");
+      drawParcelIncidentMarkers(map);
+      const b = state.layers.parcelSelected.getBounds();
+      if(b.isValid()) stabilizeMap(map, b, [42,42]);
+    });
   }
 
   function drawParcelIncidentMarkers(map){
@@ -479,15 +532,15 @@
 
   function setupWorkMap(){
     if(!state.work) return;
-    if(!state.maps.work) state.maps.work = makeMap("mapWork");
-    const map = state.maps.work;
-    if(!map) return;
-
-    ["workParcel","workRoute","workCleanRoute","workEvents","workCurrent","workImportedIncidents"].forEach(k => { if(state.layers[k]) { state.layers[k].remove(); state.layers[k]=null; }});
-    state.layers.workParcel = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
-    drawImportedIncidents(map, "workImportedIncidents");
-    const b = state.layers.workParcel.getBounds();
-    if(b.isValid()) stabilizeMap(map, b, [40,40]);
+    waitForMapContainer("mapWork", () => {
+      const map = makeMap("mapWork", "work");
+      if(!map) return;
+      state.layers.workParcel = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
+      drawImportedIncidents(map, "workImportedIncidents");
+      const b = state.layers.workParcel.getBounds();
+      if(b.isValid()) stabilizeMap(map, b, [42,42]);
+      updateRouteLayers();
+    });
   }
 
   function resetLiveUi(){
@@ -1096,13 +1149,13 @@
   }
 
   function restoreIfPossible(){
-    const savedMap = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v06", null);
+    const savedMap = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v07", null) || storage.get("pbgps_parcel_geojson_v06", null);
     if(savedMap && isValidParcelsGeoJSON(savedMap)){
       state.parcelsGeoJSON = savedMap;
       storage.set(LS.map, savedMap);
       renderParcelPreview(savedMap);
     }
-    const savedIncidents = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v06", null);
+    const savedIncidents = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v07", null) || storage.get("pbgps_incident_layer_geojson_v06", null);
     if(savedIncidents && isValidIncidentsGeoJSON(savedIncidents)){
       state.incidentsGeoJSON = savedIncidents;
       storage.set(LS.incidentLayer, savedIncidents);
@@ -1146,8 +1199,8 @@
 
     $("continueAfterMap").onclick = () => show("screen-day-config");
     $("useSavedMap").onclick = () => {
-      const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v06", null);
-      const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v06", null);
+      const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v07", null) || storage.get("pbgps_parcel_geojson_v06", null);
+      const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v07", null) || storage.get("pbgps_incident_layer_geojson_v06", null);
       if(isValidParcelsGeoJSON(gj)){
         state.parcelsGeoJSON = gj; storage.set(LS.map, gj); renderParcelPreview(gj);
         if(isValidIncidentsGeoJSON(inc)){ state.incidentsGeoJSON = inc; storage.set(LS.incidentLayer, inc); renderIncidentLayerStatus(inc); }
@@ -1222,14 +1275,17 @@
   }
 
   function init(){
+    setAppHeight();
+    window.addEventListener("resize", setAppHeight);
+    window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 250));
     initLists();
     loadSavedDayConfig();
     bind();
     restoreIfPossible();
 
     setTimeout(() => {
-      const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v06", null);
-      const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v06", null);
+      const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v07", null) || storage.get("pbgps_parcel_geojson_v06", null);
+      const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v07", null) || storage.get("pbgps_incident_layer_geojson_v06", null);
       if(isValidParcelsGeoJSON(gj)) { state.parcelsGeoJSON = gj; storage.set(LS.map, gj); renderParcelPreview(gj); }
       if(isValidIncidentsGeoJSON(inc)) { state.incidentsGeoJSON = inc; storage.set(LS.incidentLayer, inc); renderIncidentLayerStatus(inc); }
       show("screen-map-load");

@@ -6,9 +6,7 @@
   <meta name="theme-color" content="#163d29" />
   <title>Pazo Baion GPS</title>
 
-  <!-- Leaflet para mapa satelital. La app no sube tus parcelas; carga el GeoJSON local desde el terminal. -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIINfQPaFroG0Bb+6S6iwB2Fw2bM2FQcwQ=" crossorigin="" />
+  <!-- Leaflet JS se carga desde CDN; el CSS crítico de Leaflet está integrado localmente en styles.css para evitar fallos de visualización en iPhone. -->
   <link rel="stylesheet" href="./styles.css" />
   <link rel="manifest" href="./manifest.json" />
 </head>
@@ -18,7 +16,7 @@
     <!-- Pantalla de carga -->
     <section id="screen-splash" class="screen active splash-screen">
       <img class="splash-img" src="./splash.png" alt="Pazo Baion GPS" />
-      <div class="version-pill">Versión Beta 0.7 Profesional Privada Corregida</div>
+      <div class="version-pill">Versión Beta 0.8 Profesional Privada · Mapa reprogramado</div>
     </section>
 
     <!-- Carga local de capas -->

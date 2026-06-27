@@ -1,14 +1,14 @@
 Pazo Baion GPS
-Beta 0.7 Profesional Privada Corregida
+Beta 0.8 Profesional Privada · Mapa reprogramado
 
 Formato:
 - ZIP sin carpetas.
 - Todos los archivos en raíz.
 - Sin PARCELAS.geojson real ni INCIDENCIAS_.geojson real.
-- Carga separada de PARCELAS.geojson e INCIDENCIAS_.geojson desde el terminal.
+- Parcelas e incidencias importadas localmente desde el terminal.
 
-Correcciones principales:
-- Dos capas GeoJSON: parcelas e incidencias.
-- Incidencias admite FeatureCollection vacío o geometrías no poligonales.
-- Reinicialización/redimensionado reforzado del mapa en iPhone.
-- Polígonos de parcela e incidencias importadas visibles encima del satélite.
+Corrección principal de esta versión:
+- Módulo de mapas reprogramado para iPhone/Safari.
+- CSS crítico de Leaflet integrado localmente.
+- Creación/recreación estable del mapa al entrar en cada pantalla.
+- Alturas explícitas para evitar teselas grises/desplazadas y botones cortados.

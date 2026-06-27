@@ -1,4 +1,4 @@
-# Pazo Baion GPS — Beta 0.7 Profesional Privada Corregida
+# Pazo Baion GPS — Beta 0.8 Profesional Privada · Mapa reprogramado
 
 ## Qué corrige esta beta
 
@@ -40,3 +40,12 @@ Todos los archivos están en raíz para subirlos juntos a GitHub:
 3. Carga primero `PARCELAS.geojson`.
 4. Carga después `INCIDENCIAS_.geojson`, aunque esté vacío.
 5. Pulsa continuar y comprueba que el mapa se centra y que las parcelas aparecen encima del satélite.
+
+
+## Corrección específica Beta 0.8
+Esta versión reprograma la visualización del mapa para iPhone/Safari:
+- El CSS crítico de Leaflet se integra localmente en `styles.css` para no depender de que cargue la hoja CSS externa.
+- El mapa se destruye y recrea al entrar en las pantallas de mapa, evitando heredar tamaños internos erróneos.
+- La pantalla “Seleccionar parcela” usa altura explícita calculada con la altura real de la ventana.
+- Se fuerza el ajuste de tamaño y el encuadre después de que el contenedor tenga tamaño real.
+- Se mantienen visibles los botones de carga y navegación.
