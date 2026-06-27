@@ -18,10 +18,10 @@
     <!-- Pantalla de carga -->
     <section id="screen-splash" class="screen active splash-screen">
       <img class="splash-img" src="./splash.png" alt="Pazo Baion GPS" />
-      <div class="version-pill">Versión Beta 0.6 Profesional Privada Corregida</div>
+      <div class="version-pill">Versión Beta 0.7 Profesional Privada Corregida</div>
     </section>
 
-    <!-- Carga local de parcelas -->
+    <!-- Carga local de capas -->
     <section id="screen-map-load" class="screen">
       <header class="topbar">
         <div class="brand-mark">B</div>
@@ -32,29 +32,34 @@
       </header>
 
       <main class="panel">
-        <h1>Cargar mapa de parcelas</h1>
-        <p class="lead">Selecciona desde este terminal el archivo <strong>PARCELAS.geojson</strong> exportado desde SW Maps. No se subirá a GitHub ni a terceros.</p>
+        <h1>Cargar capas del mapa</h1>
+        <p class="lead">Selecciona desde este terminal las dos capas exportadas desde SW Maps: <strong>PARCELAS.geojson</strong> e <strong>INCIDENCIAS_.geojson</strong>. No se subirán a GitHub ni a terceros.</p>
 
         <div class="privacy-box">
           <strong>Privacidad:</strong> las coordenadas quedan guardadas localmente en este dispositivo. El mapa satelital online puede consultar imágenes de la zona al proveedor del mapa durante esta beta.
         </div>
 
-        <label class="file-box">
-          <input id="geojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
-          <span>Seleccionar PARCELAS.geojson</span>
-        </label>
+        <div class="layer-load-grid">
+          <label class="file-box">
+            <input id="parcelGeojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
+            <span>1. Seleccionar PARCELAS.geojson</span>
+          </label>
+          <div id="mapLoadStatus" class="status-card muted">Parcelas: no cargadas.</div>
 
-        <div id="mapLoadStatus" class="status-card muted">
-          Estado: mapa no cargado.
+          <label class="file-box secondary-file">
+            <input id="incidentGeojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
+            <span>2. Seleccionar INCIDENCIAS_.geojson</span>
+          </label>
+          <div id="incidentLayerStatus" class="status-card muted">Incidencias: no cargadas. Puede estar vacía.</div>
         </div>
 
         <div id="parcelListPreview" class="parcel-preview hidden"></div>
 
         <div class="button-row">
           <button id="continueAfterMap" class="btn primary" disabled>Continuar</button>
-          <button id="useSavedMap" class="btn ghost">Usar mapa guardado</button>
+          <button id="useSavedMap" class="btn ghost">Usar capas guardadas</button>
         </div>
-        <button id="clearSavedMap" class="btn danger outline">Borrar mapa guardado</button>
+        <button id="clearSavedMap" class="btn danger outline">Borrar capas guardadas</button>
       </main>
     </section>
 

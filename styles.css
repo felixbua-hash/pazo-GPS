@@ -76,10 +76,12 @@ button{cursor:pointer}
 .status-card.bad{border-color:#e0b4ad;background:#fff0ee;color:var(--danger)}
 .file-box{
   display:flex;align-items:center;justify-content:center;
-  min-height:80px;border:2px dashed var(--olive);border-radius:22px;
+  min-height:66px;border:2px dashed var(--olive);border-radius:22px;
   background:rgba(255,255,255,.45);font-weight:700;color:var(--green)
 }
 .file-box input{display:none}
+.secondary-file{border-style:solid;border-color:var(--gold);background:rgba(199,173,103,.08)}
+.layer-load-grid{display:grid;gap:8px}
 .parcel-preview{
   background:#fffaf0;border:1px solid var(--border);border-radius:18px;
   padding:13px;display:grid;grid-template-columns:1fr 1fr;gap:7px;font-size:13px;overflow:hidden
@@ -120,7 +122,8 @@ textarea{resize:none}
 }
 .map-wrap.small{height:56vh;flex:0 0 56vh}
 .map-wrap.work-map{flex:1}
-.map{position:absolute;inset:0;background:#d6d2c2}
+.map{position:absolute;inset:0;width:100%;height:100%;min-height:100%;background:#d6d2c2}
+.leaflet-container{width:100%!important;height:100%!important;background:#d6d2c2}
 .map-tools{position:absolute;right:14px;top:14px;display:grid;gap:10px;z-index:500}
 .fixed-footer{
   flex:0 0 auto;padding:10px 0 2px
@@ -261,3 +264,16 @@ textarea{resize:none}
   .report-content table{font-size:12px;border-collapse:collapse;width:100%}
   .report-content td,.report-content th{border:1px solid #bbb!important;padding:6px!important;color:#111!important}
 }
+
+.imported-incident-label{background:rgba(251,248,238,.9);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:11px;padding:2px 6px}
+.parcel-label{background:rgba(251,248,238,.86);border:1px solid rgba(216,206,181,.85);border-radius:999px;color:#163d29;font-weight:800;padding:2px 7px}
+
+/* Ajuste específico de la pantalla de carga para iPhone: evita que los botones queden cortados. */
+#screen-map-load .panel{gap:8px;padding:18px}
+#screen-map-load .panel h1{font-size:28px;line-height:1.05;margin-bottom:0}
+#screen-map-load .lead{font-size:14px;line-height:1.25;margin-bottom:2px}
+#screen-map-load .privacy-box{font-size:13px;line-height:1.25;padding:10px 12px;border-radius:16px}
+#screen-map-load .status-card{font-size:13px;line-height:1.22;padding:9px 12px;border-radius:16px}
+#screen-map-load .file-box{min-height:56px;border-radius:18px;font-size:14px}
+#screen-map-load .parcel-preview{max-height:52px;overflow:hidden;padding:8px 12px;font-size:12px;line-height:1.15}
+#screen-map-load .btn{min-height:48px;padding:11px 12px}

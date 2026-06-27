@@ -1,16 +1,29 @@
-# Pazo Baion GPS — Beta 0.6 Profesional Privada Corregida
+# Pazo Baion GPS — Beta 0.7 Profesional Privada Corregida
 
-## Qué es
-Beta profesional privada corregida de la app de viñedo GPS. Mantiene la estructura sin carpetas y sin datos sensibles incluidos.
+## Qué corrige esta beta
+
+Esta versión corrige los problemas detectados en iPhone en la Beta 0.6:
+
+- La pantalla de carga ya permite cargar dos capas separadas:
+  - `PARCELAS.geojson`
+  - `INCIDENCIAS_.geojson`
+- `PARCELAS.geojson` se valida como capa de polígonos.
+- `INCIDENCIAS_.geojson` se valida como capa de incidencias y puede estar vacía. No se exige que tenga polígonos.
+- Se refuerza la inicialización de Leaflet en iPhone: invalidación de tamaño, reajuste de límites y redibujado de teselas.
+- Las parcelas se dibujan encima del satélite con capa vectorial visible.
+- La capa importada de incidencias se dibuja en los mapas si contiene geometrías.
 
 ## Privacidad
-Esta versión NO incluye `PARCELAS.geojson` real ni `INCIDENCIAS_.geojson` real.
-Al abrir la app se solicita seleccionar desde el terminal el archivo `PARCELAS.geojson`, que se guarda localmente en el dispositivo.
 
-Advertencia: el mapa satelital online consulta teselas del proveedor de mapas. No sube el GeoJSON, pero sí consulta imágenes de la zona visualizada. Esta opción queda aceptada solo para beta, pendiente de valorar una solución offline/privada.
+Esta versión NO incluye `PARCELAS.geojson` real ni `INCIDENCIAS_.geojson` real.
+Las capas se cargan localmente desde el dispositivo y se guardan en el navegador del terminal.
+
+Advertencia: el mapa satelital online consulta teselas del proveedor de mapas. No sube los GeoJSON, pero sí consulta imágenes de la zona visualizada.
 
 ## Archivos
-Todos los archivos están en raíz:
+
+Todos los archivos están en raíz para subirlos juntos a GitHub:
+
 - index.html
 - styles.css
 - app.js
@@ -20,31 +33,10 @@ Todos los archivos están en raíz:
 - README_PRUEBA.md
 - splash.png
 
-## Funciones incluidas
-- Pantalla de carga con versión visible.
-- Carga local protegida de `PARCELAS.geojson`.
-- Guardado local del mapa de parcelas.
-- Configuración de jornada con operario, tractor y atomizador/cisterna.
-- Aviso si se conserva una jornada de fecha anterior.
-- Listas mixtas editables localmente.
-- Selección táctil de parcela sobre mapa satelital.
-- Pantalla de parcela seleccionada.
-- Selección de tipo de trabajo.
-- Calibración GPS con varias muestras.
-- Inicio normal o inicio forzado si la precisión es insuficiente.
-- Registro GPS con Comienzo, Parada, Continuar y Fin.
-- Comienzo no reutilizable tras iniciar.
-- Recargas múltiples y punto final único.
-- Datos en pantalla: velocidad, parcial, total, distancia, precisión, estado y recargas.
-- Incidencias con tipo, estado, observación, coordenada GPS y foto local.
-- Solicitud de posición GPS al guardar incidencia si no hay posición activa.
-- Fotos comprimidas localmente antes de guardarse.
-- Tipos de incidencia iniciales y posibilidad de añadir nuevos tipos.
-- Corrección GPS prudente: puntos originales, ruta depurada y clasificación válidos/dudosos/descartados.
-- Informe ampliado con resumen, jornada, eventos, incidencias, calidad GPS y exportación.
-- Historial local pulsable para abrir informes anteriores.
-- Exportación JSON, CSV, GeoJSON, KML y GPX de ruta.
-- Compartir resumen desde el móvil si el navegador lo permite.
+## Prueba recomendada
 
-## Prueba en iPhone
-Para usar GPS real, abre la app desde GitHub Pages en HTTPS y permite ubicación precisa.
+1. Sube todos los archivos del ZIP a la raíz de GitHub.
+2. Abre la app desde GitHub Pages.
+3. Carga primero `PARCELAS.geojson`.
+4. Carga después `INCIDENCIAS_.geojson`, aunque esté vacío.
+5. Pulsa continuar y comprueba que el mapa se centra y que las parcelas aparecen encima del satélite.

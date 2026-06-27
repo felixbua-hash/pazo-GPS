@@ -1,18 +1,20 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 0.6 Profesional Privada Corregida";
+  const VERSION = "Beta 0.7 Profesional Privada Corregida";
   const LS = {
-    map: "pbgps_parcel_geojson_v06",
-    lists: "pbgps_lists_v06",
-    day: "pbgps_day_config_v06",
-    history: "pbgps_history_v06",
-    incidents: "pbgps_incidents_v06",
-    active: "pbgps_active_work_v06"
+    map: "pbgps_parcel_geojson_v07",
+    incidentLayer: "pbgps_incident_layer_geojson_v07",
+    lists: "pbgps_lists_v07",
+    day: "pbgps_day_config_v07",
+    history: "pbgps_history_v07",
+    incidents: "pbgps_incidents_v07",
+    active: "pbgps_active_work_v07"
   };
 
   const state = {
     parcelsGeoJSON: null,
+    incidentsGeoJSON: null,
     selectedFeature: null,
     selectedParcelName: "",
     workType: "",
@@ -43,14 +45,15 @@
 
   function show(screenId){
     qsa(".screen").forEach(s => s.classList.remove("active"));
-    $(screenId).classList.add("active");
-    setTimeout(() => {
+    const screen = $(screenId);
+    screen.classList.add("active");
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       if(screenId === "screen-parcel-select") setupAllMap();
       if(screenId === "screen-parcel-detail") setupParcelMap();
       if(screenId === "screen-work") setupWorkMap();
       if(screenId === "screen-report") renderReport();
       if(screenId === "screen-history") renderHistory();
-    }, 60);
+    }));
   }
 
   function toast(msg){ alert(msg); }
@@ -84,9 +87,23 @@
     return 2*R*Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
   }
 
-  function isValidGeoJSON(gj){
-    return gj && gj.type === "FeatureCollection" && Array.isArray(gj.features) &&
+  function isFeatureCollection(gj){
+    return gj && gj.type === "FeatureCollection" && Array.isArray(gj.features);
+  }
+
+  function isValidParcelsGeoJSON(gj){
+    return isFeatureCollection(gj) &&
       gj.features.some(f => f.geometry && ["Polygon","MultiPolygon"].includes(f.geometry.type));
+  }
+
+  function isValidIncidentsGeoJSON(gj){
+    // La capa de incidencias puede estar vacía o contener puntos, líneas o polígonos.
+    return isFeatureCollection(gj);
+  }
+
+  // Compatibilidad interna con versiones anteriores del código.
+  function isValidGeoJSON(gj){
+    return isValidParcelsGeoJSON(gj);
   }
 
   function featureName(f){
@@ -96,26 +113,48 @@
   function getBoundsFromGeoJSON(gj){
     const coords=[];
     const walk = (c) => {
-      if(typeof c?.[0] === "number") coords.push([c[1], c[0]]);
+      if(typeof c?.[0] === "number" && isFinite(c[0]) && isFinite(c[1])) coords.push([c[1], c[0]]);
       else if(Array.isArray(c)) c.forEach(walk);
     };
-    gj.features.forEach(f => walk(f.geometry.coordinates));
+    if(gj?.type === "Feature") walk(gj.geometry?.coordinates);
+    else if(Array.isArray(gj?.features)) gj.features.forEach(f => walk(f.geometry?.coordinates));
     return coords.length ? L.latLngBounds(coords) : null;
   }
 
-  function saveMap(gj){
+  function saveParcelsLayer(gj){
     state.parcelsGeoJSON = gj;
     storage.set(LS.map, gj);
     renderParcelPreview(gj);
+    updateContinueAvailability();
+  }
+
+  // Compatibilidad con nombre anterior.
+  function saveMap(gj){ saveParcelsLayer(gj); }
+
+  function saveIncidentsLayer(gj){
+    state.incidentsGeoJSON = gj;
+    storage.set(LS.incidentLayer, gj);
+    renderIncidentLayerStatus(gj);
+  }
+
+  function updateContinueAvailability(){
+    $("continueAfterMap").disabled = !isValidParcelsGeoJSON(state.parcelsGeoJSON);
   }
 
   function renderParcelPreview(gj){
-    const names = gj.features.map(featureName);
+    const polygons = gj.features.filter(f => f.geometry && ["Polygon","MultiPolygon"].includes(f.geometry.type));
+    const names = polygons.map(featureName);
     $("parcelListPreview").innerHTML = names.map(n => `<div>• ${escapeHtml(n)}</div>`).join("");
     $("parcelListPreview").classList.remove("hidden");
     $("mapLoadStatus").className = "status-card ok";
-    $("mapLoadStatus").innerHTML = `<strong>Mapa cargado correctamente.</strong><br>${names.length} parcelas detectadas.`;
-    $("continueAfterMap").disabled = false;
+    $("mapLoadStatus").innerHTML = `<strong>PARCELAS.geojson cargado.</strong><br>${names.length} parcelas detectadas.`;
+    updateContinueAvailability();
+  }
+
+  function renderIncidentLayerStatus(gj){
+    const count = Array.isArray(gj?.features) ? gj.features.length : 0;
+    $("incidentLayerStatus").className = "status-card ok";
+    $("incidentLayerStatus").innerHTML = `<strong>INCIDENCIAS_.geojson cargado.</strong><br>${count} incidencias importadas${count === 0 ? " (capa vacía)" : ""}.`;
   }
 
   function escapeHtml(s){
@@ -200,13 +239,31 @@
 
   function makeMap(id){
     if(!ensureLeaflet()) return null;
-    const map = L.map(id, { zoomControl: false, attributionControl: true });
+    const el = $(id);
+    const map = L.map(el, { zoomControl: false, attributionControl: true, trackResize: true, preferCanvas: true });
     L.control.zoom({ position: "bottomright" }).addTo(map);
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    const tile = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
       maxZoom: 20,
-      attribution: "Tiles © Esri"
+      attribution: "Tiles © Esri",
+      keepBuffer: 4,
+      updateWhenIdle: false,
+      updateWhenZooming: false
     }).addTo(map);
+    map._pbgpsTile = tile;
     return map;
+  }
+
+  function stabilizeMap(map, bounds=null, padding=[25,25]){
+    if(!map) return;
+    const apply = () => {
+      try{
+        map.invalidateSize({pan:false});
+        if(bounds && bounds.isValid && bounds.isValid()) map.fitBounds(bounds, { padding, animate:false, maxZoom: 19 });
+        if(map._pbgpsTile) map._pbgpsTile.redraw();
+      }catch(err){ console.warn("Ajuste de mapa", err); }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(apply));
+    [80, 220, 500, 900].forEach(ms => setTimeout(apply, ms));
   }
 
   function parcelStyle(selected=false){
@@ -219,6 +276,36 @@
     };
   }
 
+  function incidentFeatureLabel(feature){
+    const p = feature?.properties || {};
+    return p.NAME || p.Name || p.name || p.NOMBRE || p.tipo || p.Tipo || p.TYPE || "Incidencia";
+  }
+
+  function importedIncidentStyle(){
+    return { color: "#a8483a", weight: 3, opacity: .95, fillColor: "#a8483a", fillOpacity: .28 };
+  }
+
+  function drawImportedIncidents(map, key){
+    if(!map || !state.incidentsGeoJSON) return;
+    const layerKey = key || "importedIncidents";
+    if(state.layers[layerKey]) state.layers[layerKey].remove();
+    if(!isValidIncidentsGeoJSON(state.incidentsGeoJSON)) return;
+    state.layers[layerKey] = L.geoJSON(state.incidentsGeoJSON, {
+      style: importedIncidentStyle,
+      pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+        radius: 7,
+        color: "#fff",
+        weight: 2,
+        fillColor: "#a8483a",
+        fillOpacity: 1
+      }),
+      onEachFeature: (feature, layer) => {
+        const label = incidentFeatureLabel(feature);
+        layer.bindTooltip(label, { permanent:false, direction:"top", className:"imported-incident-label" });
+      }
+    }).addTo(map);
+  }
+
   function setupAllMap(){
     if(!state.parcelsGeoJSON) return;
     if(!state.maps.all){
@@ -226,20 +313,23 @@
     }
     const map = state.maps.all;
     if(!map) return;
-    setTimeout(() => map.invalidateSize(), 20);
 
     if(state.layers.all) state.layers.all.remove();
     state.layers.all = L.geoJSON(state.parcelsGeoJSON, {
+      filter: feature => feature.geometry && ["Polygon","MultiPolygon"].includes(feature.geometry.type),
       style: parcelStyle(false),
+      interactive: true,
       onEachFeature: (feature, layer) => {
         const name = featureName(feature);
         layer.bindTooltip(name, { permanent: true, direction: "center", className: "parcel-label" });
         layer.on("click", () => selectParcel(feature));
       }
-    }).addTo(map);
+    }).addTo(map).bringToFront();
+    drawImportedIncidents(map, "allImportedIncidents");
+    if(state.layers.allImportedIncidents) state.layers.allImportedIncidents.bringToFront();
 
     const bounds = getBoundsFromGeoJSON(state.parcelsGeoJSON);
-    if(bounds) map.fitBounds(bounds, { padding: [25,25] });
+    if(bounds) stabilizeMap(map, bounds, [28,28]);
   }
 
   function selectParcel(feature){
@@ -255,18 +345,18 @@
     if(!state.maps.parcel) state.maps.parcel = makeMap("mapParcel");
     const map = state.maps.parcel;
     if(!map) return;
-    setTimeout(() => map.invalidateSize(), 20);
 
     if(state.layers.parcelAll) state.layers.parcelAll.remove();
     if(state.layers.parcelSelected) state.layers.parcelSelected.remove();
 
-    state.layers.parcelAll = L.geoJSON(state.parcelsGeoJSON, { style: { color:"#ffffff", weight:1, fillOpacity:.06, opacity:.35 } }).addTo(map);
-    state.layers.parcelSelected = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map);
+    state.layers.parcelAll = L.geoJSON(state.parcelsGeoJSON, { filter: feature => feature.geometry && ["Polygon","MultiPolygon"].includes(feature.geometry.type), style: { color:"#ffffff", weight:1, fillOpacity:.06, opacity:.35 } }).addTo(map);
+    state.layers.parcelSelected = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
     state.layers.parcelSelected.bindTooltip(state.selectedParcelName, { permanent:true, direction:"center", className:"parcel-label selected" });
 
+    drawImportedIncidents(map, "parcelImportedIncidents");
     drawParcelIncidentMarkers(map);
     const b = state.layers.parcelSelected.getBounds();
-    if(b.isValid()) map.fitBounds(b, { padding:[35,35] });
+    if(b.isValid()) stabilizeMap(map, b, [38,38]);
   }
 
   function drawParcelIncidentMarkers(map){
@@ -392,12 +482,12 @@
     if(!state.maps.work) state.maps.work = makeMap("mapWork");
     const map = state.maps.work;
     if(!map) return;
-    setTimeout(()=>map.invalidateSize(), 20);
 
-    ["workParcel","workRoute","workCleanRoute","workEvents","workCurrent"].forEach(k => { if(state.layers[k]) { state.layers[k].remove(); state.layers[k]=null; }});
-    state.layers.workParcel = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map);
+    ["workParcel","workRoute","workCleanRoute","workEvents","workCurrent","workImportedIncidents"].forEach(k => { if(state.layers[k]) { state.layers[k].remove(); state.layers[k]=null; }});
+    state.layers.workParcel = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
+    drawImportedIncidents(map, "workImportedIncidents");
     const b = state.layers.workParcel.getBounds();
-    if(b.isValid()) map.fitBounds(b, { padding:[40,40] });
+    if(b.isValid()) stabilizeMap(map, b, [40,40]);
   }
 
   function resetLiveUi(){
@@ -828,9 +918,10 @@
     const reportFeature = w.parcelFeature || findParcelFeatureByName(w.parcel) || (w.parcel === state.selectedParcelName ? state.selectedFeature : null);
     let bounds = null;
     if(reportFeature) {
-      const lyr = L.geoJSON(reportFeature, { style: parcelStyle(true) }).addTo(map);
+      const lyr = L.geoJSON(reportFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
       bounds = lyr.getBounds();
     }
+    drawImportedIncidents(map, "reportImportedIncidents");
     const pts = (w.pointsClean || []).map(p=>[p.lat,p.lng]);
     if(pts.length > 1) {
       const route = L.polyline(pts, {color:"#1f7ed0",weight:4}).addTo(map);
@@ -842,8 +933,8 @@
     (w.incidents || []).forEach(inc => {
       if(inc.lat && inc.lng) L.circleMarker([inc.lat,inc.lng], {radius:6,color:"#fff",weight:2,fillColor:getIncidentColor(inc.type),fillOpacity:1}).addTo(map);
     });
-    if(bounds && bounds.isValid()) map.fitBounds(bounds, {padding:[18,18]});
-    setTimeout(()=>map.invalidateSize(), 100);
+    if(bounds && bounds.isValid()) stabilizeMap(map, bounds, [18,18]);
+    else stabilizeMap(map, null, [18,18]);
   }
 
   function reportWarning(w){
@@ -1005,10 +1096,17 @@
   }
 
   function restoreIfPossible(){
-    const savedMap = storage.get(LS.map, null);
-    if(savedMap && isValidGeoJSON(savedMap)){
+    const savedMap = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v06", null);
+    if(savedMap && isValidParcelsGeoJSON(savedMap)){
       state.parcelsGeoJSON = savedMap;
+      storage.set(LS.map, savedMap);
       renderParcelPreview(savedMap);
+    }
+    const savedIncidents = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v06", null);
+    if(savedIncidents && isValidIncidentsGeoJSON(savedIncidents)){
+      state.incidentsGeoJSON = savedIncidents;
+      storage.set(LS.incidentLayer, savedIncidents);
+      renderIncidentLayerStatus(savedIncidents);
     }
   }
 
@@ -1016,30 +1114,50 @@
     qsa("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
     qsa("[data-add-list]").forEach(b => b.addEventListener("click", () => addToList(b.dataset.addList)));
 
-    $("geojsonInput").addEventListener("change", async (e) => {
+    $("parcelGeojsonInput").addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if(!file) return;
       try{
         const text = await file.text();
         const gj = JSON.parse(text);
-        if(!isValidGeoJSON(gj)) throw new Error("No se detectaron polígonos válidos.");
-        saveMap(gj);
+        if(!isFeatureCollection(gj)) throw new Error("No es un GeoJSON FeatureCollection válido.");
+        if(!isValidParcelsGeoJSON(gj)) throw new Error("No se detectaron polígonos de parcela. Si es INCIDENCIAS_.geojson, usa el segundo selector.");
+        saveParcelsLayer(gj);
       }catch(err){
         $("mapLoadStatus").className = "status-card bad";
-        $("mapLoadStatus").textContent = "Archivo no válido: " + err.message;
-        $("continueAfterMap").disabled = true;
+        $("mapLoadStatus").textContent = "PARCELAS.geojson no válido: " + err.message;
+        updateContinueAvailability();
+      }
+    });
+
+    $("incidentGeojsonInput").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
+      try{
+        const text = await file.text();
+        const gj = JSON.parse(text);
+        if(!isValidIncidentsGeoJSON(gj)) throw new Error("No es un GeoJSON FeatureCollection válido.");
+        saveIncidentsLayer(gj);
+      }catch(err){
+        $("incidentLayerStatus").className = "status-card bad";
+        $("incidentLayerStatus").textContent = "INCIDENCIAS_.geojson no válido: " + err.message;
       }
     });
 
     $("continueAfterMap").onclick = () => show("screen-day-config");
     $("useSavedMap").onclick = () => {
-      const gj = storage.get(LS.map, null);
-      if(isValidGeoJSON(gj)){ state.parcelsGeoJSON = gj; renderParcelPreview(gj); show("screen-day-config"); }
-      else toast("No hay mapa guardado en este dispositivo.");
+      const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v06", null);
+      const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v06", null);
+      if(isValidParcelsGeoJSON(gj)){
+        state.parcelsGeoJSON = gj; storage.set(LS.map, gj); renderParcelPreview(gj);
+        if(isValidIncidentsGeoJSON(inc)){ state.incidentsGeoJSON = inc; storage.set(LS.incidentLayer, inc); renderIncidentLayerStatus(inc); }
+        show("screen-day-config");
+      }
+      else toast("No hay capa de parcelas guardada en este dispositivo.");
     };
     $("clearSavedMap").onclick = () => {
-      if(confirm("¿Borrar el mapa de parcelas guardado en este dispositivo?")){
-        storage.remove(LS.map); state.parcelsGeoJSON = null; location.reload();
+      if(confirm("¿Borrar las capas de parcelas e incidencias guardadas en este dispositivo?")){
+        storage.remove(LS.map); storage.remove(LS.incidentLayer); state.parcelsGeoJSON = null; state.incidentsGeoJSON = null; location.reload();
       }
     };
 
@@ -1051,7 +1169,7 @@
     };
     $("fitAllParcels").onclick = () => {
       const b = getBoundsFromGeoJSON(state.parcelsGeoJSON);
-      if(b && state.maps.all) state.maps.all.fitBounds(b, {padding:[25,25]});
+      if(b && state.maps.all) stabilizeMap(state.maps.all, b, [25,25]);
     };
     $("changeMapFile").onclick = () => show("screen-map-load");
     $("startWorkFlow").onclick = () => show("screen-work-type");
@@ -1110,8 +1228,10 @@
     restoreIfPossible();
 
     setTimeout(() => {
-      const gj = storage.get(LS.map, null);
-      if(isValidGeoJSON(gj)) { state.parcelsGeoJSON = gj; renderParcelPreview(gj); }
+      const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v06", null);
+      const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v06", null);
+      if(isValidParcelsGeoJSON(gj)) { state.parcelsGeoJSON = gj; storage.set(LS.map, gj); renderParcelPreview(gj); }
+      if(isValidIncidentsGeoJSON(inc)) { state.incidentsGeoJSON = inc; storage.set(LS.incidentLayer, inc); renderIncidentLayerStatus(inc); }
       show("screen-map-load");
     }, 3200);
   }
