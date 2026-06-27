@@ -451,3 +451,60 @@ input,select,textarea{background:#fffdf8!important;border:1px solid #e4dac5!impo
 .work-main-btn,.work-secondary-btn{background:rgba(251,248,238,.98)!important;color:var(--green)!important;border:1px solid #d7c79f!important;box-shadow:0 4px 14px rgba(30,35,25,.06)!important}.work-main-btn{min-height:88px!important;border-radius:28px!important;padding:16px 18px!important}.work-main-btn .btn-icon,.work-secondary-btn .btn-icon{width:58px;height:58px;border:1px solid #d3c594;background:#fffdf8;color:var(--green)}.work-main-btn .btn-copy strong,.work-secondary-btn .btn-copy strong{font-size:16px!important;font-weight:700!important}.work-main-btn .btn-copy small,.work-secondary-btn .btn-copy small{font-size:12px!important;color:var(--muted)!important;font-weight:500!important;opacity:1!important}.work-secondary-btn{min-height:78px!important;border-radius:24px!important;padding:14px 16px!important}.work-actions{gap:10px!important;padding-top:2px!important}
 .modal-card{padding:22px!important}.modal-card h2{font:700 28px Georgia,serif;margin:0 0 8px;color:var(--green)}.modal .choice-btn{padding:16px 18px!important;border-radius:18px!important}
 @media (max-height:820px){.action-card{min-height:88px!important;padding:16px 18px!important}.action-card .icon,.choice-icon,.btn-icon{width:48px;height:48px}.action-card .icon .ui-icon,.choice-icon .ui-icon,.btn-icon .ui-icon{width:21px;height:21px}.metric-card{min-height:52px!important;padding:7px 6px!important}.metric-card.compact{min-height:52px!important}.metric-card .metric-icon{width:22px!important;height:22px!important}.metric-card .metric-icon .ui-icon{width:13px;height:13px}.metric-card small{font-size:9px!important}.metric-card strong{font-size:10.5px!important}.metric-card strong span{font-size:12.6px!important}.metric-card strong#partialTime,.metric-card strong#totalTime,.metric-card strong#liveAccuracy,.metric-card strong#refillCount{font-size:12px!important}.metric-card strong#workStateLabel{font-size:11.3px!important}.work-main-btn{min-height:80px!important}.work-secondary-btn{min-height:72px!important}}
+
+
+/* Beta 1.0: ajustes mínimos de trabajo, viento e informes */
+#screen-work .work-stats-primary{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+#screen-work .work-stats-secondary{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+#screen-work .metric-card{min-height:48px!important;padding:6px 5px!important;gap:5px!important;border-radius:16px!important}
+#screen-work .metric-card .metric-icon{width:20px!important;height:20px!important}
+#screen-work .metric-card .metric-icon .ui-icon{width:12px!important;height:12px!important}
+#screen-work .metric-card small{font-size:8px!important;line-height:1!important;margin-bottom:2px!important}
+#screen-work .metric-card strong{font-size:10px!important;line-height:1.05!important}
+#screen-work .metric-card strong span,
+#screen-work .metric-card strong#partialTime,
+#screen-work .metric-card strong#totalTime,
+#screen-work .metric-card strong#liveAccuracy,
+#screen-work .metric-card strong#workStateLabel,
+#screen-work .metric-card strong#refillCount,
+#screen-work .metric-card strong#windSpeedValue{font-size:11px!important;font-weight:800!important;white-space:nowrap!important;overflow:visible!important}
+button.metric-card{appearance:none;-webkit-appearance:none;text-align:left;color:var(--green);font:inherit;cursor:pointer}
+.wind-card{background:rgba(251,248,238,.98)!important}
+.report-panel{gap:8px!important;overflow:hidden!important}
+.report-cards-compact{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:7px!important;flex:0 0 auto!important}
+.report-cards-compact div{padding:9px 8px!important;border-radius:18px!important;min-width:0!important}
+.report-cards-compact span{font-size:9px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.report-cards-compact strong{font-size:14px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.report-tabs{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:6px!important;flex:0 0 auto!important}
+.report-tabs .tab{min-height:38px!important;padding:8px 4px!important;border-radius:15px!important;font-size:11px!important}
+.report-map{height:22vh!important;min-height:130px!important;max-height:190px!important;flex:0 0 auto!important;border-radius:22px!important}
+.report-map.hidden{display:none!important}
+.report-content{flex:1 1 auto!important;min-height:0!important;overflow:hidden!important;padding:10px!important;border-radius:22px!important}
+.report-content .scroll-box{height:100%!important;overflow:auto!important;padding:2px 2px 8px!important}
+.report-visual{display:grid;gap:10px;align-content:start}
+.report-section-title{font:700 18px Georgia,serif;color:var(--green);margin:2px 0 0}
+.report-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.report-kpi{background:#fffdf8;border:1px solid #e6ddca;border-radius:18px;padding:11px 12px;min-width:0}
+.report-kpi span{display:block;color:var(--muted);font-size:11px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.report-kpi strong{display:block;color:var(--green);font-size:18px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.report-kpi small{display:block;color:var(--muted);font-size:11px;margin-top:4px;line-height:1.2}
+.report-list{display:grid;gap:8px}
+.report-list div,.report-event,.report-empty{background:#fffdf8;border:1px solid #e6ddca;border-radius:18px;padding:11px 12px}
+.report-list span,.report-event span,.report-event small{display:block;color:var(--muted);font-size:12px;line-height:1.25;margin-top:3px}
+.report-list strong,.report-event strong{display:block;color:var(--green);font-size:15px;line-height:1.2}
+.report-empty{color:var(--muted);line-height:1.35}
+.export-grid .btn{justify-content:flex-start!important;min-height:48px!important}
+@media (max-height:820px){
+  #screen-work .metric-card{min-height:44px!important;padding:5px 4px!important}
+  #screen-work .metric-card .metric-icon{width:18px!important;height:18px!important}
+  #screen-work .metric-card small{font-size:7.5px!important}
+  #screen-work .metric-card strong span,
+  #screen-work .metric-card strong#partialTime,
+  #screen-work .metric-card strong#totalTime,
+  #screen-work .metric-card strong#liveAccuracy,
+  #screen-work .metric-card strong#workStateLabel,
+  #screen-work .metric-card strong#refillCount,
+  #screen-work .metric-card strong#windSpeedValue{font-size:10px!important}
+  .report-cards-compact strong{font-size:12px!important}
+  .report-tabs .tab{font-size:10px!important;min-height:34px!important}
+}

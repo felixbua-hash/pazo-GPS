@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 0.9 Profesional Privada · Presentación visual";
+  const VERSION = "Beta 1.0 Profesional Privada · Trabajo e informes";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -521,6 +521,8 @@
       events: [],
       incidents: [],
       gpsStats: { bad:0, doubtful:0, discarded:0, best:Infinity, worst:0, sum:0, count:0 },
+      windReadings: [],
+      nextWindPromptAt: null,
       forcedStart: forced
     };
     storage.set(LS.active, state.work);
@@ -573,6 +575,7 @@
     $("distanceKm").textContent = "0,00";
     $("liveAccuracy").textContent = "—";
     $("refillCount").textContent = "0";
+    updateWindUi();
   }
 
   function beginWork(){
@@ -580,12 +583,16 @@
     state.work.status = "trabajando";
     state.work.startedAt = Date.now();
     state.work.lastSegmentAt = Date.now();
+    state.work.nextWindPromptAt = Date.now() + 30*60*1000;
     addEvent("Comienzo", "Punto inicial", "Inicio del trabajo");
     $("beginWorkBtn").classList.add("hidden");
     $("stopWorkBtn").classList.remove("hidden");
     $("continueWorkBtn").classList.add("hidden");
     setWorkStateUi("Trabajando");
+    state.trackingFollow = true;
     startGpsWatch();
+    centerWorkMapOnTractor(true);
+    setTimeout(() => promptWindReading(false, "Registrar viento inicial"), 600);
     if(!state.tickerStarted){
       state.tickerStarted = true;
       tick();
@@ -605,6 +612,88 @@
   function stopGpsWatch(){
     if(state.watchId !== null) navigator.geolocation.clearWatch(state.watchId);
     state.watchId = null;
+  }
+
+  async function centerWorkMapOnTractor(forceFresh=false){
+    const map = state.maps.work;
+    if(!map) return;
+    let p = state.currentPos;
+    if(forceFresh || !freshPosition(p)){
+      try{
+        p = await getCurrentGpsPosition();
+        state.currentPos = p;
+        drawCurrentPosition(p);
+      }catch(err){
+        return;
+      }
+    }
+    if(p && isFinite(p.lat) && isFinite(p.lng)){
+      map.setView([p.lat, p.lng], Math.max(map.getZoom() || 0, 19), { animate:true });
+    }
+  }
+
+  function formatWind(kmh){
+    if(kmh === null || kmh === undefined || !isFinite(kmh)) return "—";
+    const n = Number(kmh);
+    return `${n.toFixed(n >= 10 ? 0 : 1).replace(".", ",")} km/h`;
+  }
+
+  function windStats(readings){
+    const arr = (readings || []).map(r => Number(r.kmh)).filter(v => isFinite(v));
+    if(!arr.length) return { latest:null, avg:null, max:null, count:0 };
+    return {
+      latest: arr[arr.length-1],
+      avg: arr.reduce((a,b)=>a+b,0)/arr.length,
+      max: Math.max(...arr),
+      count: arr.length
+    };
+  }
+
+  function updateWindUi(){
+    const el = $("windSpeedValue");
+    if(!el) return;
+    const stats = windStats(state.work?.windReadings || []);
+    el.textContent = formatWind(stats.latest);
+  }
+
+  function promptWindReading(auto=false, title="Registrar viento"){
+    if(!state.work) return;
+    if(state.windPromptOpen) return;
+    state.windPromptOpen = true;
+    try{
+      const stats = windStats(state.work.windReadings || []);
+      const base = stats.latest !== null ? String(stats.latest).replace(".", ",") : "";
+      const raw = prompt(`${title}. Velocidad del viento en km/h:`, base);
+      state.work.nextWindPromptAt = Date.now() + 30*60*1000;
+      if(raw === null || String(raw).trim() === ""){
+        storage.set(LS.active, state.work);
+        return;
+      }
+      const value = Number(String(raw).replace(",", "."));
+      if(!isFinite(value) || value < 0 || value > 150){
+        toast("Valor de viento no válido. Introduce km/h entre 0 y 150.");
+        storage.set(LS.active, state.work);
+        return;
+      }
+      const reading = {
+        at: new Date().toISOString(),
+        timeLabel: new Date().toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}),
+        kmh: value,
+        autoPrompt: !!auto
+      };
+      state.work.windReadings = state.work.windReadings || [];
+      state.work.windReadings.push(reading);
+      updateWindUi();
+      storage.set(LS.active, state.work);
+    }finally{
+      state.windPromptOpen = false;
+    }
+  }
+
+  function checkWindPrompt(){
+    if(!state.work || state.work.status !== "trabajando") return;
+    if(!state.work.nextWindPromptAt) state.work.nextWindPromptAt = Date.now() + 30*60*1000;
+    if(Date.now() >= state.work.nextWindPromptAt) promptWindReading(true, "Registro periódico de viento");
   }
   function onGpsError(err){
     $("liveAccuracy").textContent = "Error";
@@ -683,9 +772,11 @@
     const pts = state.work.pointsClean.map(p => [p.lat,p.lng]);
     if(pts.length > 1){
       state.layers.workRoute = L.polyline(pts, { color:"#1f7ed0", weight:5, opacity:.95 }).addTo(map);
-      if(state.trackingFollow && state.currentPos) map.setView([state.currentPos.lat, state.currentPos.lng], Math.max(map.getZoom(), 18));
     }
     drawCurrentPosition(state.currentPos);
+    if(state.trackingFollow && state.currentPos && state.work?.status === "trabajando"){
+      map.setView([state.currentPos.lat, state.currentPos.lng], Math.max(map.getZoom() || 0, 19));
+    }
     drawEventMarkers(map);
   }
 
@@ -780,6 +871,7 @@
     if(!state.work) return;
     $("distanceKm").textContent = (state.work.distanceM/1000).toFixed(2).replace(".", ",");
     $("refillCount").textContent = String(state.work.refills);
+    updateWindUi();
   }
 
   function tick(){
@@ -791,6 +883,7 @@
       else if(state.work.status === "parado") partialMs = now - (state.work.pausedAt || now);
       $("totalTime").textContent = fmtTime(totalMs);
       $("partialTime").textContent = fmtTime(partialMs);
+      checkWindPrompt();
     }
     requestAnimationFrame(() => setTimeout(tick, 1000));
   }
@@ -956,10 +1049,35 @@
     return state.parcelsGeoJSON.features.find(f => featureName(f) === name) || null;
   }
 
+  function reportTotalMs(w){
+    return w?.startedAt ? (w.finishedAt || Date.now()) - w.startedAt : 0;
+  }
+
+  function reportEffectiveActiveMs(w){
+    let ms = w?.activeMs || 0;
+    if(w?.status === "trabajando" && w.lastSegmentAt) ms += Date.now() - w.lastSegmentAt;
+    return ms;
+  }
+
+  function reportAverageSpeed(w){
+    const activeHours = reportEffectiveActiveMs(w) / 3600000;
+    if(!activeHours || !isFinite(activeHours)) return null;
+    return (w.distanceM || 0) / 1000 / activeHours;
+  }
+
+  function reportEmpty(text){
+    return `<div class="report-empty">${escapeHtml(text)}</div>`;
+  }
+
+  function reportKpi(label, value, note=""){
+    return `<div class="report-kpi"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>`;
+  }
+
   function renderReport(){
     const w = getReportWork();
     if(!w){
-      $("reportContent").innerHTML = "No hay trabajo para informar.";
+      $("reportContent").innerHTML = reportEmpty("No hay trabajo para informar.");
+      $("reportMap").classList.add("hidden");
       return;
     }
 
@@ -967,23 +1085,29 @@
     $("reportStatusChip").textContent = w.status === "finalizado" ? "Informe definitivo" : "Resumen provisional";
     $("reportStatusChip").style.background = w.status === "finalizado" ? "#eaf6e9" : "#fff4e6";
     $("reportStatusChip").style.color = w.status === "finalizado" ? "#2f7d44" : "#8b520e";
-    const totalMs = w.startedAt ? (w.finishedAt || Date.now()) - w.startedAt : 0;
-    $("reportTotal").textContent = fmtTime(totalMs);
+    $("reportTotal").textContent = fmtTime(reportTotalMs(w));
     $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
     $("reportRefills").textContent = String(w.refills || 0);
+    const ws = windStats(w.windReadings || []);
+    $("reportWind").textContent = ws.latest === null ? "—" : formatWind(ws.latest);
 
     renderReportSummary(w);
-    renderReportMap(w);
+    const hasMapData = (w.pointsClean || []).length > 1 || (w.events || []).some(e=>e.lat && e.lng) || (w.incidents || []).some(i=>i.lat && i.lng);
+    if(hasMapData) renderReportMap(w); else $("reportMap").classList.add("hidden");
   }
 
   function renderReportMap(w){
     const el = $("reportMap");
+    el.classList.remove("hidden");
     if(state.maps.report){
       state.maps.report.remove();
       state.maps.report = null;
     }
     el.innerHTML = "";
-    if(!ensureLeaflet()) return;
+    if(!ensureLeaflet()){
+      el.classList.add("hidden");
+      return;
+    }
     const map = L.map(el, { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
     state.maps.report = map;
     L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom:20 }).addTo(map);
@@ -1019,67 +1143,124 @@
 
   function renderReportSummary(w){
     const day = w.day || {};
-    const cal = w.gpsCalibration || {};
-    const gps = w.gpsStats || {};
-    const avgAcc = gps.count ? (gps.sum / gps.count) : null;
-    const totalMs = w.startedAt ? (w.finishedAt || Date.now()) - w.startedAt : 0;
+    const ws = windStats(w.windReadings || []);
+    const status = w.status === "finalizado" ? "Finalizado" : "Provisional";
     $("reportContent").innerHTML = `
-      <div class="scroll-box report-sheet">
-        <h3>PAZO BAION GPS</h3>
-        <p class="report-sub">Informe de trabajo en parcela</p>
+      <div class="scroll-box report-visual">
         ${reportWarning(w)}
-        <table>
-          <tr><th colspan="2">Datos generales</th></tr>
-          <tr><td>Parcela</td><td>${escapeHtml(w.parcel)}</td></tr>
-          <tr><td>Tipo de trabajo</td><td>${escapeHtml(w.type)}</td></tr>
-          <tr><td>Estado</td><td>${w.status === "finalizado" ? "Finalizado" : "Provisional / no finalizado"}</td></tr>
-          <tr><td>Inicio</td><td>${w.startedAt ? new Date(w.startedAt).toLocaleString("es-ES") : "—"}</td></tr>
-          <tr><td>Fin</td><td>${w.finishedAt ? new Date(w.finishedAt).toLocaleString("es-ES") : "—"}</td></tr>
-          <tr><td>Duración total</td><td>${fmtTime(totalMs)}</td></tr>
-          <tr><th colspan="2">Jornada</th></tr>
-          <tr><td>Operario</td><td>${escapeHtml(day.operator || "—")}</td></tr>
-          <tr><td>Tractor</td><td>${escapeHtml(day.tractor || "—")}</td></tr>
-          <tr><td>Atomizador / cisterna</td><td>${escapeHtml(day.sprayer || "—")}</td></tr>
-          <tr><td>Observaciones jornada</td><td>${escapeHtml(day.notes || "—")}</td></tr>
-          <tr><th colspan="2">Resumen operativo</th></tr>
-          <tr><td>Distancia recorrida</td><td>${((w.distanceM || 0)/1000).toFixed(2).replace(".", ",")} km</td></tr>
-          <tr><td>Tiempo efectivo</td><td>${fmtTime(w.activeMs || 0)}</td></tr>
-          <tr><td>Tiempo parado</td><td>${fmtTime(w.stoppedMs || 0)}</td></tr>
-          <tr><td>Paradas</td><td>${w.stops || 0}</td></tr>
-          <tr><td>Recargas</td><td>${w.refills || 0}</td></tr>
-          <tr><td>Incidencias registradas</td><td>${(w.incidents || []).length}</td></tr>
-          <tr><th colspan="2">Calidad GPS</th></tr>
-          <tr><td>Calibración previa</td><td>${escapeHtml(cal.quality || "—")}</td></tr>
-          <tr><td>Muestras calibración</td><td>${cal.samples || 0}</td></tr>
-          <tr><td>Mejor precisión calibración</td><td>${formatMeters(cal.best)}</td></tr>
-          <tr><td>Precisión media calibración</td><td>${formatMeters(cal.avg)}</td></tr>
-          <tr><td>Inicio forzado baja precisión</td><td>${w.forcedStart ? "Sí" : "No"}</td></tr>
-          <tr><td>Precisión media trabajo</td><td>${formatMeters(avgAcc)}</td></tr>
-          <tr><td>Peor precisión trabajo</td><td>${formatMeters(gps.worst)}</td></tr>
-          <tr><td>Puntos originales</td><td>${(w.pointsOriginal || []).length}</td></tr>
-          <tr><td>Puntos ruta depurada</td><td>${(w.pointsClean || []).length}</td></tr>
-          <tr><td>Puntos dudosos / descartados</td><td>${gps.doubtful || 0} / ${gps.discarded || 0}</td></tr>
-        </table>
+        <div class="report-section-title">Datos del trabajo</div>
+        <div class="report-grid">
+          ${reportKpi("Parcela", w.parcel || "—")}
+          ${reportKpi("Labor", w.type || "—")}
+          ${reportKpi("Estado", status)}
+          ${reportKpi("Inicio", w.startedAt ? new Date(w.startedAt).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}) : "—")}
+        </div>
+        <div class="report-section-title">Jornada</div>
+        <div class="report-list">
+          <div><span>Operario</span><strong>${escapeHtml(day.operator || "—")}</strong></div>
+          <div><span>Tractor</span><strong>${escapeHtml(day.tractor || "—")}</strong></div>
+          <div><span>Atomizador / cisterna</span><strong>${escapeHtml(day.sprayer || "—")}</strong></div>
+          <div><span>Observaciones</span><strong>${escapeHtml(day.notes || "—")}</strong></div>
+        </div>
+        <div class="report-section-title">Resumen visual</div>
+        <div class="report-grid">
+          ${reportKpi("Tiempo total", fmtTime(reportTotalMs(w)))}
+          ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
+          ${reportKpi("Recargas", String(w.refills || 0))}
+          ${reportKpi("Viento último", ws.latest === null ? "—" : formatWind(ws.latest), ws.count ? `${ws.count} registros` : "sin registros")}
+        </div>
+        ${(!w.startedAt && !(w.events||[]).length) ? reportEmpty("Todavía no hay datos suficientes. El informe se completará al iniciar y registrar el trabajo.") : ""}
       </div>
     `;
   }
 
+  function renderReportWork(w){
+    const avg = reportAverageSpeed(w);
+    const started = w.startedAt ? new Date(w.startedAt).toLocaleString("es-ES") : "—";
+    const finished = w.finishedAt ? new Date(w.finishedAt).toLocaleString("es-ES") : "—";
+    $("reportContent").innerHTML = `
+      <div class="scroll-box report-visual">
+        <div class="report-section-title">Tiempos y recorrido</div>
+        <div class="report-grid">
+          ${reportKpi("Tiempo total", fmtTime(reportTotalMs(w)))}
+          ${reportKpi("Tiempo efectivo", fmtTime(reportEffectiveActiveMs(w)))}
+          ${reportKpi("Tiempo parado", fmtTime(w.stoppedMs || 0))}
+          ${reportKpi("Velocidad media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
+          ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
+          ${reportKpi("Paradas", String(w.stops || 0))}
+          ${reportKpi("Recargas", String(w.refills || 0))}
+          ${reportKpi("Incidencias", String((w.incidents || []).length))}
+        </div>
+        <div class="report-section-title">Inicio y fin</div>
+        <div class="report-list">
+          <div><span>Inicio</span><strong>${escapeHtml(started)}</strong></div>
+          <div><span>Fin</span><strong>${escapeHtml(finished)}</strong></div>
+        </div>
+      </div>`;
+  }
+
   function renderReportEvents(w){
-    const rows = (w.events || []).map(ev => `<tr><td>${ev.timeLabel}</td><td>${escapeHtml(ev.type)}</td><td>${escapeHtml(ev.label)}</td><td>${formatMeters(ev.accuracy)}</td><td>${escapeHtml(ev.notes || "")}</td></tr>`).join("");
-    $("reportContent").innerHTML = `<div class="scroll-box"><table><tr><th>Hora</th><th>Evento</th><th>Punto</th><th>GPS</th><th>Observación</th></tr>${rows || "<tr><td colspan='5'>Sin eventos</td></tr>"}</table></div>`;
+    const events = w.events || [];
+    const rows = events.map(ev => `<div class="report-event"><strong>${escapeHtml(ev.type)}</strong><span>${escapeHtml(ev.timeLabel || "—")} · ${escapeHtml(ev.label || "—")}</span><small>GPS ${formatMeters(ev.accuracy)}${ev.notes ? " · " + escapeHtml(ev.notes) : ""}</small></div>`).join("");
+    $("reportContent").innerHTML = `<div class="scroll-box report-visual"><div class="report-section-title">Eventos del trabajo</div>${rows || reportEmpty("Sin eventos registrados todavía.")}</div>`;
   }
 
   function renderReportIncidents(w){
-    const rows = (w.incidents || []).map(i => `<tr><td>${i.timeLabel}</td><td>${escapeHtml(i.type)}</td><td>${escapeHtml(i.status)}</td><td>${formatMeters(i.accuracy)}${i.gpsMissing ? "<br><strong>Sin coordenada</strong>" : ""}</td><td>${escapeHtml(i.notes || "")}${i.photo ? `<br><img class="incident-thumb" src="${i.photo}" alt="Foto incidencia" />` : ""}</td></tr>`).join("");
-    $("reportContent").innerHTML = `<div class="scroll-box"><table><tr><th>Hora</th><th>Tipo</th><th>Estado</th><th>GPS</th><th>Observación / foto</th></tr>${rows || "<tr><td colspan='5'>Sin incidencias</td></tr>"}</table></div>`;
+    const incidents = w.incidents || [];
+    const rows = incidents.map(i => `<div class="report-event"><strong>${escapeHtml(i.type)}</strong><span>${escapeHtml(i.timeLabel || "—")} · ${escapeHtml(i.status || "—")}</span><small>GPS ${formatMeters(i.accuracy)}${i.gpsMissing ? " · Sin coordenada" : ""}${i.notes ? " · " + escapeHtml(i.notes) : ""}</small>${i.photo ? `<img class="incident-thumb" src="${i.photo}" alt="Foto incidencia" />` : ""}</div>`).join("");
+    $("reportContent").innerHTML = `<div class="scroll-box report-visual"><div class="report-section-title">Incidencias</div>${rows || reportEmpty("Sin incidencias registradas.")}</div>`;
+  }
+
+  function renderReportGps(w){
+    const cal = w.gpsCalibration || {};
+    const gps = w.gpsStats || {};
+    const avgAcc = gps.count ? (gps.sum / gps.count) : null;
+    $("reportContent").innerHTML = `
+      <div class="scroll-box report-visual">
+        ${reportWarning(w)}
+        <div class="report-section-title">Calidad GPS</div>
+        <div class="report-grid">
+          ${reportKpi("Calibración", cal.quality || "—")}
+          ${reportKpi("Mejor previa", formatMeters(cal.best))}
+          ${reportKpi("Media previa", formatMeters(cal.avg))}
+          ${reportKpi("Inicio forzado", w.forcedStart ? "Sí" : "No")}
+          ${reportKpi("Media trabajo", formatMeters(avgAcc))}
+          ${reportKpi("Peor trabajo", formatMeters(gps.worst))}
+          ${reportKpi("Puntos originales", String((w.pointsOriginal || []).length))}
+          ${reportKpi("Ruta depurada", String((w.pointsClean || []).length))}
+          ${reportKpi("Dudosos", String(gps.doubtful || 0))}
+          ${reportKpi("Descartados", String(gps.discarded || 0))}
+        </div>
+      </div>`;
+  }
+
+  function renderReportWind(w){
+    const readings = w.windReadings || [];
+    const ws = windStats(readings);
+    const rows = readings.map(r => `<div class="report-event"><strong>${formatWind(r.kmh)}</strong><span>${escapeHtml(r.timeLabel || "—")}</span><small>${r.autoPrompt ? "Registro periódico" : "Registro manual/inicial"}</small></div>`).join("");
+    const warning = ws.max !== null && ws.max >= 20 ? `<div class="report-warning"><strong>Aviso viento:</strong> se registró un valor máximo de ${formatWind(ws.max)}. Revisar idoneidad de aplicación según criterio técnico y normativa aplicable.</div>` : "";
+    $("reportContent").innerHTML = `
+      <div class="scroll-box report-visual">
+        ${warning}
+        <div class="report-section-title">Viento durante la aplicación</div>
+        <div class="report-grid">
+          ${reportKpi("Último", ws.latest === null ? "—" : formatWind(ws.latest))}
+          ${reportKpi("Media", ws.avg === null ? "—" : formatWind(ws.avg))}
+          ${reportKpi("Máximo", ws.max === null ? "—" : formatWind(ws.max))}
+          ${reportKpi("Registros", String(ws.count))}
+        </div>
+        <div class="report-section-title">Registros cada 30 minutos</div>
+        ${rows || reportEmpty("Sin registros de viento. Durante el trabajo la app pedirá el dato cada 30 minutos y también puede registrarse tocando la tarjeta Viento.")}
+      </div>`;
   }
 
   function renderReportExport(w){
     $("reportContent").innerHTML = `
-      <div class="scroll-box export-grid">
+      <div class="scroll-box export-grid report-visual">
         <button class="btn primary full" id="shareReport">Compartir resumen</button>
         <button class="btn ghost full" id="downloadJson">Exportar JSON completo</button>
         <button class="btn ghost full" id="downloadCsv">Exportar CSV eventos</button>
+        <button class="btn ghost full" id="downloadWindCsv">Exportar CSV viento</button>
         <button class="btn ghost full" id="downloadGeojson">Exportar ruta GeoJSON</button>
         <button class="btn ghost full" id="downloadGpx">Exportar ruta GPX</button>
         <button class="btn ghost full" id="downloadKml">Exportar ruta KML</button>
@@ -1089,6 +1270,7 @@
     $("shareReport").onclick = () => shareReportSummary(w);
     $("downloadJson").onclick = () => downloadBlob(safeFilename(w, "trabajo", "json"), JSON.stringify(w, null, 2), "application/json");
     $("downloadCsv").onclick = () => exportEventsCsv(w);
+    $("downloadWindCsv").onclick = () => exportWindCsv(w);
     $("downloadGeojson").onclick = () => exportRouteGeoJSON(w);
     $("downloadGpx").onclick = () => exportRouteGPX(w);
     $("downloadKml").onclick = () => exportRouteKML(w);
@@ -1112,6 +1294,12 @@
     const header = "hora,tipo,punto,gps,observacion\n";
     const rows = (w.events || []).map(e => [e.timeLabel,e.type,e.label,formatMeters(e.accuracy),e.notes].map(v => `"${String(v||"").replaceAll('"','""')}"`).join(",")).join("\n");
     downloadBlob(safeFilename(w, "eventos", "csv"), header + rows, "text/csv");
+  }
+
+  function exportWindCsv(w){
+    const header = "hora,kmh,tipo_registro\n";
+    const rows = (w.windReadings || []).map(r => [r.timeLabel, r.kmh, r.autoPrompt ? "periodico" : "manual"].map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
+    downloadBlob(safeFilename(w, "viento", "csv"), header + rows, "text/csv");
   }
 
   function exportRouteGeoJSON(w){
@@ -1265,8 +1453,10 @@
     };
     $("centerTractor").onclick = () => {
       state.trackingFollow = true;
-      if(state.currentPos && state.maps.work) state.maps.work.setView([state.currentPos.lat, state.currentPos.lng], 18);
+      if(state.currentPos && state.maps.work) state.maps.work.setView([state.currentPos.lat, state.currentPos.lng], 19);
+      else centerWorkMapOnTractor(true);
     };
+    $("windReadingBtn").onclick = () => promptWindReading(false, "Registrar viento");
 
     $("cancelStopModal").onclick = closeStopModal;
     qsa("[data-stop-reason]").forEach(b => b.addEventListener("click", () => handleStop(b.dataset.stopReason)));
@@ -1281,7 +1471,10 @@
       const w = getReportWork();
       if(!w) return;
       if(b.dataset.reportTab === "summary") renderReportSummary(w);
+      if(b.dataset.reportTab === "work") renderReportWork(w);
       if(b.dataset.reportTab === "events") renderReportEvents(w);
+      if(b.dataset.reportTab === "gps") renderReportGps(w);
+      if(b.dataset.reportTab === "wind") renderReportWind(w);
       if(b.dataset.reportTab === "incidents") renderReportIncidents(w);
       if(b.dataset.reportTab === "export") renderReportExport(w);
     }));

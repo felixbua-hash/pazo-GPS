@@ -16,7 +16,7 @@
     <!-- Pantalla de carga -->
     <section id="screen-splash" class="screen active splash-screen">
       <img class="splash-img" src="./splash.png" alt="Pazo Baion GPS" />
-      <div class="version-pill">Versión Beta 0.9 Profesional Privada · Presentación visual</div>
+      <div class="version-pill">Versión Beta 1.0 Profesional Privada · Trabajo e informes</div>
     </section>
 
     <!-- Carga local de capas -->
@@ -253,6 +253,10 @@
             <span class="metric-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4c2.6 3.5 5 6.1 5 9a5 5 0 1 1-10 0c0-2.9 2.4-5.5 5-9z"/></svg></span>
             <div><small>Recargas</small><strong id="refillCount">0</strong></div>
           </div>
+          <button id="windReadingBtn" type="button" class="metric-card compact wind-card">
+            <span class="metric-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h9a3 3 0 1 0-3-3"/><path d="M4 13h13a3 3 0 1 1-3 3"/><path d="M4 18h6"/></svg></span>
+            <div><small>Viento</small><strong id="windSpeedValue">—</strong></div>
+          </button>
         </div>
 
         <div class="map-wrap work-map clean-map">
@@ -286,21 +290,24 @@
 
       <main class="report-panel">
         <div id="reportStatusChip" class="status-chip">Borrador</div>
-        <div class="report-cards">
+        <div class="report-cards report-cards-compact">
           <div><span>Tiempo total</span><strong id="reportTotal">—</strong></div>
           <div><span>Distancia</span><strong id="reportDistance">—</strong></div>
           <div><span>Recargas</span><strong id="reportRefills">—</strong></div>
+          <div><span>Viento</span><strong id="reportWind">—</strong></div>
         </div>
 
-        <div id="reportMap" class="report-map"></div>
-
-        <nav class="tabs">
+        <nav class="tabs report-tabs">
           <button class="tab active" data-report-tab="summary">Resumen</button>
+          <button class="tab" data-report-tab="work">Trabajo</button>
           <button class="tab" data-report-tab="events">Eventos</button>
+          <button class="tab" data-report-tab="gps">GPS</button>
+          <button class="tab" data-report-tab="wind">Viento</button>
           <button class="tab" data-report-tab="incidents">Incidencias</button>
           <button class="tab" data-report-tab="export">Exportar</button>
         </nav>
 
+        <div id="reportMap" class="report-map hidden"></div>
         <div id="reportContent" class="report-content"></div>
       </main>
     </section>
