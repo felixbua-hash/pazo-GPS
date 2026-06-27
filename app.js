@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 0.8 Profesional Privada · Mapa reprogramado";
+  const VERSION = "Beta 0.9 Profesional Privada · Presentación visual";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -545,25 +545,20 @@
 
   function setWorkStateUi(label){
     const icon = $("workStateIcon");
-    const use = $("workStateUse");
     $("workStateLabel").textContent = label;
-    if(!icon || !use) return;
-    icon.classList.remove("is-working","is-paused","is-ended");
+    if(!icon) return;
+    icon.className = "metric-icon state-icon";
     if(label === "Trabajando"){
-      use.setAttribute("href", "#i-play");
-      use.setAttribute("xlink:href", "#i-play");
+      icon.textContent = "▶";
       icon.classList.add("is-working");
     }else if(label === "Parado"){
-      use.setAttribute("href", "#i-stop");
-      use.setAttribute("xlink:href", "#i-stop");
+      icon.textContent = "■";
       icon.classList.add("is-paused");
     }else if(label === "Finalizado"){
-      use.setAttribute("href", "#i-stop");
-      use.setAttribute("xlink:href", "#i-stop");
+      icon.textContent = "■";
       icon.classList.add("is-ended");
     }else{
-      use.setAttribute("href", "#i-play");
-      use.setAttribute("xlink:href", "#i-play");
+      icon.textContent = "○";
     }
   }
 

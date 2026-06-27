@@ -1,5 +1,5 @@
 Pazo Baion GPS
-Beta 0.8 Profesional Privada · Mapa reprogramado
+Beta 0.9 Profesional Privada · Presentación visual
 
 Formato:
 - ZIP sin carpetas.
@@ -7,18 +7,8 @@ Formato:
 - Sin PARCELAS.geojson real ni INCIDENCIAS_.geojson real.
 - Parcelas e incidencias importadas localmente desde el terminal.
 
-Correcciones principales de esta versión de trabajo:
-- Mantiene el mapa reprogramado para iPhone/Safari.
-- Ajustes visuales puntuales en carga, configuración, tipo de trabajo y registro de trabajo.
-- Pantalla de carga compactada sin listado de parcelas visible.
-- Área de observaciones de jornada ampliada.
-- Pantalla de tipo de trabajo rehecha con presentación más profesional.
-- Pantalla de registro de trabajo reorganizada para limpiar el mapa y profesionalizar los botones.
-
-Ajuste adicional aplicado:
-- Recuadros de información de la pantalla de trabajo refinados y compactados.
-- Estado con icono visual coherente según Preparado / Trabajando / Parado / Finalizado.
-
-Ajuste visual integral:
-- Presentación unificada de métricas, botones y ventanas según el estilo de referencia indicado.
-- Iconografía SVG integrada localmente para mantener coherencia visual sin depender de recursos externos.
+Cambios de esta versión:
+- Mantiene el módulo de mapas reprogramado de Beta 0.8.
+- Incluye la versión visible en la pantalla de carga.
+- Reaplica la presentación visual de métricas, botones y ventanas con iconografía local integrada.
+- Regenerada desde una base funcional anterior para corregir el problema de apertura.
