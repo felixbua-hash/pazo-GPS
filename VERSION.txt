@@ -18,3 +18,7 @@ Correcciones principales de esta versión de trabajo:
 Ajuste adicional aplicado:
 - Recuadros de información de la pantalla de trabajo refinados y compactados.
 - Estado con icono visual coherente según Preparado / Trabajando / Parado / Finalizado.
+
+Ajuste visual integral:
+- Presentación unificada de métricas, botones y ventanas según el estilo de referencia indicado.
+- Iconografía SVG integrada localmente para mantener coherencia visual sin depender de recursos externos.

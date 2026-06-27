@@ -545,20 +545,25 @@
 
   function setWorkStateUi(label){
     const icon = $("workStateIcon");
+    const use = $("workStateUse");
     $("workStateLabel").textContent = label;
-    if(!icon) return;
-    icon.className = "metric-icon state-icon";
+    if(!icon || !use) return;
+    icon.classList.remove("is-working","is-paused","is-ended");
     if(label === "Trabajando"){
-      icon.textContent = "▶";
+      use.setAttribute("href", "#i-play");
+      use.setAttribute("xlink:href", "#i-play");
       icon.classList.add("is-working");
     }else if(label === "Parado"){
-      icon.textContent = "■";
+      use.setAttribute("href", "#i-stop");
+      use.setAttribute("xlink:href", "#i-stop");
       icon.classList.add("is-paused");
     }else if(label === "Finalizado"){
-      icon.textContent = "■";
+      use.setAttribute("href", "#i-stop");
+      use.setAttribute("xlink:href", "#i-stop");
       icon.classList.add("is-ended");
     }else{
-      icon.textContent = "○";
+      use.setAttribute("href", "#i-play");
+      use.setAttribute("xlink:href", "#i-play");
     }
   }
 

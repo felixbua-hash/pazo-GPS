@@ -434,3 +434,188 @@ textarea{resize:none}
 #screen-work .work-shell{overflow:hidden}
 #screen-work .map-wrap.work-map{height:auto;min-height:0;flex:1 1 auto}
 #screen-work .work-actions{height:auto;flex:0 0 auto;padding-top:0}
+
+
+/* === Beta 0.8 visual de referencia unificada === */
+.ui-sprite{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+.ui-icon{display:block;width:1em;height:1em;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.inline-icon{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;flex:0 0 auto}
+
+.back-btn,.round-btn{
+  background:rgba(251,248,238,.98)!important;
+  border:1px solid #e5dcc9!important;
+  color:var(--green)!important;
+  box-shadow:0 3px 12px rgba(30,35,25,.08)!important;
+}
+.back-btn{width:72px;height:50px;border-radius:26px;font-size:0;line-height:0;display:grid;place-items:center}
+.back-btn .ui-icon{width:22px;height:22px}
+.round-btn{width:52px;height:52px;display:grid;place-items:center}
+.round-btn .ui-icon{width:21px;height:21px}
+
+.panel,.report-panel,.modal-card,.report-content,.report-map,.map-wrap,.footer-info,.privacy-box,.status-card,.file-box,.gps-stats div,.report-cards div,.history-item,.scroll-box{
+  background:rgba(251,248,238,.96)!important;
+  border:1px solid #e6ddca!important;
+  box-shadow:0 5px 18px rgba(30,35,25,.07)!important;
+}
+.panel,.report-content,.modal-card{border-radius:26px!important}
+.file-box{border-style:solid!important;font-weight:700}
+.status-card.ok{background:#f4faf2!important;color:#275f3a!important;border-color:#dceadf!important}
+.status-card.warn{background:#fff7ec!important;border-color:#eadfc8!important}
+.status-card.bad{background:#fff3f1!important;border-color:#efd4cf!important}
+
+input,select,textarea{
+  background:#fffdf8!important;
+  border:1px solid #e4dac5!important;
+  border-radius:18px!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.65)!important;
+}
+
+.btn,.mini-btn,.tab,.choice-btn,.action-card{
+  background:rgba(251,248,238,.98)!important;
+  color:var(--green)!important;
+  border:1px solid #e1d7c0!important;
+  box-shadow:0 4px 14px rgba(30,35,25,.06)!important;
+}
+.btn,.mini-btn,.tab{display:inline-flex;align-items:center;justify-content:center;gap:10px}
+.btn.primary,.btn.ghost,.btn.warning,.btn.danger,.btn.outline,.mini-btn{
+  background:rgba(251,248,238,.98)!important;
+  color:var(--green)!important;
+}
+.btn.warning{border-color:#dccaa3!important}
+.btn.danger,.btn.danger.outline{color:#864337!important;border-color:#dfc4bd!important}
+.btn{border-radius:20px!important;min-height:54px;padding:14px 18px!important;font-weight:700!important}
+.btn.full{justify-content:flex-start}
+.mini-btn{border-radius:18px!important;min-height:48px;padding:10px 14px!important;font-weight:700!important}
+.tab{border-radius:16px!important;min-height:44px;padding:10px 8px!important;font-weight:700!important}
+.tab.active{background:#f2ecde!important;border-color:#d7c79f!important;color:var(--green)!important}
+
+.action-grid{grid-template-columns:1fr;gap:12px;padding-top:12px}
+.action-card{
+  min-height:98px!important;
+  padding:18px 20px!important;
+  border-radius:24px!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  gap:14px!important;
+}
+.action-card .icon,
+.choice-icon,
+.btn-icon{
+  width:54px;height:54px;border-radius:50%;
+  border:1px solid #d7ccae;background:#fffdf8;
+  display:grid;place-items:center;flex:0 0 auto;color:var(--green)
+}
+.action-card .icon .ui-icon,
+.choice-icon .ui-icon,
+.btn-icon .ui-icon{width:24px;height:24px}
+.action-card > span:not(.icon){display:block;font-size:18px;line-height:1.1}
+.action-card small{font-size:13px;color:var(--muted)}
+.primary-card,.light-card{background:rgba(251,248,238,.98)!important;color:var(--green)!important}
+
+.work-type-card{
+  background:rgba(251,248,238,.98)!important;
+  border-radius:24px!important;
+  padding:18px 18px!important;
+  min-height:96px!important;
+  box-shadow:0 4px 14px rgba(30,35,25,.06)!important;
+}
+.work-type-card .choice-copy strong{font-size:18px!important;font-weight:700}
+.work-type-card .choice-copy small{font-size:13px!important;color:var(--muted)!important}
+
+.work-topbar{padding-bottom:6px}
+.work-shell{gap:10px!important}
+.work-stats-grid{gap:8px!important}
+.work-stats-primary{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.work-stats-secondary{grid-template-columns:1fr 1.2fr 1fr!important}
+.metric-card{
+  background:rgba(251,248,238,.98)!important;
+  border:1px solid #e6ddca!important;
+  border-radius:18px!important;
+  padding:8px 7px!important;
+  min-height:56px!important;
+  gap:8px!important;
+  box-shadow:0 3px 12px rgba(30,35,25,.05)!important;
+}
+.metric-card.compact{min-height:56px!important}
+.metric-card .metric-icon{
+  width:24px!important;height:24px!important;
+  border-radius:50%!important;
+  border:1px solid #d9cfb8!important;
+  background:#fffdf8!important;
+  display:grid!important;place-items:center!important;
+  color:var(--green)!important;
+  flex:0 0 auto!important;
+}
+.metric-card .metric-icon .ui-icon{width:14px;height:14px}
+.metric-card > div{min-width:0;flex:1}
+.metric-card small{
+  display:block!important;
+  font-size:10px!important;
+  line-height:1.05!important;
+  color:var(--muted)!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  margin-bottom:2px!important;
+}
+.metric-card strong{
+  display:block!important;
+  font-size:11.2px!important;
+  line-height:1.06!important;
+  color:var(--green)!important;
+  font-weight:500!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+}
+.metric-card strong span{font-size:13.2px!important;font-weight:700!important}
+.metric-card strong#partialTime,
+.metric-card strong#totalTime,
+.metric-card strong#liveAccuracy,
+.metric-card strong#refillCount{font-size:12.6px!important;font-weight:700!important}
+.metric-card strong#workStateLabel{font-size:12px!important;font-weight:500!important}
+#liveSpeed{letter-spacing:-.01em}
+.state-icon.is-working{color:#1f5d36!important}
+.state-icon.is-paused{color:#8b520e!important}
+.state-icon.is-ended{color:#a8483a!important}
+
+.work-actions{gap:10px!important;padding-top:2px!important}
+.work-main-btn,.work-secondary-btn{
+  background:rgba(251,248,238,.98)!important;
+  color:var(--green)!important;
+  border:1px solid #d7c79f!important;
+  box-shadow:0 4px 14px rgba(30,35,25,.06)!important;
+}
+.work-main-btn{min-height:88px!important;border-radius:28px!important;padding:16px 18px!important}
+.work-main-btn .btn-icon,.work-secondary-btn .btn-icon{width:58px;height:58px;border:1px solid #d3c594;background:#fffdf8;color:var(--green)}
+.work-main-btn .btn-copy strong,.work-secondary-btn .btn-copy strong{font-size:16px!important;font-weight:700!important}
+.work-main-btn .btn-copy small,.work-secondary-btn .btn-copy small{font-size:12px!important;color:var(--muted)!important;font-weight:500!important;opacity:1!important}
+.work-secondary-btn{min-height:78px!important;border-radius:24px!important;padding:14px 16px!important}
+
+.report-cards{gap:10px}
+.report-cards div,.gps-stats div{border-radius:18px!important}
+.tabs{gap:8px}
+.modal-card{padding:22px!important}
+.modal-card h2{font:700 28px Georgia,serif;margin:0 0 8px;color:var(--green)}
+.modal .choice-btn{padding:16px 18px!important;border-radius:18px!important}
+
+.history-item,.scroll-box{background:rgba(251,248,238,.96);border:1px solid #e6ddca;border-radius:18px;padding:14px}
+
+@media (max-height: 820px){
+  .action-card{min-height:88px!important;padding:16px 18px!important}
+  .action-card .icon,.choice-icon,.btn-icon{width:48px;height:48px}
+  .action-card .icon .ui-icon,.choice-icon .ui-icon,.btn-icon .ui-icon{width:21px;height:21px}
+  .metric-card{min-height:52px!important;padding:7px 6px!important}
+  .metric-card.compact{min-height:52px!important}
+  .metric-card .metric-icon{width:22px!important;height:22px!important}
+  .metric-card .metric-icon .ui-icon{width:13px;height:13px}
+  .metric-card small{font-size:9px!important}
+  .metric-card strong{font-size:10.5px!important}
+  .metric-card strong span{font-size:12.6px!important}
+  .metric-card strong#partialTime,
+  .metric-card strong#totalTime,
+  .metric-card strong#liveAccuracy,
+  .metric-card strong#refillCount{font-size:12px!important}
+  .metric-card strong#workStateLabel{font-size:11.3px!important}
+  .work-main-btn{min-height:80px!important}
+  .work-secondary-btn{min-height:72px!important}
+}

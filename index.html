@@ -12,6 +12,31 @@
 </head>
 <body>
   <div id="app">
+    <svg class="ui-sprite" aria-hidden="true">
+      <symbol id="i-speed" viewBox="0 0 24 24"><path d="M4 14a8 8 0 1 1 16 0"/><path d="M12 12l4-4"/><path d="M12 12l3 1"/><path d="M8 17h8"/></symbol>
+      <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 13V9"/><path d="M12 13l3 2"/><path d="M9 3h6"/><path d="M15 6l1.5-1.5"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></symbol>
+      <symbol id="i-route" viewBox="0 0 24 24"><circle cx="7" cy="17" r="2"/><circle cx="17" cy="7" r="2"/><path d="M9 17h3a4 4 0 0 0 4-4V9"/></symbol>
+      <symbol id="i-gps" viewBox="0 0 24 24"><path d="M12 3v3"/><path d="M12 18v3"/><path d="M3 12h3"/><path d="M18 12h3"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2.5"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 4c2.6 3.5 5 6.1 5 9a5 5 0 1 1-10 0c0-2.9 2.4-5.5 5-9z"/></symbol>
+      <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 5l8 14H4z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h10"/><path d="M8 12h10"/><path d="M8 17h10"/><circle cx="5" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="17" r="1" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-track" viewBox="0 0 24 24"><path d="M6 18c4-7 8-9 12-12"/><path d="M10 8l3-3 3 3"/><path d="M10 19l-4-1 1-4"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 20s6-4.5 6-10a6 6 0 1 0-12 0c0 5.5 6 10 6 10z"/><circle cx="12" cy="10" r="2"/></symbol>
+      <symbol id="i-spray" viewBox="0 0 24 24"><path d="M6 9h8v10H6z"/><path d="M14 11h2a2 2 0 0 0 2-2V7h-2"/><path d="M9 9V6h2"/><path d="M18 13h2"/><path d="M19 10.5h1.5"/><path d="M19 15.5h1.5"/></symbol>
+      <symbol id="i-cut" viewBox="0 0 24 24"><circle cx="7" cy="17" r="2.5"/><circle cx="7" cy="7" r="2.5"/><path d="M20 5l-8.5 6.5"/><path d="M20 19l-8.5-6.5"/></symbol>
+      <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14 6l4 4"/><path d="M7 17l8-8"/><path d="M6 14l4 4"/><path d="M17 7l2-2"/><path d="M5 19l2-2"/></symbol>
+      <symbol id="i-focus" viewBox="0 0 24 24"><path d="M4 9V4h5"/><path d="M15 4h5v5"/><path d="M20 15v5h-5"/><path d="M9 20H4v-5"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V5"/><path d="M8 9l4-4 4 4"/><path d="M5 19h14"/></symbol>
+      <symbol id="i-crosshair" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/></symbol>
+      <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 5h12l2 2v12H5z"/><path d="M8 5v6h8V5"/><path d="M9 19h6"/></symbol>
+      <symbol id="i-history" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/><path d="M12 8v5l3 2"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 12h6l1-12"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></symbol>
+    </svg>
+
 
     <!-- Pantalla de carga -->
     <section id="screen-splash" class="screen active splash-screen">
@@ -57,14 +82,14 @@
           <button id="continueAfterMap" class="btn primary" disabled>Continuar</button>
           <button id="useSavedMap" class="btn ghost">Usar capas guardadas</button>
         </div>
-        <button id="clearSavedMap" class="btn danger outline">Borrar capas guardadas</button>
+        <button id="clearSavedMap" class="btn danger outline"><span class="inline-icon"><svg class="ui-icon"><use href="#i-trash"></use></svg></span><span>Borrar capas guardadas</span></button>
       </main>
     </section>
 
     <!-- Configuración de jornada -->
     <section id="screen-day-config" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-map-load">‹</button>
+        <button class="back-btn" data-go="screen-map-load"><svg class="ui-icon"><use href="#i-back"></use></svg></button>
         <div>
           <div class="brand-title">Configuración de jornada</div>
           <div class="brand-subtitle">Datos activos del día</div>
@@ -97,15 +122,15 @@
         <label>Observaciones de jornada</label>
         <textarea id="dayNotes" rows="3" placeholder="Opcional"></textarea>
 
-        <button id="saveDayConfig" class="btn primary full">Guardar jornada</button>
-        <button id="openHistoryFromDay" class="btn ghost full">Ver historial</button>
+        <button id="saveDayConfig" class="btn primary full"><span class="inline-icon"><svg class="ui-icon"><use href="#i-save"></use></svg></span><span>Guardar jornada</span></button>
+        <button id="openHistoryFromDay" class="btn ghost full"><span class="inline-icon"><svg class="ui-icon"><use href="#i-history"></use></svg></span><span>Ver historial</span></button>
       </main>
     </section>
 
     <!-- Selección de parcela -->
     <section id="screen-parcel-select" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-day-config">‹</button>
+        <button class="back-btn" data-go="screen-day-config"><svg class="ui-icon"><use href="#i-back"></use></svg></button>
         <div>
           <div class="brand-title">Seleccionar parcela</div>
           <div class="brand-subtitle">Toca una parcela para continuar</div>
@@ -115,8 +140,8 @@
       <div class="map-wrap">
         <div id="mapAll" class="map"></div>
         <div class="map-tools">
-          <button id="fitAllParcels" class="round-btn" title="Ver todas">⌖</button>
-          <button id="changeMapFile" class="round-btn" title="Cambiar mapa">⇪</button>
+          <button id="fitAllParcels" class="round-btn" title="Ver todas"><svg class="ui-icon"><use href="#i-focus"></use></svg></button>
+          <button id="changeMapFile" class="round-btn" title="Cambiar mapa"><svg class="ui-icon"><use href="#i-upload"></use></svg></button>
         </div>
       </div>
       <footer class="fixed-footer">
@@ -127,7 +152,7 @@
     <!-- Parcela seleccionada -->
     <section id="screen-parcel-detail" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-parcel-select">‹</button>
+        <button class="back-btn" data-go="screen-parcel-select"><svg class="ui-icon"><use href="#i-back"></use></svg></button>
         <div>
           <div class="brand-title">Parcela seleccionada</div>
           <div id="selectedParcelName" class="brand-subtitle">—</div>
@@ -140,12 +165,12 @@
 
       <main class="action-grid">
         <button id="startWorkFlow" class="action-card primary-card">
-          <span class="icon">☘</span>
+          <span class="icon ui-circle"><svg class="ui-icon"><use href="#i-track"></use></svg></span>
           <span>Trabajar en parcela</span>
           <small>Registrar recorrido GPS</small>
         </button>
         <button id="openIncidentFromParcel" class="action-card light-card">
-          <span class="icon">⚠</span>
+          <span class="icon ui-circle"><svg class="ui-icon"><use href="#i-alert"></use></svg></span>
           <span>Señalizar incidencia</span>
           <small>Guardar punto, tipo y foto</small>
         </button>
@@ -155,7 +180,7 @@
     <!-- Tipo de trabajo -->
     <section id="screen-work-type" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-parcel-detail">‹</button>
+        <button class="back-btn" data-go="screen-parcel-detail"><svg class="ui-icon"><use href="#i-back"></use></svg></button>
         <div>
           <div class="brand-title">Tipo de trabajo</div>
           <div class="brand-subtitle">Selecciona la labor</div>
@@ -166,15 +191,15 @@
         <h1 id="workTypeParcel">Parcela</h1>
         <div class="work-type-grid">
           <button class="choice-btn work-type-card" data-work-type="Aplicación de fitosanitarios">
-            <span class="choice-icon">⚗</span>
+            <span class="choice-icon ui-circle"><svg class="ui-icon"><use href="#i-spray"></use></svg></span>
             <span class="choice-copy"><strong>Aplicación de fitosanitarios</strong><small>Registro GPS del tratamiento y recargas</small></span>
           </button>
           <button class="choice-btn work-type-card" data-work-type="Desbroce">
-            <span class="choice-icon">✂</span>
+            <span class="choice-icon ui-circle"><svg class="ui-icon"><use href="#i-cut"></use></svg></span>
             <span class="choice-copy"><strong>Desbroce</strong><small>Seguimiento de la labor realizada en parcela</small></span>
           </button>
           <button class="choice-btn work-type-card" data-work-type="Otro">
-            <span class="choice-icon">⚒</span>
+            <span class="choice-icon ui-circle"><svg class="ui-icon"><use href="#i-tools"></use></svg></span>
             <span class="choice-copy"><strong>Otro</strong><small>Registrar cualquier otro trabajo de jornada</small></span>
           </button>
         </div>
@@ -184,7 +209,7 @@
     <!-- Calibración GPS -->
     <section id="screen-gps-calibration" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-work-type">‹</button>
+        <button class="back-btn" data-go="screen-work-type"><svg class="ui-icon"><use href="#i-back"></use></svg></button>
         <div>
           <div class="brand-title">Calibración GPS</div>
           <div class="brand-subtitle">Comprobación previa</div>
@@ -213,7 +238,7 @@
     <!-- Registro de trabajo -->
     <section id="screen-work" class="screen">
       <header class="topbar work-topbar">
-        <button id="backFromWork" class="back-btn">‹</button>
+        <button id="backFromWork" class="back-btn"><svg class="ui-icon"><use href="#i-back"></use></svg></button>
         <div class="work-title-block">
           <div class="brand-title">Registro de trabajo</div>
           <div id="workHeader" class="brand-subtitle">—</div>
@@ -223,34 +248,34 @@
       <main class="work-shell">
         <div class="work-stats-grid work-stats-primary">
           <div class="metric-card">
-            <span class="metric-icon">◔</span>
+            <span class="metric-icon"><svg class="ui-icon"><use href="#i-speed"></use></svg></span>
             <div><small>Velocidad</small><strong><span id="liveSpeed">0,0</span> km/h</strong></div>
           </div>
           <div class="metric-card">
-            <span class="metric-icon">◷</span>
+            <span class="metric-icon"><svg class="ui-icon"><use href="#i-timer"></use></svg></span>
             <div><small>Parcial</small><strong id="partialTime">00:00</strong></div>
           </div>
           <div class="metric-card">
-            <span class="metric-icon">◷</span>
+            <span class="metric-icon"><svg class="ui-icon"><use href="#i-clock"></use></svg></span>
             <div><small>Total</small><strong id="totalTime">00:00</strong></div>
           </div>
           <div class="metric-card">
-            <span class="metric-icon">⌁</span>
+            <span class="metric-icon"><svg class="ui-icon"><use href="#i-route"></use></svg></span>
             <div><small>Distancia</small><strong><span id="distanceKm">0,00</span> km</strong></div>
           </div>
         </div>
 
         <div class="work-stats-grid work-stats-secondary">
           <div class="metric-card compact">
-            <span class="metric-icon">◎</span>
+            <span class="metric-icon"><svg class="ui-icon"><use href="#i-gps"></use></svg></span>
             <div><small>GPS</small><strong id="liveAccuracy">—</strong></div>
           </div>
           <div class="metric-card compact wide state-card">
-            <span id="workStateIcon" class="metric-icon state-icon">○</span>
+            <span class="metric-icon state-icon"><svg id="workStateIcon" class="ui-icon"><use id="workStateUse" href="#i-play"></use></svg></span>
             <div><small>Estado</small><strong id="workStateLabel">Preparado</strong></div>
           </div>
           <div class="metric-card compact">
-            <span class="metric-icon">◌</span>
+            <span class="metric-icon"><svg class="ui-icon"><use href="#i-drop"></use></svg></span>
             <div><small>Recargas</small><strong id="refillCount">0</strong></div>
           </div>
         </div>
@@ -258,17 +283,17 @@
         <div class="map-wrap work-map clean-map">
           <div id="mapWork" class="map"></div>
           <div class="map-tools work-map-tools">
-            <button id="centerTractor" class="round-btn" title="Centrar posición">⌖</button>
+            <button id="centerTractor" class="round-btn" title="Centrar posición"><svg class="ui-icon"><use href="#i-crosshair"></use></svg></button>
           </div>
         </div>
 
         <div class="work-actions">
-          <button id="beginWorkBtn" class="btn primary work-main-btn"><span class="btn-icon">▶</span><span class="btn-copy"><strong>Comienzo</strong><small>Registrar inicio del trabajo</small></span></button>
-          <button id="stopWorkBtn" class="btn warning work-main-btn hidden"><span class="btn-icon">■</span><span class="btn-copy"><strong>Parada</strong><small>Detener y registrar motivo</small></span></button>
-          <button id="continueWorkBtn" class="btn primary work-main-btn hidden"><span class="btn-icon">↻</span><span class="btn-copy"><strong>Continuar</strong><small>Reanudar el trabajo</small></span></button>
+          <button id="beginWorkBtn" class="btn primary work-main-btn"><span class="btn-icon"><svg class="ui-icon"><use href="#i-play"></use></svg></span><span class="btn-copy"><strong>Comienzo</strong><small>Registrar inicio del trabajo</small></span></button>
+          <button id="stopWorkBtn" class="btn warning work-main-btn hidden"><span class="btn-icon"><svg class="ui-icon"><use href="#i-stop"></use></svg></span><span class="btn-copy"><strong>Parada</strong><small>Detener y registrar motivo</small></span></button>
+          <button id="continueWorkBtn" class="btn primary work-main-btn hidden"><span class="btn-icon"><svg class="ui-icon"><use href="#i-play"></use></svg></span><span class="btn-copy"><strong>Continuar</strong><small>Reanudar el trabajo</small></span></button>
           <div class="work-secondary-actions">
-            <button id="incidentWorkBtn" class="btn ghost work-secondary-btn"><span class="btn-icon">⚠</span><span class="btn-copy"><strong>Incidencia</strong><small>Registrar incidencia</small></span></button>
-            <button id="viewDraftReportBtn" class="btn ghost work-secondary-btn"><span class="btn-icon">▤</span><span class="btn-copy"><strong>Resumen</strong><small>Ver informe de trabajo</small></span></button>
+            <button id="incidentWorkBtn" class="btn ghost work-secondary-btn"><span class="btn-icon"><svg class="ui-icon"><use href="#i-alert"></use></svg></span><span class="btn-copy"><strong>Incidencia</strong><small>Registrar incidencia</small></span></button>
+            <button id="viewDraftReportBtn" class="btn ghost work-secondary-btn"><span class="btn-icon"><svg class="ui-icon"><use href="#i-list"></use></svg></span><span class="btn-copy"><strong>Resumen</strong><small>Ver informe de trabajo</small></span></button>
           </div>
         </div>
       </main>
@@ -277,7 +302,7 @@
     <!-- Informe -->
     <section id="screen-report" class="screen">
       <header class="topbar">
-        <button id="reportBackBtn" class="back-btn">‹</button>
+        <button id="reportBackBtn" class="back-btn"><svg class="ui-icon"><use href="#i-back"></use></svg></button>
         <div>
           <div class="brand-title">Informe de trabajo</div>
           <div id="reportSubtitle" class="brand-subtitle">—</div>
@@ -308,7 +333,7 @@
     <!-- Historial -->
     <section id="screen-history" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-day-config">‹</button>
+        <button class="back-btn" data-go="screen-day-config"><svg class="ui-icon"><use href="#i-back"></use></svg></button>
         <div>
           <div class="brand-title">Historial</div>
           <div class="brand-subtitle">Trabajos guardados localmente</div>
@@ -317,7 +342,7 @@
 
       <main class="panel">
         <div id="historyList" class="history-list"></div>
-        <button id="clearHistory" class="btn danger outline full">Borrar historial local</button>
+        <button id="clearHistory" class="btn danger outline full"><span class="inline-icon"><svg class="ui-icon"><use href="#i-trash"></use></svg></span><span>Borrar historial local</span></button>
       </main>
     </section>
 
@@ -330,7 +355,7 @@
         <button class="choice-btn" data-stop-reason="Avería / revisión">Avería / revisión</button>
         <button class="choice-btn" data-stop-reason="Otro motivo">Otro motivo</button>
         <button class="choice-btn danger-choice" data-stop-reason="Fin de tratamiento de la parcela">Fin de tratamiento de la parcela</button>
-        <button id="cancelStopModal" class="btn ghost full">Cancelar</button>
+        <button id="cancelStopModal" class="btn ghost full"><span class="inline-icon"><svg class="ui-icon"><use href="#i-back"></use></svg></span><span>Cancelar</span></button>
       </div>
     </div>
 
@@ -361,8 +386,8 @@
         <small class="hint">Puedes elegir cámara o galería según permita el móvil. La foto se comprimirá antes de guardarse.</small>
 
         <div class="button-row">
-          <button id="saveIncident" class="btn primary">Guardar</button>
-          <button id="cancelIncident" class="btn ghost">Cancelar</button>
+          <button id="saveIncident" class="btn primary"><span class="inline-icon"><svg class="ui-icon"><use href="#i-save"></use></svg></span><span>Guardar</span></button>
+          <button id="cancelIncident" class="btn ghost"><span class="inline-icon"><svg class="ui-icon"><use href="#i-back"></use></svg></span><span>Cancelar</span></button>
         </div>
       </div>
     </div>
