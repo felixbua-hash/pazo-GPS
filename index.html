@@ -164,9 +164,20 @@
 
       <main class="panel">
         <h1 id="workTypeParcel">Parcela</h1>
-        <button class="choice-btn" data-work-type="Aplicación de fitosanitarios">Aplicación de fitosanitarios</button>
-        <button class="choice-btn" data-work-type="Desbroce">Desbroce</button>
-        <button class="choice-btn" data-work-type="Otro">Otro</button>
+        <div class="work-type-grid">
+          <button class="choice-btn work-type-card" data-work-type="Aplicación de fitosanitarios">
+            <span class="choice-icon">⚗</span>
+            <span class="choice-copy"><strong>Aplicación de fitosanitarios</strong><small>Registro GPS del tratamiento y recargas</small></span>
+          </button>
+          <button class="choice-btn work-type-card" data-work-type="Desbroce">
+            <span class="choice-icon">✂</span>
+            <span class="choice-copy"><strong>Desbroce</strong><small>Seguimiento de la labor realizada en parcela</small></span>
+          </button>
+          <button class="choice-btn work-type-card" data-work-type="Otro">
+            <span class="choice-icon">⚒</span>
+            <span class="choice-copy"><strong>Otro</strong><small>Registrar cualquier otro trabajo de jornada</small></span>
+          </button>
+        </div>
       </main>
     </section>
 
@@ -201,39 +212,66 @@
 
     <!-- Registro de trabajo -->
     <section id="screen-work" class="screen">
-      <header class="topbar compact">
+      <header class="topbar work-topbar">
         <button id="backFromWork" class="back-btn">‹</button>
-        <div>
+        <div class="work-title-block">
           <div class="brand-title">Registro de trabajo</div>
           <div id="workHeader" class="brand-subtitle">—</div>
         </div>
-        <button id="centerTractor" class="round-btn header-tool">⌖</button>
       </header>
 
-      <div class="map-wrap work-map">
-        <div id="mapWork" class="map"></div>
-
-        <div class="data-strip">
-          <div><span>Vel.</span><strong id="liveSpeed">0,0</strong><small>km/h</small></div>
-          <div><span>Parcial</span><strong id="partialTime">00:00</strong></div>
-          <div><span>Total</span><strong id="totalTime">00:00</strong></div>
-          <div><span>Dist.</span><strong id="distanceKm">0,00</strong><small>km</small></div>
+      <main class="work-shell">
+        <div class="work-stats-grid work-stats-primary">
+          <div class="metric-card">
+            <span class="metric-icon">◔</span>
+            <div><small>Velocidad</small><strong><span id="liveSpeed">0,0</span> km/h</strong></div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-icon">◷</span>
+            <div><small>Parcial</small><strong id="partialTime">00:00</strong></div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-icon">◷</span>
+            <div><small>Total</small><strong id="totalTime">00:00</strong></div>
+          </div>
+          <div class="metric-card">
+            <span class="metric-icon">⌁</span>
+            <div><small>Distancia</small><strong><span id="distanceKm">0,00</span> km</strong></div>
+          </div>
         </div>
 
-        <div class="data-strip secondary">
-          <div><span>GPS</span><strong id="liveAccuracy">—</strong></div>
-          <div><span>Estado</span><strong id="workStateLabel">Preparado</strong></div>
-          <div><span>Recargas</span><strong id="refillCount">0</strong></div>
+        <div class="work-stats-grid work-stats-secondary">
+          <div class="metric-card compact">
+            <span class="metric-icon">◎</span>
+            <div><small>GPS</small><strong id="liveAccuracy">—</strong></div>
+          </div>
+          <div class="metric-card compact wide">
+            <span class="metric-icon">▶</span>
+            <div><small>Estado</small><strong id="workStateLabel">Preparado</strong></div>
+          </div>
+          <div class="metric-card compact">
+            <span class="metric-icon">◌</span>
+            <div><small>Recargas</small><strong id="refillCount">0</strong></div>
+          </div>
         </div>
-      </div>
 
-      <footer class="work-actions">
-        <button id="beginWorkBtn" class="btn primary">Comienzo</button>
-        <button id="stopWorkBtn" class="btn warning hidden">Parada</button>
-        <button id="continueWorkBtn" class="btn primary hidden">Continuar</button>
-        <button id="incidentWorkBtn" class="btn ghost">Incidencia</button>
-        <button id="viewDraftReportBtn" class="btn ghost">Resumen</button>
-      </footer>
+        <div class="map-wrap work-map clean-map">
+          <div id="mapWork" class="map"></div>
+          <div class="map-tools work-map-tools">
+            <button id="centerTractor" class="round-btn" title="Centrar posición">⌖</button>
+          </div>
+        </div>
+
+        <div class="work-actions">
+          <button id="beginWorkBtn" class="btn primary work-main-btn"><span class="btn-icon">▶</span><span class="btn-copy"><strong>Comienzo</strong><small>Registrar inicio del trabajo</small></span></button>
+          <button id="stopWorkBtn" class="btn warning work-main-btn hidden"><span class="btn-icon">■</span><span class="btn-copy"><strong>Parada</strong><small>Detener y registrar motivo</small></span></button>
+          <button id="continueWorkBtn" class="btn primary work-main-btn hidden"><span class="btn-icon">↻</span><span class="btn-copy"><strong>Continuar</strong><small>Reanudar el trabajo</small></span></button>
+          <div class="work-secondary-actions">
+            <button id="incidentWorkBtn" class="btn ghost work-secondary-btn"><span class="btn-icon">⚠</span><span class="btn-copy"><strong>Incidencia</strong><small>Registrar incidencia</small></span></button>
+            <button id="viewDraftReportBtn" class="btn ghost work-secondary-btn"><span class="btn-icon">▤</span><span class="btn-copy"><strong>Resumen</strong><small>Ver informe de trabajo</small></span></button>
+          </div>
+        </div>
+      </main>
     </section>
 
     <!-- Informe -->

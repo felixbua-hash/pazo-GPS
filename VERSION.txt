@@ -7,8 +7,10 @@ Formato:
 - Sin PARCELAS.geojson real ni INCIDENCIAS_.geojson real.
 - Parcelas e incidencias importadas localmente desde el terminal.
 
-Corrección principal de esta versión:
-- Módulo de mapas reprogramado para iPhone/Safari.
-- CSS crítico de Leaflet integrado localmente.
-- Creación/recreación estable del mapa al entrar en cada pantalla.
-- Alturas explícitas para evitar teselas grises/desplazadas y botones cortados.
+Correcciones principales de esta versión de trabajo:
+- Mantiene el mapa reprogramado para iPhone/Safari.
+- Ajustes visuales puntuales en carga, configuración, tipo de trabajo y registro de trabajo.
+- Pantalla de carga compactada sin listado de parcelas visible.
+- Área de observaciones de jornada ampliada.
+- Pantalla de tipo de trabajo rehecha con presentación más profesional.
+- Pantalla de registro de trabajo reorganizada para limpiar el mapa y profesionalizar los botones.

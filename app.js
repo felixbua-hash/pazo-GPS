@@ -154,8 +154,8 @@
   function renderParcelPreview(gj){
     const polygons = gj.features.filter(f => f.geometry && ["Polygon","MultiPolygon"].includes(f.geometry.type));
     const names = polygons.map(featureName);
-    $("parcelListPreview").innerHTML = names.map(n => `<div>• ${escapeHtml(n)}</div>`).join("");
-    $("parcelListPreview").classList.remove("hidden");
+    $("parcelListPreview").innerHTML = "";
+    $("parcelListPreview").classList.add("hidden");
     $("mapLoadStatus").className = "status-card ok";
     $("mapLoadStatus").innerHTML = `<strong>PARCELAS.geojson cargado.</strong><br>${names.length} parcelas detectadas.`;
     updateContinueAvailability();

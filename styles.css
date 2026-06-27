@@ -33,10 +33,12 @@ button{cursor:pointer}
 .splash-screen{padding:0;background:#eee4d5;align-items:center;justify-content:center}
 .splash-img{width:100%;height:100%;object-fit:cover}
 .version-pill{
-  position:absolute;bottom:34px;left:50%;transform:translateX(-50%);
-  background:rgba(251,248,238,.9);border:1px solid var(--border);
-  color:var(--green);padding:10px 18px;border-radius:999px;
-  font-weight:700;box-shadow:var(--shadow);white-space:nowrap;font-size:14px
+  position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+  background:rgba(251,248,238,.92);border:1px solid var(--border);
+  color:var(--green);padding:10px 16px;border-radius:20px;
+  font-weight:700;box-shadow:var(--shadow);font-size:13px;
+  max-width:calc(100% - 28px);width:max-content;text-align:center;line-height:1.25;
+  white-space:normal
 }
 
 .topbar{
@@ -255,6 +257,108 @@ textarea{resize:none}
 .export-grid{display:grid;gap:9px;align-content:start}
 .report-content th[colspan="2"]{background:#f4eddb;color:var(--green);font-weight:900}
 
+
+
+/* Ajustes visuales solicitados */
+#screen-map-load .topbar{height:78px;padding:12px 4px 6px;gap:10px}
+#screen-map-load .brand-mark{width:44px;height:44px;font-size:27px}
+#screen-map-load .brand-title{font-size:20px}
+#screen-map-load .brand-subtitle{font-size:12px}
+#screen-map-load .panel{padding:18px 18px 16px;gap:8px}
+#screen-map-load .panel h1{font-size:27px;line-height:.98;margin-bottom:2px}
+#screen-map-load .lead{font-size:14px;line-height:1.24;margin-bottom:4px}
+#screen-map-load .privacy-box,
+#screen-map-load .status-card{padding:11px 12px;font-size:13px;line-height:1.22;border-radius:16px}
+#screen-map-load .file-box{min-height:54px;border-radius:18px;font-size:14px;padding:0 10px;text-align:center}
+#screen-map-load .layer-load-grid{gap:7px}
+#screen-map-load .button-row{gap:8px}
+#screen-map-load .btn{min-height:46px;padding:12px 14px;font-size:14px}
+#screen-map-load #clearSavedMap{min-height:44px}
+#screen-map-load #parcelListPreview{display:none!important}
+
+#screen-day-config .topbar{height:82px;padding:12px 4px 6px}
+#screen-day-config .brand-title{font-size:20px}
+#screen-day-config .panel{padding:18px;gap:9px}
+#screen-day-config .panel h1{font-size:29px;line-height:1.02}
+#screen-day-config .lead{font-size:14px;line-height:1.28;margin-bottom:2px}
+#screen-day-config .status-card{padding:12px 14px;font-size:14px}
+#screen-day-config label{font-size:12px;margin-top:0}
+#screen-day-config input,
+#screen-day-config select,
+#screen-day-config textarea{padding:12px 14px}
+#screen-day-config .select-edit{gap:8px}
+#screen-day-config .mini-btn{padding:11px 12px;min-width:88px}
+#screen-day-config #dayNotes{min-height:88px;height:88px}
+#screen-day-config .btn{min-height:46px}
+
+#screen-work-type .panel{justify-content:flex-start;gap:14px}
+#screen-work-type .panel h1{font-size:31px;line-height:1.02}
+#screen-work-type .work-type-grid{display:grid;gap:14px;align-content:start;flex:1}
+.work-type-card{display:flex;align-items:center;gap:16px;padding:18px 18px;border-radius:24px;min-height:102px}
+.work-type-card .choice-icon{width:56px;height:56px;border-radius:18px;display:grid;place-items:center;border:1px solid rgba(22,61,41,.14);background:rgba(199,173,103,.12);font-size:26px;flex:0 0 auto}
+.work-type-card .choice-copy{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.work-type-card .choice-copy strong{font-size:18px;line-height:1.15}
+.work-type-card .choice-copy small{font-size:13px;color:var(--muted);line-height:1.25;text-align:left}
+
+.work-topbar{height:82px;padding:12px 4px 6px;gap:12px}
+.work-title-block{min-width:0}
+.work-shell{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+.work-shell .brand-subtitle{max-width:none}
+.work-stats-grid{display:grid;gap:8px;flex:0 0 auto}
+.work-stats-primary{grid-template-columns:repeat(4,1fr)}
+.work-stats-secondary{grid-template-columns:1fr 1.2fr 1fr}
+.metric-card{background:rgba(251,248,238,.92);border:1px solid var(--border);border-radius:18px;padding:10px 10px 9px;display:flex;align-items:center;gap:9px;min-height:64px;box-shadow:0 6px 16px rgba(30,35,25,.08)}
+.metric-card.compact{min-height:58px}
+.metric-card .metric-icon{width:32px;height:32px;border-radius:50%;border:1px solid rgba(22,61,41,.18);display:grid;place-items:center;font-size:15px;color:var(--green);flex:0 0 auto}
+.metric-card small{display:block;font-size:11px;color:var(--muted);margin-bottom:2px}
+.metric-card strong{display:block;font-size:18px;line-height:1.1;color:var(--green)}
+.metric-card.wide{padding-right:14px}
+.clean-map{flex:1;min-height:0;border-radius:28px}
+.work-map-tools{right:12px;top:12px}
+.work-actions{display:flex;flex-direction:column;gap:9px;flex:0 0 auto;padding:0 0 2px}
+.work-main-btn{width:100%;min-height:72px;border-radius:24px;justify-content:flex-start;gap:14px;padding:14px 18px;text-align:left}
+.work-main-btn .btn-icon,
+.work-secondary-btn .btn-icon{width:42px;height:42px;border-radius:50%;border:1px solid rgba(255,255,255,.3);display:grid;place-items:center;font-size:18px;flex:0 0 auto}
+.work-main-btn .btn-copy,
+.work-secondary-btn .btn-copy{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+.work-main-btn .btn-copy strong,
+.work-secondary-btn .btn-copy strong{font-size:17px;line-height:1.1}
+.work-main-btn .btn-copy small,
+.work-secondary-btn .btn-copy small{font-size:12px;line-height:1.2;font-weight:600;opacity:.9;text-align:left}
+.work-secondary-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.work-secondary-btn{min-height:66px;border-radius:22px;justify-content:flex-start;gap:12px;padding:12px 16px;text-align:left}
+.work-secondary-btn .btn-icon{border-color:rgba(22,61,41,.16)}
+
+@media (max-height: 820px){
+  #screen-map-load .panel{padding:16px 16px 14px;gap:7px}
+  #screen-map-load .panel h1{font-size:24px}
+  #screen-map-load .lead{font-size:13px}
+  #screen-map-load .privacy-box,
+  #screen-map-load .status-card{font-size:12px;padding:10px 11px}
+  #screen-map-load .file-box{min-height:50px;font-size:13px}
+  #screen-map-load .btn{min-height:42px;font-size:13px}
+
+  #screen-day-config .panel{padding:16px;gap:8px}
+  #screen-day-config .panel h1{font-size:27px}
+  #screen-day-config .lead{font-size:13px}
+  #screen-day-config #dayNotes{min-height:76px;height:76px}
+  #screen-day-config .btn{min-height:44px}
+
+  .work-topbar{height:74px;padding:10px 4px 4px}
+  .work-stats-grid{gap:7px}
+  .metric-card{padding:8px 9px;min-height:58px}
+  .metric-card.compact{min-height:54px}
+  .metric-card .metric-icon{width:28px;height:28px;font-size:14px}
+  .metric-card small{font-size:10px}
+  .metric-card strong{font-size:16px}
+  .work-main-btn{min-height:66px;padding:12px 16px}
+  .work-main-btn .btn-copy strong,
+  .work-secondary-btn .btn-copy strong{font-size:16px}
+  .work-main-btn .btn-copy small,
+  .work-secondary-btn .btn-copy small{font-size:11px}
+  .work-secondary-btn{min-height:60px;padding:11px 14px}
+}
+
 @media print{
   body,#app,.screen{position:static!important;width:auto!important;height:auto!important;overflow:visible!important;background:white!important;box-shadow:none!important;border-radius:0!important;color:#111!important}
   .screen{display:none!important}
@@ -303,3 +407,12 @@ textarea{resize:none}
 #screen-work .map-wrap.work-map{height:calc(var(--app-height, 100dvh) - 174px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:380px;flex:0 0 auto}
 .work-actions{height:64px;flex:0 0 64px}.work-actions .btn{min-width:0}
 .leaflet-container img,.leaflet-container video{max-width:none!important;max-height:none!important}.leaflet-container img.leaflet-image-layer,.leaflet-container .leaflet-tile{max-width:none!important;max-height:none!important}
+
+/* Overrides finales sobre parches anteriores */
+#screen-map-load .panel{overflow:hidden;padding-bottom:16px}
+#screen-map-load .layer-load-grid{gap:7px}
+#screen-map-load .file-box{min-height:54px}
+#screen-map-load .parcel-preview{display:none!important}
+#screen-work .work-shell{overflow:hidden}
+#screen-work .map-wrap.work-map{height:auto;min-height:0;flex:1 1 auto}
+#screen-work .work-actions{height:auto;flex:0 0 auto;padding-top:0}
