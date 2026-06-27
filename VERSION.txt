@@ -1,0 +1,6 @@
+Pazo Baion GPS
+Versión: Beta 0.2
+Fecha: 2026-06-27
+
+Criterio visual: pantallas estáticas aprobadas, no deslizantes, con paleta/iconos/estilo de referencia.
+Pantallas base incluidas: carga, configuración de jornada, selección de parcela, parcela seleccionada, tipo de trabajo, calibración GPS, registro trabajando, registro parado/continuar, informe e historial.
