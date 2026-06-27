@@ -302,24 +302,29 @@ textarea{resize:none}
 
 .work-topbar{height:82px;padding:12px 4px 6px;gap:12px}
 .work-title-block{min-width:0}
-.work-shell{flex:1;min-height:0;display:flex;flex-direction:column;gap:9px}
+.work-shell{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
 .work-shell .brand-subtitle{max-width:none}
-.work-stats-grid{display:grid;gap:7px;flex:0 0 auto}
+.work-stats-grid{display:grid;gap:8px;flex:0 0 auto}
 .work-stats-primary{grid-template-columns:repeat(4,minmax(0,1fr))}
 .work-stats-secondary{grid-template-columns:repeat(3,minmax(0,1fr))}
-.metric-card{background:rgba(251,248,238,.96);border:1px solid var(--border);border-radius:16px;padding:8px 8px;display:flex;align-items:center;gap:8px;min-height:54px;box-shadow:0 4px 12px rgba(30,35,25,.06);min-width:0}
-.metric-card.compact{min-height:54px}
-.metric-card .metric-icon{width:26px;height:26px;border-radius:50%;border:1px solid rgba(22,61,41,.16);display:grid;place-items:center;font-size:13px;color:var(--green);flex:0 0 auto}
+.metric-card{background:rgba(251,248,238,.98);border:1px solid #e8dfca;border-radius:18px;padding:8px 9px;display:flex;align-items:center;gap:8px;min-height:58px;box-shadow:0 3px 10px rgba(30,35,25,.05);min-width:0}
+.metric-card.compact{min-height:56px}
+.metric-card .metric-icon{width:28px;height:28px;border-radius:50%;border:1px solid rgba(22,61,41,.14);display:grid;place-items:center;font-size:13px;color:var(--green);flex:0 0 auto;background:#fffdf8}
 .metric-card > div{min-width:0;flex:1}
-.metric-card small{display:block;font-size:9px;color:var(--muted);margin-bottom:1px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.metric-card strong{display:block;font-size:11px;line-height:1.08;color:var(--green);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric-card small{display:block;font-size:9px;color:var(--muted);margin-bottom:2px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric-card strong{display:block;font-size:12px;line-height:1.08;color:var(--green);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .metric-card strong span,
 .metric-card strong#partialTime,
 .metric-card strong#totalTime,
 .metric-card strong#liveAccuracy,
 .metric-card strong#workStateLabel,
-.metric-card strong#refillCount{font-size:17px;font-weight:800}
-.metric-card.wide{padding-right:8px}
+.metric-card strong#refillCount{font-size:15px;font-weight:800}
+.metric-card.state-card strong#workStateLabel{font-size:14px}
+.metric-card.wide{padding-right:9px}
+.state-icon{font-size:14px;font-weight:800}
+.state-icon.is-working{color:#1f5d36}
+.state-icon.is-paused{color:#8b520e}
+.state-icon.is-ended{color:#a8483a}
 .clean-map{flex:1;min-height:0;border-radius:28px}
 .work-map-tools{right:12px;top:12px}
 .work-actions{display:flex;flex-direction:column;gap:9px;flex:0 0 auto;padding:0 0 2px}
@@ -353,9 +358,9 @@ textarea{resize:none}
 
   .work-topbar{height:74px;padding:10px 4px 4px}
   .work-stats-grid{gap:6px}
-  .metric-card{padding:7px 7px;min-height:50px}
-  .metric-card.compact{min-height:50px}
-  .metric-card .metric-icon{width:24px;height:24px;font-size:12px}
+  .metric-card{padding:7px 7px;min-height:52px}
+  .metric-card.compact{min-height:52px}
+  .metric-card .metric-icon{width:25px;height:25px;font-size:12px}
   .metric-card small{font-size:8px}
   .metric-card strong{font-size:10px}
   .metric-card strong span,
@@ -363,7 +368,7 @@ textarea{resize:none}
   .metric-card strong#totalTime,
   .metric-card strong#liveAccuracy,
   .metric-card strong#workStateLabel,
-  .metric-card strong#refillCount{font-size:15px}
+  .metric-card strong#refillCount{font-size:14px}
   .work-main-btn{min-height:66px;padding:12px 16px}
   .work-main-btn .btn-copy strong,
   .work-secondary-btn .btn-copy strong{font-size:16px}

@@ -543,11 +543,30 @@
     });
   }
 
+  function setWorkStateUi(label){
+    const icon = $("workStateIcon");
+    $("workStateLabel").textContent = label;
+    if(!icon) return;
+    icon.className = "metric-icon state-icon";
+    if(label === "Trabajando"){
+      icon.textContent = "▶";
+      icon.classList.add("is-working");
+    }else if(label === "Parado"){
+      icon.textContent = "■";
+      icon.classList.add("is-paused");
+    }else if(label === "Finalizado"){
+      icon.textContent = "■";
+      icon.classList.add("is-ended");
+    }else{
+      icon.textContent = "○";
+    }
+  }
+
   function resetLiveUi(){
     $("beginWorkBtn").classList.remove("hidden");
     $("stopWorkBtn").classList.add("hidden");
     $("continueWorkBtn").classList.add("hidden");
-    $("workStateLabel").textContent = "Preparado";
+    setWorkStateUi("Preparado");
     $("liveSpeed").textContent = "0,0";
     $("partialTime").textContent = "00:00";
     $("totalTime").textContent = "00:00";
@@ -565,7 +584,7 @@
     $("beginWorkBtn").classList.add("hidden");
     $("stopWorkBtn").classList.remove("hidden");
     $("continueWorkBtn").classList.add("hidden");
-    $("workStateLabel").textContent = "Trabajando";
+    setWorkStateUi("Trabajando");
     startGpsWatch();
     if(!state.tickerStarted){
       state.tickerStarted = true;
@@ -719,7 +738,7 @@
       $("stopWorkBtn").classList.add("hidden");
       $("continueWorkBtn").classList.add("hidden");
       $("beginWorkBtn").classList.add("hidden");
-      $("workStateLabel").textContent = "Finalizado";
+      setWorkStateUi("Finalizado");
       stopGpsWatch();
       saveFinishedWork();
       state.reportWork = null;
@@ -739,7 +758,7 @@
 
     $("stopWorkBtn").classList.add("hidden");
     $("continueWorkBtn").classList.remove("hidden");
-    $("workStateLabel").textContent = "Parado";
+    setWorkStateUi("Parado");
     $("refillCount").textContent = String(state.work.refills);
     storage.set(LS.active, state.work);
   }
@@ -753,7 +772,7 @@
     state.work.lastSegmentAt = now;
     $("stopWorkBtn").classList.remove("hidden");
     $("continueWorkBtn").classList.add("hidden");
-    $("workStateLabel").textContent = "Trabajando";
+    setWorkStateUi("Trabajando");
     storage.set(LS.active, state.work);
   }
 

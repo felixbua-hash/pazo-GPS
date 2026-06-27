@@ -14,3 +14,7 @@ Correcciones principales de esta versión de trabajo:
 - Área de observaciones de jornada ampliada.
 - Pantalla de tipo de trabajo rehecha con presentación más profesional.
 - Pantalla de registro de trabajo reorganizada para limpiar el mapa y profesionalizar los botones.
+
+Ajuste adicional aplicado:
+- Recuadros de información de la pantalla de trabajo refinados y compactados.
+- Estado con icono visual coherente según Preparado / Trabajando / Parado / Finalizado.
