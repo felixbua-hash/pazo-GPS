@@ -1,0 +1,16 @@
+Pazo Baion GPS
+Beta 0.6 Profesional Privada Corregida
+
+Formato:
+- ZIP sin carpetas.
+- Todos los archivos en raíz.
+- Sin PARCELAS.geojson real ni INCIDENCIAS_.geojson real.
+- Parcelas importadas localmente desde el terminal.
+
+Correcciones principales sobre Beta 0.5:
+- Historial pulsable con apertura de informe anterior.
+- Incidencias con solicitud GPS al guardar si no hay posición activa.
+- Fotos comprimidas localmente antes de guardarse.
+- Informe ampliado con jornada, eventos, incidencias, GPS y exportaciones.
+- Compartir nativo si el móvil/navegador lo permite.
+- Gestión de jornada con aviso si procede de otro día.

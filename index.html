@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#163d29" />
+  <title>Pazo Baion GPS</title>
+
+  <!-- Leaflet para mapa satelital. La app no sube tus parcelas; carga el GeoJSON local desde el terminal. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIINfQPaFroG0Bb+6S6iwB2Fw2bM2FQcwQ=" crossorigin="" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="manifest" href="./manifest.json" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- Pantalla de carga -->
+    <section id="screen-splash" class="screen active splash-screen">
+      <img class="splash-img" src="./splash.png" alt="Pazo Baion GPS" />
+      <div class="version-pill">Versión Beta 0.6 Profesional Privada Corregida</div>
+    </section>
+
+    <!-- Carga local de parcelas -->
+    <section id="screen-map-load" class="screen">
+      <header class="topbar">
+        <div class="brand-mark">B</div>
+        <div>
+          <div class="brand-title">Pazo Baion GPS</div>
+          <div class="brand-subtitle">Carga local protegida</div>
+        </div>
+      </header>
+
+      <main class="panel">
+        <h1>Cargar mapa de parcelas</h1>
+        <p class="lead">Selecciona desde este terminal el archivo <strong>PARCELAS.geojson</strong> exportado desde SW Maps. No se subirá a GitHub ni a terceros.</p>
+
+        <div class="privacy-box">
+          <strong>Privacidad:</strong> las coordenadas quedan guardadas localmente en este dispositivo. El mapa satelital online puede consultar imágenes de la zona al proveedor del mapa durante esta beta.
+        </div>
+
+        <label class="file-box">
+          <input id="geojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
+          <span>Seleccionar PARCELAS.geojson</span>
+        </label>
+
+        <div id="mapLoadStatus" class="status-card muted">
+          Estado: mapa no cargado.
+        </div>
+
+        <div id="parcelListPreview" class="parcel-preview hidden"></div>
+
+        <div class="button-row">
+          <button id="continueAfterMap" class="btn primary" disabled>Continuar</button>
+          <button id="useSavedMap" class="btn ghost">Usar mapa guardado</button>
+        </div>
+        <button id="clearSavedMap" class="btn danger outline">Borrar mapa guardado</button>
+      </main>
+    </section>
+
+    <!-- Configuración de jornada -->
+    <section id="screen-day-config" class="screen">
+      <header class="topbar">
+        <button class="back-btn" data-go="screen-map-load">‹</button>
+        <div>
+          <div class="brand-title">Configuración de jornada</div>
+          <div class="brand-subtitle">Datos activos del día</div>
+        </div>
+      </header>
+
+      <main class="panel">
+        <h1>Preparar jornada</h1>
+        <p class="lead">Estos datos se aplicarán por defecto a los trabajos de hoy, salvo cambio expreso.</p>
+        <div id="dayStatus" class="status-card muted">Jornada preparada para hoy.</div>
+
+        <label>Operario</label>
+        <div class="select-edit">
+          <select id="operatorSelect"></select>
+          <button class="mini-btn" data-add-list="operators">Añadir</button>
+        </div>
+
+        <label>Tractor</label>
+        <div class="select-edit">
+          <select id="tractorSelect"></select>
+          <button class="mini-btn" data-add-list="tractors">Añadir</button>
+        </div>
+
+        <label>Atomizador / cisterna</label>
+        <div class="select-edit">
+          <select id="sprayerSelect"></select>
+          <button class="mini-btn" data-add-list="sprayers">Añadir</button>
+        </div>
+
+        <label>Observaciones de jornada</label>
+        <textarea id="dayNotes" rows="3" placeholder="Opcional"></textarea>
+
+        <button id="saveDayConfig" class="btn primary full">Guardar jornada</button>
+        <button id="openHistoryFromDay" class="btn ghost full">Ver historial</button>
+      </main>
+    </section>
+
+    <!-- Selección de parcela -->
+    <section id="screen-parcel-select" class="screen">
+      <header class="topbar">
+        <button class="back-btn" data-go="screen-day-config">‹</button>
+        <div>
+          <div class="brand-title">Seleccionar parcela</div>
+          <div class="brand-subtitle">Toca una parcela para continuar</div>
+        </div>
+      </header>
+
+      <div class="map-wrap">
+        <div id="mapAll" class="map"></div>
+        <div class="map-tools">
+          <button id="fitAllParcels" class="round-btn" title="Ver todas">⌖</button>
+          <button id="changeMapFile" class="round-btn" title="Cambiar mapa">⇪</button>
+        </div>
+      </div>
+      <footer class="fixed-footer">
+        <div id="parcelSelectInfo" class="footer-info">Mapa cargado. Selecciona una parcela.</div>
+      </footer>
+    </section>
+
+    <!-- Parcela seleccionada -->
+    <section id="screen-parcel-detail" class="screen">
+      <header class="topbar">
+        <button class="back-btn" data-go="screen-parcel-select">‹</button>
+        <div>
+          <div class="brand-title">Parcela seleccionada</div>
+          <div id="selectedParcelName" class="brand-subtitle">—</div>
+        </div>
+      </header>
+
+      <div class="map-wrap small">
+        <div id="mapParcel" class="map"></div>
+      </div>
+
+      <main class="action-grid">
+        <button id="startWorkFlow" class="action-card primary-card">
+          <span class="icon">☘</span>
+          <span>Trabajar en parcela</span>
+          <small>Registrar recorrido GPS</small>
+        </button>
+        <button id="openIncidentFromParcel" class="action-card light-card">
+          <span class="icon">⚠</span>
+          <span>Señalizar incidencia</span>
+          <small>Guardar punto, tipo y foto</small>
+        </button>
+      </main>
+    </section>
+
+    <!-- Tipo de trabajo -->
+    <section id="screen-work-type" class="screen">
+      <header class="topbar">
+        <button class="back-btn" data-go="screen-parcel-detail">‹</button>
+        <div>
+          <div class="brand-title">Tipo de trabajo</div>
+          <div class="brand-subtitle">Selecciona la labor</div>
+        </div>
+      </header>
+
+      <main class="panel">
+        <h1 id="workTypeParcel">Parcela</h1>
+        <button class="choice-btn" data-work-type="Aplicación de fitosanitarios">Aplicación de fitosanitarios</button>
+        <button class="choice-btn" data-work-type="Desbroce">Desbroce</button>
+        <button class="choice-btn" data-work-type="Otro">Otro</button>
+      </main>
+    </section>
+
+    <!-- Calibración GPS -->
+    <section id="screen-gps-calibration" class="screen">
+      <header class="topbar">
+        <button class="back-btn" data-go="screen-work-type">‹</button>
+        <div>
+          <div class="brand-title">Calibración GPS</div>
+          <div class="brand-subtitle">Comprobación previa</div>
+        </div>
+      </header>
+
+      <main class="panel gps-panel">
+        <div class="gps-dial" id="gpsQualityDial">
+          <div id="gpsAccuracyValue">—</div>
+          <small>precisión actual</small>
+        </div>
+        <div id="gpsQualityText" class="status-card muted">Pulsa iniciar comprobación.</div>
+
+        <div class="gps-stats">
+          <div><span>Muestras</span><strong id="gpsSamples">0</strong></div>
+          <div><span>Mejor</span><strong id="gpsBest">—</strong></div>
+          <div><span>Media</span><strong id="gpsAvg">—</strong></div>
+        </div>
+
+        <button id="runGpsCalibration" class="btn primary full">Iniciar comprobación GPS</button>
+        <button id="startAfterCalibration" class="btn primary full" disabled>Iniciar trabajo</button>
+        <button id="forceStartWork" class="btn warning full hidden">Comenzar de todos modos</button>
+      </main>
+    </section>
+
+    <!-- Registro de trabajo -->
+    <section id="screen-work" class="screen">
+      <header class="topbar compact">
+        <button id="backFromWork" class="back-btn">‹</button>
+        <div>
+          <div class="brand-title">Registro de trabajo</div>
+          <div id="workHeader" class="brand-subtitle">—</div>
+        </div>
+        <button id="centerTractor" class="round-btn header-tool">⌖</button>
+      </header>
+
+      <div class="map-wrap work-map">
+        <div id="mapWork" class="map"></div>
+
+        <div class="data-strip">
+          <div><span>Vel.</span><strong id="liveSpeed">0,0</strong><small>km/h</small></div>
+          <div><span>Parcial</span><strong id="partialTime">00:00</strong></div>
+          <div><span>Total</span><strong id="totalTime">00:00</strong></div>
+          <div><span>Dist.</span><strong id="distanceKm">0,00</strong><small>km</small></div>
+        </div>
+
+        <div class="data-strip secondary">
+          <div><span>GPS</span><strong id="liveAccuracy">—</strong></div>
+          <div><span>Estado</span><strong id="workStateLabel">Preparado</strong></div>
+          <div><span>Recargas</span><strong id="refillCount">0</strong></div>
+        </div>
+      </div>
+
+      <footer class="work-actions">
+        <button id="beginWorkBtn" class="btn primary">Comienzo</button>
+        <button id="stopWorkBtn" class="btn warning hidden">Parada</button>
+        <button id="continueWorkBtn" class="btn primary hidden">Continuar</button>
+        <button id="incidentWorkBtn" class="btn ghost">Incidencia</button>
+        <button id="viewDraftReportBtn" class="btn ghost">Resumen</button>
+      </footer>
+    </section>
+
+    <!-- Informe -->
+    <section id="screen-report" class="screen">
+      <header class="topbar">
+        <button id="reportBackBtn" class="back-btn">‹</button>
+        <div>
+          <div class="brand-title">Informe de trabajo</div>
+          <div id="reportSubtitle" class="brand-subtitle">—</div>
+        </div>
+      </header>
+
+      <main class="report-panel">
+        <div id="reportStatusChip" class="status-chip">Borrador</div>
+        <div class="report-cards">
+          <div><span>Tiempo total</span><strong id="reportTotal">—</strong></div>
+          <div><span>Distancia</span><strong id="reportDistance">—</strong></div>
+          <div><span>Recargas</span><strong id="reportRefills">—</strong></div>
+        </div>
+
+        <div id="reportMap" class="report-map"></div>
+
+        <nav class="tabs">
+          <button class="tab active" data-report-tab="summary">Resumen</button>
+          <button class="tab" data-report-tab="events">Eventos</button>
+          <button class="tab" data-report-tab="incidents">Incidencias</button>
+          <button class="tab" data-report-tab="export">Exportar</button>
+        </nav>
+
+        <div id="reportContent" class="report-content"></div>
+      </main>
+    </section>
+
+    <!-- Historial -->
+    <section id="screen-history" class="screen">
+      <header class="topbar">
+        <button class="back-btn" data-go="screen-day-config">‹</button>
+        <div>
+          <div class="brand-title">Historial</div>
+          <div class="brand-subtitle">Trabajos guardados localmente</div>
+        </div>
+      </header>
+
+      <main class="panel">
+        <div id="historyList" class="history-list"></div>
+        <button id="clearHistory" class="btn danger outline full">Borrar historial local</button>
+      </main>
+    </section>
+
+    <!-- Modal parada -->
+    <div id="stopModal" class="modal hidden">
+      <div class="modal-card">
+        <h2>Motivo de parada</h2>
+        <button class="choice-btn" data-stop-reason="Recarga cisterna">Recarga cisterna</button>
+        <button class="choice-btn" data-stop-reason="Pausa técnica / incidencia">Pausa técnica / incidencia</button>
+        <button class="choice-btn" data-stop-reason="Avería / revisión">Avería / revisión</button>
+        <button class="choice-btn" data-stop-reason="Otro motivo">Otro motivo</button>
+        <button class="choice-btn danger-choice" data-stop-reason="Fin de tratamiento de la parcela">Fin de tratamiento de la parcela</button>
+        <button id="cancelStopModal" class="btn ghost full">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Modal incidencia -->
+    <div id="incidentModal" class="modal hidden">
+      <div class="modal-card">
+        <h2>Nueva incidencia</h2>
+        <label>Tipo</label>
+        <select id="incidentType"></select>
+        <div class="select-edit">
+          <input id="newIncidentType" type="text" placeholder="Añadir nuevo tipo" />
+          <button id="addIncidentType" class="mini-btn">Añadir</button>
+        </div>
+
+        <label>Estado</label>
+        <select id="incidentStatus">
+          <option>Pendiente</option>
+          <option>Revisada</option>
+          <option>Reparada</option>
+          <option>Descartada</option>
+        </select>
+
+        <label>Observación</label>
+        <textarea id="incidentNotes" rows="3" placeholder="Opcional"></textarea>
+
+        <label>Foto</label>
+        <input id="incidentPhoto" type="file" accept="image/*" />
+        <small class="hint">Puedes elegir cámara o galería según permita el móvil. La foto se comprimirá antes de guardarse.</small>
+
+        <div class="button-row">
+          <button id="saveIncident" class="btn primary">Guardar</button>
+          <button id="cancelIncident" class="btn ghost">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

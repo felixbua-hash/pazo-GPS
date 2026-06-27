@@ -1,0 +1,10 @@
+{
+  "name": "Pazo Baion GPS",
+  "short_name": "Baion GPS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4efe3",
+  "theme_color": "#163d29",
+  "description": "Beta profesional privada para registro GPS de trabajos en parcelas de viñedo.",
+  "icons": []
+}
