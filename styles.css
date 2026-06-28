@@ -589,3 +589,105 @@ button.metric-card:active{transform:scale(.99)}
 .history-status.pending{background:#fff4e6;color:#8b520e;border-color:#ead0a9}
 .history-status.completed{background:#edf7ef;color:#2f7d44;border-color:#bfd9c5}
 .history-empty{background:#f7f1e4;border:1px solid #e4d9bf;border-radius:20px;padding:16px;color:var(--muted);line-height:1.35}
+
+
+/* Beta 1.2: pantalla de carga, marco interno y estilo Champán elegante */
+:root{
+  --champagne-bg:#f7f0df;
+  --champagne-panel:rgba(255,252,244,.94);
+  --champagne-btn:#fffaf0;
+  --champagne-btn-2:#f7edd8;
+  --champagne-border:#cfb879;
+  --champagne-border-soft:#e2d4b3;
+  --champagne-gold:#b99645;
+  --champagne-shadow:0 7px 16px rgba(83,68,34,.13), 0 1px 0 rgba(255,255,255,.75) inset;
+  --champagne-shadow-soft:0 3px 10px rgba(83,68,34,.08);
+}
+
+.splash-screen{padding:0!important;background:#eee4d5!important;align-items:center;justify-content:center}
+.splash-img{width:100%!important;height:100%!important;object-fit:cover!important;display:block!important}
+.version-pill{display:none!important}
+
+.screen:not(.splash-screen){
+  background-image:url('./app-frame.png')!important;
+  background-size:100% 100%!important;
+  background-position:center center!important;
+  background-repeat:no-repeat!important;
+  background-color:var(--champagne-bg)!important;
+}
+
+.panel,.report-panel,.modal-card,.report-content,.report-map,.map-wrap,.footer-info,.privacy-box,.status-card,.file-box,.gps-stats div,.report-cards div,.history-card,.history-empty,.scroll-box,.report-kpi,.report-list div,.report-event,.report-empty{
+  background:rgba(255,252,244,.94)!important;
+  border-color:var(--champagne-border-soft)!important;
+}
+.panel,.modal-card,.report-content{box-shadow:0 12px 28px rgba(83,68,34,.10)!important}
+.status-card,.privacy-box,.footer-info,.report-kpi,.report-list div,.report-event,.report-empty{
+  background:rgba(247,241,228,.88)!important;
+  box-shadow:none!important;
+}
+.status-card.ok{background:#edf7ef!important;border-color:#bfd9c5!important;color:#2f7d44!important}
+.status-card.warn{background:#fff4e6!important;border-color:#ead0a9!important;color:#8b520e!important}
+.status-card.bad{background:#fff0ee!important;border-color:#e0b4ad!important;color:var(--danger)!important}
+
+/* Botones funcionales: crema/champán con borde dorado y ligero sombreado */
+.btn,.mini-btn,.tab,.choice-btn,.action-card,.file-box,.round-btn,.back-btn,.history-filter,.history-card,button.metric-card{
+  background:linear-gradient(180deg,#fffdf7 0%, var(--champagne-btn) 100%)!important;
+  color:var(--green)!important;
+  border:1px solid var(--champagne-border)!important;
+  box-shadow:var(--champagne-shadow)!important;
+}
+.btn.primary,.btn.ghost,.btn.warning,.btn.outline,.mini-btn,.mini-btn.add-btn,#continueAfterMap,#saveDayConfig,#beginWorkBtn,#startAfterCalibration,#runGpsCalibration,#continueWorkBtn,.work-main-btn,.work-secondary-btn,.primary-card,.light-card{
+  background:linear-gradient(180deg,#fffdf7 0%, var(--champagne-btn) 100%)!important;
+  color:var(--green)!important;
+  border:1px solid var(--champagne-border)!important;
+  box-shadow:var(--champagne-shadow)!important;
+}
+.btn.primary .ui-icon,.mini-btn.add-btn .ui-icon,#saveDayConfig .ui-icon,.btn .ui-icon,.mini-btn .ui-icon{color:var(--champagne-gold)!important}
+.btn.full{justify-content:center!important}
+#saveDayConfig.btn.full,#openHistoryFromDay.btn.full,#clearHistory.btn.full,#clearSavedMap.btn{justify-content:center!important}
+.btn:active,.mini-btn:active,.tab:active,.choice-btn:active,.action-card:active,.file-box:active,.round-btn:active,.back-btn:active,.history-filter:active,button.metric-card:active{transform:translateY(1px) scale(.995)!important;box-shadow:0 4px 10px rgba(83,68,34,.10)!important}
+.btn:disabled{opacity:.48!important;filter:saturate(.7)!important;box-shadow:none!important}
+
+.btn.danger,.btn.danger.outline,.danger-tool,#clearHistory,#clearSavedMap,.danger-choice{
+  background:#fff7f5!important;
+  color:#9b3f35!important;
+  border:1px solid #d8a9a1!important;
+  box-shadow:0 5px 13px rgba(139,54,45,.08)!important;
+}
+.btn.danger .ui-icon,#clearHistory .ui-icon,#clearSavedMap .ui-icon{color:#9b3f35!important}
+
+.tab.active,.history-filter.active{
+  background:linear-gradient(180deg,#fff6df 0%,#f2e6c8 100%)!important;
+  color:var(--green)!important;
+  border-color:var(--champagne-gold)!important;
+  box-shadow:var(--champagne-shadow)!important;
+}
+.tab.active::after{background:var(--champagne-gold)!important}
+
+.action-card .icon,.choice-icon,.btn-icon,.metric-card .metric-icon,.inline-icon,.round-btn .ui-icon,.back-btn .ui-icon{
+  color:var(--champagne-gold)!important;
+}
+.action-card .icon,.choice-icon,.btn-icon,.metric-card .metric-icon{
+  background:#fffdf8!important;
+  border:1px solid var(--champagne-border)!important;
+  box-shadow:0 3px 10px rgba(83,68,34,.08)!important;
+}
+.metric-card{background:rgba(255,252,244,.94)!important;border-color:var(--champagne-border-soft)!important;box-shadow:0 4px 11px rgba(83,68,34,.08)!important}
+.metric-card small{color:var(--muted)!important}
+.metric-card strong,.metric-card strong span{color:var(--green)!important}
+
+input,select,textarea{
+  background:rgba(255,252,244,.92)!important;
+  border-color:var(--champagne-border-soft)!important;
+  box-shadow:0 1px 0 rgba(255,255,255,.75) inset!important;
+}
+
+.map-wrap,.report-map{
+  background:#d8d2c0!important;
+  border-color:var(--champagne-border-soft)!important;
+  box-shadow:0 8px 22px rgba(83,68,34,.14)!important;
+}
+.map-wrap .round-btn{background:rgba(255,252,244,.96)!important}
+
+.history-status.pending{background:#fff4e6!important;color:#8b520e!important;border-color:#ead0a9!important}
+.history-status.completed{background:#edf7ef!important;color:#2f7d44!important;border-color:#bfd9c5!important}

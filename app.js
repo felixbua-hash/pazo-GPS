@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 1.1 Profesional Privada · Gestión e historial";
+  const VERSION = "Beta 1.2";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -1590,7 +1590,7 @@
       if(isValidParcelsGeoJSON(gj)) { state.parcelsGeoJSON = gj; storage.set(LS.map, gj); renderParcelPreview(gj); }
       if(isValidIncidentsGeoJSON(inc)) { state.incidentsGeoJSON = inc; storage.set(LS.incidentLayer, inc); renderIncidentLayerStatus(inc); }
       show("screen-map-load");
-    }, 3200);
+    }, 4000);
   }
 
   window.addEventListener("load", init);

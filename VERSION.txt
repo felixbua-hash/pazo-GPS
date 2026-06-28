@@ -1,18 +1,11 @@
-Pazo Baion GPS
-Beta 1.1 Profesional Privada · Gestión e historial
+Pazo Baion GPS — Beta 1.2
 
-Formato:
-- ZIP sin carpetas.
-- Todos los archivos en raíz.
-- Sin PARCELAS.geojson real ni INCIDENCIAS_.geojson real.
-- Parcelas e incidencias importadas localmente desde el terminal.
+Cambios integrados:
+- Nueva pantalla de carga aprobada, mostrada durante 4 segundos.
+- Estilo de botones e iconos Champán elegante.
+- Marco ornamental sutil como fondo de todas las pantallas internas, excepto pantalla de carga.
 
-Cambios incluidos en esta beta:
-- Mantiene zoom automático al iniciar trabajo y seguimiento visual del tractor.
-- Mantiene informe/resumen funcional con pestañas, viento e informes exportables.
-- Diferencia visualmente botones de acción y cajas informativas.
-- Permite añadir, editar y eliminar operarios, tractores y atomizadores/cisternas.
-- Cambia “Guardar jornada” por “Comenzar jornada”.
-- Reordena las fichas del historial: fecha, parcela, tipo y estado.
-- Añade filtros de historial: Todos, Pendientes y Completados.
-- Protege el borrado del historial con triple validación.
+Privacidad:
+- No incluye PARCELAS.geojson real.
+- No incluye INCIDENCIAS_.geojson real.
+- Las capas reales se cargan localmente en el dispositivo.

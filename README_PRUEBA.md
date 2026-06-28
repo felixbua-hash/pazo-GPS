@@ -1,17 +1,12 @@
-# Pazo Baion GPS — Beta 0.8 Profesional Privada · Mapa reprogramado
+# Pazo Baion GPS — Beta 1.2
 
-## Qué corrige esta beta
+## Cambios de esta beta
 
-Esta versión corrige los problemas detectados en iPhone en la Beta 0.6:
+Esta versión integra únicamente los cambios visuales definidos para la Beta 1.2:
 
-- La pantalla de carga ya permite cargar dos capas separadas:
-  - `PARCELAS.geojson`
-  - `INCIDENCIAS_.geojson`
-- `PARCELAS.geojson` se valida como capa de polígonos.
-- `INCIDENCIAS_.geojson` se valida como capa de incidencias y puede estar vacía. No se exige que tenga polígonos.
-- Se refuerza la inicialización de Leaflet en iPhone: invalidación de tamaño, reajuste de límites y redibujado de teselas.
-- Las parcelas se dibujan encima del satélite con capa vectorial visible.
-- La capa importada de incidencias se dibuja en los mapas si contiene geometrías.
+- Nueva pantalla de carga aprobada, mostrada durante 4 segundos.
+- Estilo de botones e iconos tipo Champán elegante.
+- Marco ornamental sutil como fondo de todas las pantallas internas, excepto la pantalla de carga.
 
 ## Privacidad
 
@@ -32,20 +27,13 @@ Todos los archivos están en raíz para subirlos juntos a GitHub:
 - VERSION.txt
 - README_PRUEBA.md
 - splash.png
+- app-frame.png
 
 ## Prueba recomendada
 
 1. Sube todos los archivos del ZIP a la raíz de GitHub.
 2. Abre la app desde GitHub Pages.
-3. Carga primero `PARCELAS.geojson`.
-4. Carga después `INCIDENCIAS_.geojson`, aunque esté vacío.
-5. Pulsa continuar y comprueba que el mapa se centra y que las parcelas aparecen encima del satélite.
-
-
-## Corrección específica Beta 0.8
-Esta versión reprograma la visualización del mapa para iPhone/Safari:
-- El CSS crítico de Leaflet se integra localmente en `styles.css` para no depender de que cargue la hoja CSS externa.
-- El mapa se destruye y recrea al entrar en las pantallas de mapa, evitando heredar tamaños internos erróneos.
-- La pantalla “Seleccionar parcela” usa altura explícita calculada con la altura real de la ventana.
-- Se fuerza el ajuste de tamaño y el encuadre después de que el contenedor tenga tamaño real.
-- Se mantienen visibles los botones de carga y navegación.
+3. Comprueba que la pantalla de carga se muestra durante 4 segundos.
+4. Carga primero `PARCELAS.geojson`.
+5. Carga después `INCIDENCIAS_.geojson`, aunque esté vacío.
+6. Revisa que las pantallas internas usan el nuevo marco y los botones Champán elegante.
