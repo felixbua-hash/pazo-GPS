@@ -1,5 +1,5 @@
 window.PAZO_BAION_DEFAULTS = {
-  version: "Beta 1.0 Profesional Privada · Trabajo e informes",
+  version: "Beta 1.1 Profesional Privada · Gestión e historial",
   operators: ["Operario 1", "Operario 2", "Operario 3"],
   tractors: ["Tractor 1", "Tractor 2"],
   sprayers: ["Atomizador 1", "Atomizador 2"],

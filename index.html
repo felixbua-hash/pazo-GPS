@@ -16,7 +16,7 @@
     <!-- Pantalla de carga -->
     <section id="screen-splash" class="screen active splash-screen">
       <img class="splash-img" src="./splash.png" alt="Pazo Baion GPS" />
-      <div class="version-pill">Versión Beta 1.0 Profesional Privada · Trabajo e informes</div>
+      <div class="version-pill">Versión Beta 1.1 Profesional Privada · Gestión e historial</div>
     </section>
 
     <!-- Carga local de capas -->
@@ -77,27 +77,33 @@
         <div id="dayStatus" class="status-card muted">Jornada preparada para hoy.</div>
 
         <label>Operario</label>
-        <div class="select-edit">
+        <div class="select-edit manage-list-row">
           <select id="operatorSelect"></select>
-          <button class="mini-btn" data-add-list="operators">Añadir</button>
+          <button class="mini-btn add-btn" data-add-list="operators">Añadir</button>
+          <button class="mini-btn tool-btn" data-edit-list="operators">Editar</button>
+          <button class="mini-btn tool-btn danger-tool" data-delete-list="operators">Eliminar</button>
         </div>
 
         <label>Tractor</label>
-        <div class="select-edit">
+        <div class="select-edit manage-list-row">
           <select id="tractorSelect"></select>
-          <button class="mini-btn" data-add-list="tractors">Añadir</button>
+          <button class="mini-btn add-btn" data-add-list="tractors">Añadir</button>
+          <button class="mini-btn tool-btn" data-edit-list="tractors">Editar</button>
+          <button class="mini-btn tool-btn danger-tool" data-delete-list="tractors">Eliminar</button>
         </div>
 
         <label>Atomizador / cisterna</label>
-        <div class="select-edit">
+        <div class="select-edit manage-list-row">
           <select id="sprayerSelect"></select>
-          <button class="mini-btn" data-add-list="sprayers">Añadir</button>
+          <button class="mini-btn add-btn" data-add-list="sprayers">Añadir</button>
+          <button class="mini-btn tool-btn" data-edit-list="sprayers">Editar</button>
+          <button class="mini-btn tool-btn danger-tool" data-delete-list="sprayers">Eliminar</button>
         </div>
 
         <label>Observaciones de jornada</label>
         <textarea id="dayNotes" rows="3" placeholder="Opcional"></textarea>
 
-        <button id="saveDayConfig" class="btn primary full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h12l2 2v12H5z"/><path d="M8 5v6h8V5"/><path d="M9 19h6"/></svg></span><span>Guardar jornada</span></button>
+        <button id="saveDayConfig" class="btn primary full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h12l2 2v12H5z"/><path d="M8 5v6h8V5"/><path d="M9 19h6"/></svg></span><span>Comenzar jornada</span></button>
         <button id="openHistoryFromDay" class="btn ghost full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/><path d="M12 8v5l3 2"/></svg></span><span>Ver historial</span></button>
       </main>
     </section>
@@ -323,6 +329,11 @@
       </header>
 
       <main class="panel">
+        <div class="history-filters" role="group" aria-label="Filtro de historial">
+          <button class="history-filter active" data-history-filter="all">Todos</button>
+          <button class="history-filter" data-history-filter="pending">Pendientes</button>
+          <button class="history-filter" data-history-filter="completed">Completados</button>
+        </div>
         <div id="historyList" class="history-list"></div>
         <button id="clearHistory" class="btn danger outline full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 12h6l1-12"/></svg></span><span>Borrar historial local</span></button>
       </main>

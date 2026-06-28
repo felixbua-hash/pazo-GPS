@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 1.0 Profesional Privada · Trabajo e informes";
+  const VERSION = "Beta 1.1 Profesional Privada · Gestión e historial";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -29,7 +29,8 @@
     trackingFollow: true,
     reportWork: null,
     reportOrigin: "work",
-    tickerStarted: false
+    tickerStarted: false,
+    historyFilter: "all"
   };
 
   const $ = (id) => document.getElementById(id);
@@ -191,12 +192,50 @@
     el.innerHTML = arr.map(v => `<option>${escapeHtml(v)}</option>`).join("");
   }
 
+  const listSelectId = { operators:"operatorSelect", tractors:"tractorSelect", sprayers:"sprayerSelect" };
+  const listLabel = { operators:"operario", tractors:"tractor", sprayers:"atomizador/cisterna" };
+
+  function normalizeListValue(value){
+    return String(value || "").trim().replace(/\s+/g, " ");
+  }
+
   function addToList(key){
-    const label = {operators:"operario", tractors:"tractor", sprayers:"atomizador/cisterna"}[key] || "elemento";
-    const value = prompt(`Nuevo ${label}:`);
+    const label = listLabel[key] || "elemento";
+    const value = normalizeListValue(prompt(`Nuevo ${label}:`));
     if(!value) return;
     const lists = storage.get(LS.lists, {});
-    lists[key] = Array.from(new Set([...(lists[key]||[]), value.trim()].filter(Boolean)));
+    lists[key] = Array.from(new Set([...(lists[key]||[]), value].filter(Boolean)));
+    storage.set(LS.lists, lists);
+    initLists();
+    const selectId = listSelectId[key];
+    if(selectId) $(selectId).value = value;
+  }
+
+  function editListItem(key){
+    const selectId = listSelectId[key];
+    const select = selectId ? $(selectId) : null;
+    const current = select?.value || "";
+    const label = listLabel[key] || "elemento";
+    if(!current){ toast(`No hay ${label} seleccionado para editar.`); return; }
+    const value = normalizeListValue(prompt(`Editar ${label}:`, current));
+    if(!value || value === current) return;
+    const lists = storage.get(LS.lists, {});
+    const arr = lists[key] || [];
+    lists[key] = Array.from(new Set(arr.map(v => v === current ? value : v).filter(Boolean)));
+    storage.set(LS.lists, lists);
+    initLists();
+    if(selectId) $(selectId).value = value;
+  }
+
+  function deleteListItem(key){
+    const selectId = listSelectId[key];
+    const select = selectId ? $(selectId) : null;
+    const current = select?.value || "";
+    const label = listLabel[key] || "elemento";
+    if(!current){ toast(`No hay ${label} seleccionado para eliminar.`); return; }
+    if(!confirm(`¿Eliminar “${current}” de la lista de ${label}s?`)) return;
+    const lists = storage.get(LS.lists, {});
+    lists[key] = (lists[key] || []).filter(v => v !== current);
     storage.set(LS.lists, lists);
     initLists();
   }
@@ -215,7 +254,7 @@
       state.dayConfig = day;
       if(day.date && day.date !== todayIso()){
         $("dayStatus").className = "status-card warn";
-        $("dayStatus").innerHTML = `<strong>Jornada anterior detectada.</strong><br>La configuración guardada es del ${escapeHtml(day.date)}. Revísala y pulsa Guardar jornada para usarla hoy.`;
+        $("dayStatus").innerHTML = `<strong>Jornada anterior detectada.</strong><br>La configuración guardada es del ${escapeHtml(day.date)}. Revísala y pulsa Comenzar jornada para usarla hoy.`;
       } else {
         $("dayStatus").className = "status-card ok";
         $("dayStatus").textContent = "Jornada activa para hoy.";
@@ -890,7 +929,10 @@
 
   function saveFinishedWork(){
     const hist = storage.get(LS.history, []);
-    hist.unshift(serializeWork(state.work));
+    const finished = serializeWork(state.work);
+    const idx = hist.findIndex(w => w.id === finished.id);
+    if(idx >= 0) hist[idx] = finished;
+    else hist.unshift(finished);
     storage.set(LS.history, hist.slice(0, 200));
     storage.remove(LS.active);
   }
@@ -1339,13 +1381,53 @@
     catch{ toast(text); }
   }
 
-  function renderHistory(){
+  function workIsCompleted(w){
+    return Boolean(w?.finishedAt || w?.status === "finalizado" || w?.status === "completado");
+  }
+
+  function workHistoryStatus(w){
+    return workIsCompleted(w) ? "Completado" : "Pendiente";
+  }
+
+  function workHistoryDate(w){
+    const raw = w?.finishedAt || w?.startedAt || w?.createdAt || w?.id?.replace("trabajo-", "") || null;
+    const n = Number(raw);
+    const d = raw ? new Date(isFinite(n) && String(raw).length >= 10 ? n : raw) : null;
+    return d && !isNaN(d.getTime()) ? d.toLocaleDateString("es-ES") : "Sin fecha";
+  }
+
+  function upsertPendingWorkInHistory(){
+    if(!state.work || workIsCompleted(state.work)) return;
     const hist = storage.get(LS.history, []);
-    $("historyList").innerHTML = hist.length ? hist.map((w,idx)=>`
-      <button class="history-card history-button" data-history-index="${idx}">
-        <strong>${escapeHtml(w.parcel)} · ${escapeHtml(w.type)}</strong>
-        <small>${w.finishedAt ? new Date(w.finishedAt).toLocaleString("es-ES") : "Sin finalizar"} · ${((w.distanceM || 0)/1000).toFixed(2).replace(".", ",")} km · ${w.refills||0} recargas · ${(w.incidents||[]).length} incidencias</small>
-      </button>`).join("") : "<p>No hay trabajos guardados.</p>";
+    const snap = serializeWork({...state.work, status:"pendiente"});
+    const idx = hist.findIndex(w => w.id === snap.id);
+    if(idx >= 0) hist[idx] = snap;
+    else hist.unshift(snap);
+    storage.set(LS.history, hist.slice(0, 200));
+  }
+
+  function renderHistory(){
+    upsertPendingWorkInHistory();
+    const hist = storage.get(LS.history, []);
+    const filter = state.historyFilter || "all";
+    const filtered = hist
+      .map((w, originalIndex) => ({w, originalIndex}))
+      .filter(({w}) => filter === "all" || (filter === "pending" ? !workIsCompleted(w) : workIsCompleted(w)));
+
+    qsa("[data-history-filter]").forEach(btn => btn.classList.toggle("active", btn.dataset.historyFilter === filter));
+
+    $("historyList").innerHTML = filtered.length ? filtered.map(({w, originalIndex}) => {
+      const status = workHistoryStatus(w);
+      const cls = status === "Pendiente" ? "pending" : "completed";
+      return `
+      <button class="history-card history-button history-card-v11" data-history-index="${originalIndex}">
+        <span class="history-date">${escapeHtml(workHistoryDate(w))}</span>
+        <strong>${escapeHtml(w.parcel || "Parcela sin nombre")}</strong>
+        <span class="history-type">${escapeHtml(w.type || "Trabajo sin tipo")}</span>
+        <span class="history-status ${cls}">${status}</span>
+      </button>`;
+    }).join("") : `<div class="history-empty">${filter === "pending" ? "No hay trabajos pendientes." : filter === "completed" ? "No hay trabajos completados." : "No hay trabajos guardados."}</div>`;
+
     qsa("[data-history-index]").forEach(card => {
       card.addEventListener("click", () => {
         const latest = storage.get(LS.history, []);
@@ -1373,6 +1455,9 @@
   function bind(){
     qsa("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
     qsa("[data-add-list]").forEach(b => b.addEventListener("click", () => addToList(b.dataset.addList)));
+    qsa("[data-edit-list]").forEach(b => b.addEventListener("click", () => editListItem(b.dataset.editList)));
+    qsa("[data-delete-list]").forEach(b => b.addEventListener("click", () => deleteListItem(b.dataset.deleteList)));
+    qsa("[data-history-filter]").forEach(b => b.addEventListener("click", () => { state.historyFilter = b.dataset.historyFilter; renderHistory(); }));
 
     $("parcelGeojsonInput").addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
@@ -1422,7 +1507,7 @@
     };
 
     $("saveDayConfig").onclick = saveDayConfig;
-    $("openHistoryFromDay").onclick = () => show("screen-history");
+    $("openHistoryFromDay").onclick = () => { upsertPendingWorkInHistory(); show("screen-history"); };
     $("reportBackBtn").onclick = () => {
       if(state.reportOrigin === "history") show("screen-history");
       else show("screen-work");
@@ -1448,6 +1533,7 @@
     $("backFromWork").onclick = () => {
       if(state.work && state.work.status !== "finalizado"){
         if(!confirm("Hay un trabajo en curso. ¿Volver sin finalizar?")) return;
+        upsertPendingWorkInHistory();
       }
       show("screen-parcel-detail");
     };
@@ -1480,9 +1566,12 @@
     }));
 
     $("clearHistory").onclick = () => {
-      if(confirm("¿Borrar historial local de este dispositivo?")){
-        storage.remove(LS.history); renderHistory();
-      }
+      if(!confirm("ATENCIÓN: vas a borrar todo el historial local de trabajos de este dispositivo. ¿Continuar?")) return;
+      const text = prompt("Para confirmar, escribe exactamente BORRAR:");
+      if(text !== "BORRAR") { toast("Borrado cancelado."); return; }
+      if(!confirm("Última confirmación: esta acción no se puede deshacer. ¿Borrar historial local?")) return;
+      storage.remove(LS.history);
+      renderHistory();
     };
   }
 
