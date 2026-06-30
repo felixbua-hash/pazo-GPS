@@ -1,19 +1,15 @@
-Pazo Baion GPS
-Versión Beta 1.5
+Pazo Baion GPS — Beta 1.6 reconstruida desde Beta 1.2
 
-Base de reconstrucción:
-- Partida desde Pazo Baion GPS Beta 1.2.
-- Reintegradas las mejoras válidas de Beta 1.3.
-- No se ha usado la Beta 1.4 como base.
+Cambios integrados exclusivamente en esta versión:
+- Pantalla de carga local y privacidad separada en Datos locales y Servicios externos.
+- Viento previsto solo en trabajos de Aplicación de fitosanitarios, con racha, dirección, fuente, hora y coordenada de referencia.
+- Mapas de informe recreados al estar visibles, con aviso si no hay recorrido GPS.
+- Continuación de trabajos pendientes desde historial sin crear un trabajo nuevo.
+- Sesiones de trabajo por fecha, inicio, fin, tiempo activo y tiempo parado.
+- Pantallas de informe: Resumen, Trabajo, Eventos, GPS, Viento e Incidencias según composición fijada.
 
-Cambios integrados:
-- Pantalla de carga limpia y actualizada a Beta 1.5.
-- Módulo de viento previsto durante trabajo activo e informes.
-- Advertencia de que el viento procede de pronóstico meteorológico, no de medición directa en parcela.
-- Corrección del mapa del informe y trazado GPS.
-- Continuación de trabajos pendientes desde historial.
-- Registro de sesiones por día para trabajos retomados.
-- Triple validación para borrar historial local.
-- Carga local protegida de PARCELAS.geojson e INCIDENCIAS_.geojson.
-
-No incluye PARCELAS.geojson real ni INCIDENCIAS_.geojson real.
+Privacidad:
+- No incluye PARCELAS.geojson real.
+- No incluye INCIDENCIAS_.geojson real.
+- No incluye coordenadas reales ni rutas GPS reales.
+- Las capas reales se cargan localmente en el dispositivo.

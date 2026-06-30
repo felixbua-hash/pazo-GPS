@@ -692,49 +692,61 @@ input,select,textarea{
 .history-status.pending{background:#fff4e6!important;color:#8b520e!important;border-color:#ead0a9!important}
 .history-status.completed{background:#edf7ef!important;color:#2f7d44!important;border-color:#bfd9c5!important}
 
-/* Beta 1.3: viento previsto, mapa de informe y trabajos pendientes por sesiones */
-.map-note{
-  position:absolute;left:12px;right:12px;bottom:12px;z-index:650;
-  background:rgba(255,252,244,.94);border:1px solid var(--champagne-border-soft);
-  border-radius:14px;padding:8px 10px;color:var(--muted);font-size:12px;
-  box-shadow:0 4px 12px rgba(83,68,34,.10);text-align:center
+/* Beta 1.6 reconstruida desde 1.2: integración exclusiva de cambios pendientes */
+.privacy-stack{display:grid;gap:8px}
+.privacy-box{display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:start}
+.privacy-box strong{display:block;font-weight:900;white-space:nowrap}
+.privacy-box span{display:block;color:var(--muted);line-height:1.25}
+.privacy-local::before,.privacy-external::before{
+  content:"";width:28px;height:28px;border-radius:50%;border:1px solid var(--champagne-border-soft);background:#fffdf8;grid-row:1 / span 2;
 }
-.wind-table-head,.wind-row{
-  display:grid;grid-template-columns:1fr 1.2fr 1.15fr .75fr 1.05fr .9fr;gap:4px;align-items:center
+.privacy-local::before{box-shadow:inset 0 0 0 7px rgba(47,125,68,.12)}
+.privacy-external::before{box-shadow:inset 0 0 0 7px rgba(55,106,153,.12)}
+#screen-work .work-stats-secondary.no-wind{grid-template-columns:1fr 1.2fr 1fr!important}
+.report-map{position:relative}
+.report-map-notice{
+  position:absolute;left:10px;right:10px;bottom:10px;z-index:1200;
+  background:rgba(255,252,244,.94);border:1px solid var(--champagne-border-soft);border-radius:14px;
+  color:#706b5a;font-size:12px;line-height:1.25;padding:8px 10px;text-align:center;box-shadow:0 4px 12px rgba(30,35,25,.10)
 }
-.wind-table-head{
-  color:var(--muted);font-weight:800;font-size:10px;padding:8px 7px;border-bottom:1px solid var(--champagne-border-soft)
+.report-conclusion,.report-note{
+  background:rgba(237,247,239,.78);border:1px solid #bfd9c5;border-radius:18px;padding:12px;color:var(--green);line-height:1.3
 }
-.wind-row{
-  background:rgba(255,252,244,.86);border:1px solid var(--champagne-border-soft);
-  border-radius:14px;padding:8px 7px;margin:6px 0;font-size:10px;box-shadow:0 2px 7px rgba(83,68,34,.06)
+.report-conclusion strong{display:block;font:700 17px Georgia,serif;margin-bottom:4px}
+.report-conclusion span,.report-note{font-size:12px;color:var(--muted)}
+.report-table{width:100%;border-collapse:separate!important;border-spacing:0;background:#fffdf8;border:1px solid var(--champagne-border-soft);border-radius:16px;overflow:hidden;font-size:11px}
+.report-table th,.report-table td{border-bottom:1px solid var(--champagne-border-soft)!important;padding:7px 6px!important;text-align:left;vertical-align:top}
+.report-table tr:last-child td{border-bottom:0!important}
+.session-list,.timeline-list{display:grid;gap:8px}
+.session-card{
+  display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;background:#fffdf8;border:1px solid var(--champagne-border-soft);border-radius:18px;padding:10px 11px
 }
-.wind-row strong{font-size:11px;color:var(--green)}
-.wind-row em{font-style:normal;font-weight:800;border-radius:999px;padding:4px 5px;text-align:center;font-size:9px}
-.wind-row small{font-size:9px;color:var(--muted);text-align:right}
-.wind-row.wind-ok em{background:#edf7ef;color:#2f7d44;border:1px solid #bfd9c5}
-.wind-row.wind-warn em{background:#fff4e6;color:#8b520e;border:1px solid #ead0a9}
-.wind-row.wind-bad em{background:#fff0ee;color:#a8483a;border:1px solid #e0b4ad}
-.report-note{
-  margin-top:10px;background:#fff4e6;border:1px solid #ead0a9;color:#725018;
-  border-radius:16px;padding:10px 12px;line-height:1.35
-}
-.history-card-v11{
-  display:grid!important;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"open status" "open continue";gap:8px 10px!important;align-items:center!important
-}
-.history-open{
-  grid-area:open;border:0;background:transparent;color:inherit;text-align:left;padding:0;display:block;min-width:0;box-shadow:none!important
-}
-.history-open:active{transform:none!important;box-shadow:none!important}
-.history-card-v11 .history-status{grid-area:status;justify-self:end;align-self:center}
-.history-continue{
-  grid-area:continue;justify-self:end;border:1px solid var(--champagne-border);border-radius:999px;
-  background:linear-gradient(180deg,#fffdf7 0%, var(--champagne-btn) 100%);color:var(--green);
-  padding:8px 11px;font-size:11px;font-weight:900;box-shadow:var(--champagne-shadow-soft);white-space:nowrap
-}
-.history-continue:active{transform:translateY(1px) scale(.995)}
+.session-index{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#edf7ef;color:#2f7d44;font-weight:900}
+.session-card strong{display:block;color:var(--green)}
+.session-card small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.session-card b{color:var(--green);font-size:13px}
+.timeline-item{display:grid;grid-template-columns:43px 14px minmax(0,1fr);gap:8px;align-items:start;background:#fffdf8;border:1px solid var(--champagne-border-soft);border-radius:18px;padding:9px 10px}
+.timeline-time{font-weight:800;color:var(--muted);font-size:12px}
+.timeline-dot{width:12px;height:12px;border-radius:50%;margin-top:3px;background:#706b5a}
+.timeline-dot.good,.quality-dot.good{color:#2f7d44;background:#2f7d44}
+.timeline-dot.warn,.quality-dot.warn{color:#c47b32;background:#c47b32}
+.timeline-dot.bad,.quality-dot.bad{color:#a8483a;background:#a8483a}
+.quality-dot.accept{color:#d6a43b;background:#d6a43b}
+.quality-dot.muted{color:#706b5a;background:#706b5a}
+.quality-dot{display:inline-block;width:.8em;height:.8em;border-radius:50%;line-height:.8em;color:inherit;background:currentColor;font-size:9px;vertical-align:middle;overflow:hidden}
+.timeline-item strong{display:block;color:var(--green);font-size:14px}
+.timeline-item small{display:block;color:var(--muted);font-size:12px;line-height:1.25;margin-top:2px}
+.gps-legend,.wind-mini-legend{display:grid;grid-template-columns:1fr 1fr;gap:7px;font-size:11px;color:var(--muted)}
+.gps-legend span,.wind-mini-legend span{background:#fffdf8;border:1px solid var(--champagne-border-soft);border-radius:999px;padding:7px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wind-arrow-marker{background:transparent;border:0}
+.wind-arrow{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:rgba(255,252,244,.94);border:1px solid var(--wind-color);color:var(--wind-color);font-size:19px;font-weight:900;transform:rotate(var(--wind-rot));box-shadow:0 3px 8px rgba(0,0,0,.16)}
+.history-entry{display:grid!important;grid-template-columns:1fr!important;gap:8px!important;padding:11px!important}
+.history-main{display:grid!important;grid-template-columns:1fr auto;grid-template-areas:"date status" "parcel status" "type status";gap:3px 10px;align-items:center;background:transparent!important;border:0!important;color:var(--green)!important;text-align:left;padding:0!important;width:100%;box-shadow:none!important}
+.history-continue{width:100%;min-height:42px!important;border-radius:18px!important;font-size:13px!important}
 @media (max-width:390px){
-  .history-card-v11{grid-template-columns:1fr;grid-template-areas:"open" "status" "continue"!important;justify-items:start!important}
-  .history-card-v11 .history-status,.history-continue{justify-self:start!important}
-  .wind-table-head,.wind-row{grid-template-columns:.8fr 1fr 1fr .65fr 1fr .8fr;font-size:9px}
+  .gps-legend,.wind-mini-legend{grid-template-columns:1fr}
 }
+#screen-map-load .privacy-stack{gap:0;border:1px solid var(--champagne-border-soft);border-radius:18px;overflow:hidden;background:rgba(255,252,244,.94)}
+#screen-map-load .privacy-stack .privacy-box{border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;padding:9px 10px!important;font-size:12px!important;line-height:1.18!important}
+#screen-map-load .privacy-stack .privacy-box + .privacy-box{border-top:1px solid var(--champagne-border-soft)!important}
+#screen-map-load .privacy-box::before{width:24px;height:24px}

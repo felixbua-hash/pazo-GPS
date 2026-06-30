@@ -1,31 +1,60 @@
-# Pazo Baion GPS — Beta 1.5
+# Pazo Baion GPS — Beta 1.6 reconstruida desde Beta 1.2
 
-Versión privada de prueba.
+## Base utilizada
 
-## Base
+Esta versión parte de `Pazo Baion GPS Beta 1.2.zip` y aplica exclusivamente los cambios pendientes indicados para la reconstrucción.
 
-Esta versión se reconstruye tomando como base la **Beta 1.2** e integrando de nuevo las mejoras válidas de **Beta 1.3**.  
-No se utiliza la Beta 1.4 como base.
+No se ha usado Beta 1.4 ni Beta 1.5 como base.
 
 ## Cambios integrados
 
-- Pantalla de carga limpia, actualizada a Beta 1.5.
-- Módulo de viento previsto durante el trabajo activo.
-- Registro de viento previsto, racha, dirección, fuente y avisos.
-- Informe de viento con tabla, resumen y advertencia de que los datos proceden de pronóstico meteorológico y no de medición directa en parcela.
-- Corrección del mapa del informe de trabajo para recrearlo al abrir la pantalla y dibujar parcela, recorrido, eventos e incidencias cuando existan.
-- Botón “Continuar trabajo” en trabajos pendientes del historial.
-- Registro de sesiones de trabajo por fecha para trabajos retomados en días distintos.
-- Triple validación para borrar historial local.
-- Carga local protegida de capas.
+- Carga local y privacidad diferenciada en dos bloques: **Datos locales** y **Servicios externos**.
+- Viento previsto limitado a **Aplicación de fitosanitarios**.
+- En desbroce y otros trabajos no se muestra ni se registra viento.
+- Registro de viento previsto con velocidad, racha, dirección, fuente, hora y coordenada de referencia.
+- Nota obligatoria en informe: dato procedente de pronóstico meteorológico, no de medición directa en parcela.
+- Umbrales de viento: verde 0-10,8 km/h; ámbar 10,9-15,3 km/h; rojo >15,3 km/h.
+- Mapa de informe inicializado cuando la pantalla está visible y con aviso si no hay recorrido GPS registrado.
+- Continuación de trabajos pendientes desde historial sin crear un trabajo nuevo.
+- Sesiones de trabajo por fecha, inicio, fin, tiempo activo y tiempo parado.
+- Pantallas de informe reconstruidas: Resumen general, Trabajo/sesiones, Eventos, GPS, Viento e Incidencias.
+- Historial con filtros Todos / Pendientes / Completados y borrado local con triple validación.
 
-## Seguridad de datos
+## Privacidad
 
-Este ZIP no incluye:
+Esta versión NO incluye `PARCELAS.geojson` real ni `INCIDENCIAS_.geojson` real.
 
-- PARCELAS.geojson real.
-- INCIDENCIAS_.geojson real.
-- Coordenadas reales.
-- Rutas GPS reales.
+Tampoco incluye coordenadas reales, rutas GPS reales ni datos reales de trabajo. Las capas se cargan localmente desde el dispositivo y se guardan en el navegador del terminal.
 
-Las capas reales deben cargarse localmente desde el dispositivo.
+Advertencia: el mapa satelital online y el viento previsto pueden consultar proveedores externos usando la ubicación de referencia.
+
+## Archivos
+
+Todos los archivos están en raíz para subirlos juntos a GitHub:
+
+- index.html
+- styles.css
+- app.js
+- data.js
+- manifest.json
+- VERSION.txt
+- README_PRUEBA.md
+- splash.png
+- app-frame.png
+
+## Prueba recomendada en iPhone
+
+1. Abrir la app y comprobar que la pantalla de carga dura 4 segundos.
+2. Cargar `PARCELAS.geojson`.
+3. Cargar `INCIDENCIAS_.geojson`, aunque esté vacío.
+4. Crear un trabajo de desbroce y verificar que no aparece ni se registra viento.
+5. Crear un trabajo de aplicación de fitosanitarios y verificar que aparece el registro de viento previsto.
+6. Parar y continuar trabajo en el mismo día.
+7. Dejar un trabajo pendiente y retomarlo desde historial con **Continuar trabajo**.
+8. Revisar informe provisional y definitivo.
+9. Revisar las pestañas Resumen, Trabajo, Eventos, GPS, Viento e Incidencias.
+10. Confirmar que el mapa del informe no queda gris y muestra aviso si no hay recorrido GPS.
+
+## Nota de prueba
+
+La revisión incluida antes de la entrega es estructural y sintáctica. La prueba real en iPhone debe hacerse en el dispositivo.
