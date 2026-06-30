@@ -1,4 +1,4 @@
-# Pazo Baion GPS — Beta 1.6 reconstruida desde Beta 1.2
+# Pazo Baion GPS — Beta 1.8 reconstruida desde Beta 1.2
 
 ## Base utilizada
 
@@ -18,6 +18,7 @@ No se ha usado Beta 1.4 ni Beta 1.5 como base.
 - Continuación de trabajos pendientes desde historial sin crear un trabajo nuevo.
 - Sesiones de trabajo por fecha, inicio, fin, tiempo activo y tiempo parado.
 - Pantallas de informe reconstruidas: Resumen general, Trabajo/sesiones, Eventos, GPS, Viento e Incidencias.
+- Navegación del informe rediseñada: se elimina la botonera superior visible y el cambio de pantalla se realiza mediante deslizamiento horizontal dentro del informe.
 - Historial con filtros Todos / Pendientes / Completados y borrado local con triple validación.
 
 ## Privacidad
@@ -52,7 +53,7 @@ Todos los archivos están en raíz para subirlos juntos a GitHub:
 6. Parar y continuar trabajo en el mismo día.
 7. Dejar un trabajo pendiente y retomarlo desde historial con **Continuar trabajo**.
 8. Revisar informe provisional y definitivo.
-9. Revisar las pestañas Resumen, Trabajo, Eventos, GPS, Viento e Incidencias.
+9. Revisar las pantallas Resumen, Trabajo, Eventos, GPS, Viento e Incidencias mediante deslizamiento horizontal dentro del informe.
 10. Confirmar que el mapa del informe no queda gris y muestra aviso si no hay recorrido GPS.
 
 ## Nota de prueba
