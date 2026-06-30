@@ -1,20 +1,23 @@
-# Pazo Baion GPS — Beta 1.4
+# Pazo Baion GPS — Beta 1.5
 
 Versión privada de prueba.
 
-## Cambios de esta beta
+## Base
 
-- Privacidad corregida en la pantalla de carga de capas: datos locales y servicios externos diferenciados.
-- Viento previsto solo para trabajos de “Aplicación de fitosanitarios”.
-- Registro de viento únicamente durante trabajo activo.
-- Umbrales de viento en km/h:
-  - Verde / recomendado: 0–10,8 km/h.
-  - Ámbar / precaución: >10,8–15,3 km/h.
-  - Rojo / exceso: >15,3 km/h.
-- Informe de viento con resumen superior, mapa con recorrido y flechas, tabla por intervalos y conclusión.
-- Pantallas de informe con composición visual fijada para Resumen, Trabajo, Eventos, GPS e Incidencias.
-- Mapa del informe reforzado para representar parcela, recorrido GPS, incidencias, eventos y flechas de viento cuando existan datos.
-- Trabajos pendientes continúan desde historial y conservan sesiones por días.
+Esta versión se reconstruye tomando como base la **Beta 1.2** e integrando de nuevo las mejoras válidas de **Beta 1.3**.  
+No se utiliza la Beta 1.4 como base.
+
+## Cambios integrados
+
+- Pantalla de carga limpia, actualizada a Beta 1.5.
+- Módulo de viento previsto durante el trabajo activo.
+- Registro de viento previsto, racha, dirección, fuente y avisos.
+- Informe de viento con tabla, resumen y advertencia de que los datos proceden de pronóstico meteorológico y no de medición directa en parcela.
+- Corrección del mapa del informe de trabajo para recrearlo al abrir la pantalla y dibujar parcela, recorrido, eventos e incidencias cuando existan.
+- Botón “Continuar trabajo” en trabajos pendientes del historial.
+- Registro de sesiones de trabajo por fecha para trabajos retomados en días distintos.
+- Triple validación para borrar historial local.
+- Carga local protegida de capas.
 
 ## Seguridad de datos
 
