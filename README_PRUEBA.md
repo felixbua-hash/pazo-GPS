@@ -1,39 +1,28 @@
-# Pazo Baion GPS — Beta 1.2
+# Pazo Baion GPS — Beta 1.4
+
+Versión privada de prueba.
 
 ## Cambios de esta beta
 
-Esta versión integra únicamente los cambios visuales definidos para la Beta 1.2:
+- Privacidad corregida en la pantalla de carga de capas: datos locales y servicios externos diferenciados.
+- Viento previsto solo para trabajos de “Aplicación de fitosanitarios”.
+- Registro de viento únicamente durante trabajo activo.
+- Umbrales de viento en km/h:
+  - Verde / recomendado: 0–10,8 km/h.
+  - Ámbar / precaución: >10,8–15,3 km/h.
+  - Rojo / exceso: >15,3 km/h.
+- Informe de viento con resumen superior, mapa con recorrido y flechas, tabla por intervalos y conclusión.
+- Pantallas de informe con composición visual fijada para Resumen, Trabajo, Eventos, GPS e Incidencias.
+- Mapa del informe reforzado para representar parcela, recorrido GPS, incidencias, eventos y flechas de viento cuando existan datos.
+- Trabajos pendientes continúan desde historial y conservan sesiones por días.
 
-- Nueva pantalla de carga aprobada, mostrada durante 4 segundos.
-- Estilo de botones e iconos tipo Champán elegante.
-- Marco ornamental sutil como fondo de todas las pantallas internas, excepto la pantalla de carga.
+## Seguridad de datos
 
-## Privacidad
+Este ZIP no incluye:
 
-Esta versión NO incluye `PARCELAS.geojson` real ni `INCIDENCIAS_.geojson` real.
-Las capas se cargan localmente desde el dispositivo y se guardan en el navegador del terminal.
+- PARCELAS.geojson real.
+- INCIDENCIAS_.geojson real.
+- Coordenadas reales.
+- Rutas GPS reales.
 
-Advertencia: el mapa satelital online consulta teselas del proveedor de mapas. No sube los GeoJSON, pero sí consulta imágenes de la zona visualizada.
-
-## Archivos
-
-Todos los archivos están en raíz para subirlos juntos a GitHub:
-
-- index.html
-- styles.css
-- app.js
-- data.js
-- manifest.json
-- VERSION.txt
-- README_PRUEBA.md
-- splash.png
-- app-frame.png
-
-## Prueba recomendada
-
-1. Sube todos los archivos del ZIP a la raíz de GitHub.
-2. Abre la app desde GitHub Pages.
-3. Comprueba que la pantalla de carga se muestra durante 4 segundos.
-4. Carga primero `PARCELAS.geojson`.
-5. Carga después `INCIDENCIAS_.geojson`, aunque esté vacío.
-6. Revisa que las pantallas internas usan el nuevo marco y los botones Champán elegante.
+Las capas reales deben cargarse localmente desde el dispositivo.

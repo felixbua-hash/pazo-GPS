@@ -1,11 +1,12 @@
-Pazo Baion GPS — Beta 1.2
+Pazo Baion GPS
+Versión Beta 1.4
 
-Cambios integrados:
-- Nueva pantalla de carga aprobada, mostrada durante 4 segundos.
-- Estilo de botones e iconos Champán elegante.
-- Marco ornamental sutil como fondo de todas las pantallas internas, excepto pantalla de carga.
+Cambios integrados respecto a Beta 1.3:
+- Privacidad corregida para distinguir datos locales y servicios externos.
+- Viento aplicado solo a trabajos de aplicación de fitosanitarios.
+- Umbrales de viento en km/h: recomendado hasta 10,8; precaución hasta 15,3; exceso por encima de 15,3.
+- Informe de viento con composición fijada: resumen, mapa con recorrido/flechas, detalle por intervalos y conclusión.
+- Pantallas de informe reorganizadas con la misma línea visual y composición para Resumen, Trabajo, Eventos, GPS e Incidencias.
+- Refuerzo del mapa del informe para mostrar parcela, recorrido, marcadores y viento cuando existan datos.
 
-Privacidad:
-- No incluye PARCELAS.geojson real.
-- No incluye INCIDENCIAS_.geojson real.
-- Las capas reales se cargan localmente en el dispositivo.
+No incluye PARCELAS.geojson real ni INCIDENCIAS_.geojson real.

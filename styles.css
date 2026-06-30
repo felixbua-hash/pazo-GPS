@@ -691,3 +691,97 @@ input,select,textarea{
 
 .history-status.pending{background:#fff4e6!important;color:#8b520e!important;border-color:#ead0a9!important}
 .history-status.completed{background:#edf7ef!important;color:#2f7d44!important;border-color:#bfd9c5!important}
+
+/* Beta 1.3: viento previsto, mapa de informe y trabajos pendientes por sesiones */
+.map-note{
+  position:absolute;left:12px;right:12px;bottom:12px;z-index:650;
+  background:rgba(255,252,244,.94);border:1px solid var(--champagne-border-soft);
+  border-radius:14px;padding:8px 10px;color:var(--muted);font-size:12px;
+  box-shadow:0 4px 12px rgba(83,68,34,.10);text-align:center
+}
+.wind-table-head,.wind-row{
+  display:grid;grid-template-columns:1fr 1.2fr 1.15fr .75fr 1.05fr .9fr;gap:4px;align-items:center
+}
+.wind-table-head{
+  color:var(--muted);font-weight:800;font-size:10px;padding:8px 7px;border-bottom:1px solid var(--champagne-border-soft)
+}
+.wind-row{
+  background:rgba(255,252,244,.86);border:1px solid var(--champagne-border-soft);
+  border-radius:14px;padding:8px 7px;margin:6px 0;font-size:10px;box-shadow:0 2px 7px rgba(83,68,34,.06)
+}
+.wind-row strong{font-size:11px;color:var(--green)}
+.wind-row em{font-style:normal;font-weight:800;border-radius:999px;padding:4px 5px;text-align:center;font-size:9px}
+.wind-row small{font-size:9px;color:var(--muted);text-align:right}
+.wind-row.wind-ok em{background:#edf7ef;color:#2f7d44;border:1px solid #bfd9c5}
+.wind-row.wind-warn em{background:#fff4e6;color:#8b520e;border:1px solid #ead0a9}
+.wind-row.wind-bad em{background:#fff0ee;color:#a8483a;border:1px solid #e0b4ad}
+.report-note{
+  margin-top:10px;background:#fff4e6;border:1px solid #ead0a9;color:#725018;
+  border-radius:16px;padding:10px 12px;line-height:1.35
+}
+.history-card-v11{
+  display:grid!important;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"open status" "open continue";gap:8px 10px!important;align-items:center!important
+}
+.history-open{
+  grid-area:open;border:0;background:transparent;color:inherit;text-align:left;padding:0;display:block;min-width:0;box-shadow:none!important
+}
+.history-open:active{transform:none!important;box-shadow:none!important}
+.history-card-v11 .history-status{grid-area:status;justify-self:end;align-self:center}
+.history-continue{
+  grid-area:continue;justify-self:end;border:1px solid var(--champagne-border);border-radius:999px;
+  background:linear-gradient(180deg,#fffdf7 0%, var(--champagne-btn) 100%);color:var(--green);
+  padding:8px 11px;font-size:11px;font-weight:900;box-shadow:var(--champagne-shadow-soft);white-space:nowrap
+}
+.history-continue:active{transform:translateY(1px) scale(.995)}
+@media (max-width:390px){
+  .history-card-v11{grid-template-columns:1fr;grid-template-areas:"open" "status" "continue"!important;justify-items:start!important}
+  .history-card-v11 .history-status,.history-continue{justify-self:start!important}
+  .wind-table-head,.wind-row{grid-template-columns:.8fr 1fr 1fr .65fr 1fr .8fr;font-size:9px}
+}
+
+
+/* Beta 1.4 — ajustes de informe y viento */
+.privacy-box{display:grid;gap:8px}
+#reportWindCard.hidden,#reportWindTab.hidden,#windReadingBtn.hidden{display:none!important}
+.report-summary-strip{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;border:1px solid #e2d5b8;border-radius:18px;padding:10px 12px;background:rgba(255,252,244,.84);color:var(--green);font-weight:700}
+.report-summary-strip span{display:inline-flex;align-items:center;gap:6px}
+.report-dot{width:10px;height:10px;border-radius:50%;display:inline-block;background:#5d9b46}
+.report-dot.warn{background:#d8a52d}
+.report-dot.bad{background:#c24a3f}
+.report-section-title .ui-icon{vertical-align:-3px;margin-right:6px}
+.report-table{display:grid;border:1px solid #e4dac4;border-radius:16px;overflow:hidden;background:rgba(255,252,244,.88)}
+.report-table-row{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;padding:9px 11px;border-top:1px solid #eee5d4;align-items:center}
+.report-table-row:first-child{border-top:0;background:rgba(246,240,225,.75);color:var(--muted);font-weight:700}
+.report-table-row strong{color:var(--green)}
+.report-table-row .state-pill{justify-self:start}
+.state-pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 10px;border:1px solid #d8e7cf;background:#eef8e9;color:#2f7d44;font-weight:800}
+.state-pill.warn{border-color:#ecd59c;background:#fff4df;color:#8b5a11}
+.state-pill.bad{border-color:#efc1bd;background:#fff0ee;color:#9b3e35}
+.timeline-panel{display:grid;gap:9px}
+.timeline-item{display:grid;grid-template-columns:54px 40px 1fr;gap:10px;align-items:center}
+.timeline-item .time{font-weight:800;color:var(--green);text-align:right}
+.timeline-icon{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px solid #d8c89f;background:#fffdf8;color:var(--green)}
+.timeline-item.warn .timeline-icon{color:#a87416;background:#fff4df}
+.timeline-item.bad .timeline-icon{color:#a8483a;background:#fff0ee}
+.session-card{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;border:1px solid #e1d4b8;border-radius:18px;padding:11px 12px;background:rgba(255,252,244,.90)}
+.session-badge{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#2f7d44;color:white;font-weight:900}
+.session-card.warn .session-badge{background:#d8a52d}
+.session-card.bad .session-badge{background:#c24a3f}
+.session-card strong{display:block;color:var(--green)}
+.session-card small{color:var(--muted)}
+.wind-arrow-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}
+.wind-arrow-shaft{font-size:20px;line-height:1;color:#2f7d44;text-shadow:0 1px 0 rgba(255,255,255,.9)}
+.wind-arrow-wrap.warn .wind-arrow-shaft{color:#b97a1b}
+.wind-arrow-wrap.bad .wind-arrow-shaft{color:#a8483a}
+.wind-arrow-chip{padding:2px 7px;border-radius:999px;background:rgba(255,252,244,.96);border:1px solid #d8c89f;box-shadow:0 3px 10px rgba(83,68,34,.12);font-size:10px;font-weight:800;color:var(--green);white-space:nowrap}
+.wind-arrow-wrap.warn .wind-arrow-chip{color:#8b5a11;background:#fff4df}
+.wind-arrow-wrap.bad .wind-arrow-chip{color:#8f362d;background:#fff0ee}
+.map-note{position:absolute;left:14px;right:14px;bottom:12px;z-index:999;background:rgba(255,252,244,.94);border:1px solid #e0d4b7;border-radius:14px;padding:9px 11px;color:var(--green);font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,.10)}
+.history-card-v11{grid-template-columns:minmax(0,1fr) auto!important;grid-template-areas:"open status" "open continue"!important;align-items:start!important}
+.history-card-v11 .history-open{grid-area:open;text-align:left;background:transparent;border:0;padding:0;color:inherit;font:inherit;display:block;width:100%;cursor:pointer}
+.history-card-v11 .history-status{grid-area:status;justify-self:end;align-self:start}
+.history-continue{grid-area:continue;justify-self:end;align-self:start;border:1px solid #d8c89f;background:rgba(255,252,244,.98);color:var(--green);border-radius:999px;padding:10px 14px;font-weight:800;box-shadow:0 4px 12px rgba(83,68,34,.08)}
+@media (max-width:380px){
+  .report-table-row{font-size:12px;gap:5px}
+  .timeline-item{grid-template-columns:46px 34px 1fr;gap:8px}
+}

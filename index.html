@@ -30,10 +30,10 @@
 
       <main class="panel">
         <h1>Cargar capas del mapa</h1>
-        <p class="lead">Selecciona desde este terminal las dos capas exportadas desde SW Maps: <strong>PARCELAS.geojson</strong> e <strong>INCIDENCIAS_.geojson</strong>. No se subirán a GitHub ni a terceros.</p>
+        <p class="lead">Selecciona desde este terminal las dos capas exportadas desde SW Maps: <strong>PARCELAS.geojson</strong> e <strong>INCIDENCIAS_.geojson</strong>. No se subirán a GitHub.</p>
 
         <div class="privacy-box">
-          <strong>Privacidad:</strong> las coordenadas quedan guardadas localmente en este dispositivo. El mapa satelital online puede consultar imágenes de la zona al proveedor del mapa durante esta beta.
+          <div><strong>Datos locales:</strong> parcelas, incidencias, recorridos, fotos e informes permanecen en este dispositivo.</div><div><strong>Servicios externos:</strong> mapa satelital y viento previsto pueden consultar proveedores externos usando la ubicación de referencia.</div>
         </div>
 
         <div class="layer-load-grid">
@@ -299,7 +299,7 @@
           <div><span>Tiempo total</span><strong id="reportTotal">—</strong></div>
           <div><span>Distancia</span><strong id="reportDistance">—</strong></div>
           <div><span>Recargas</span><strong id="reportRefills">—</strong></div>
-          <div><span>Viento</span><strong id="reportWind">—</strong></div>
+          <div id="reportWindCard"><span>Viento</span><strong id="reportWind">—</strong></div>
         </div>
 
         <nav class="tabs report-tabs">
@@ -307,7 +307,7 @@
           <button class="tab" data-report-tab="work">Trabajo</button>
           <button class="tab" data-report-tab="events">Eventos</button>
           <button class="tab" data-report-tab="gps">GPS</button>
-          <button class="tab" data-report-tab="wind">Viento</button>
+          <button id="reportWindTab" class="tab" data-report-tab="wind">Viento</button>
           <button class="tab" data-report-tab="incidents">Incidencias</button>
           <button class="tab" data-report-tab="export">Exportar</button>
         </nav>
