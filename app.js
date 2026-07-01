@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 1.8 reconstruida desde Beta 1.2";
+  const VERSION = "Beta 1.9 reconstruida desde Beta 1.2";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",

@@ -1,4 +1,4 @@
-# Pazo Baion GPS — Beta 1.8 reconstruida desde Beta 1.2
+# Pazo Baion GPS — Beta 1.9 reconstruida desde Beta 1.2
 
 ## Base utilizada
 
