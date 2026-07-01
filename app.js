@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 1.9 reconstruida desde Beta 1.2";
+  const VERSION = "Beta 1.10 reconstruida desde Beta 1.2";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -1366,6 +1366,9 @@
       incidents:'<path d="M12 5l8 14H4z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>',
       map:'<path d="M12 21s7-5.5 7-12a7 7 0 1 0-14 0c0 6.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.2"/>',
       clock:'<circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/>',
+      parcel:'<path d="M4 17c2.5-2 5.5-2 8 0"/><path d="M12 17c2.5-2 5.5-2 8 0"/><path d="M7 17v-4"/><path d="M17 17v-4"/><path d="M4 13c1.2-1.2 2.6-1.8 4-1.8s2.8.6 4 1.8"/><path d="M12 13c1.2-1.2 2.6-1.8 4-1.8s2.8.6 4 1.8"/><path d="M7 11V7"/><path d="M17 11V7"/>',
+      labor:'<path d="M7 20v-5"/><path d="M11 20v-8"/><path d="M15 20v-6"/><path d="M4 9c2-1 4-3 5-5 1 2 3 4 5 5"/><path d="M16 5l4 4"/><path d="M18 3v4h-4"/>',
+      leaf:'<path d="M18.5 5.5c-6.5-.7-10.6 2.3-11.9 8.4-.5 2.4.4 4.8 2.2 6.1 1.8 1.3 4.2 1.5 6.2.4 5.3-2.8 5.2-8.8 3.5-14.9z"/><path d="M8 15c2.5-1.3 4.8-3.5 6.5-6.5"/><path d="M7 20l3-3"/>',
       conclusion:'<path d="M7 12l3 3 7-7"/><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6"/>'
     }[name] || '<circle cx="12" cy="12" r="8"/>';
     return `<svg class="report-icon-svg" viewBox="0 0 24 24" aria-hidden="true">${path}</svg>`;
@@ -1387,7 +1390,7 @@
   }
 
   function fixedMini(label, value, icon=""){
-    return `<div class="fixed-mini-card">${icon ? reportIcon(icon) : ""}<span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+    return `<div class="fixed-mini-card${icon ? " has-icon" : ""}">${icon ? `<div class="fixed-mini-head">${reportIcon(icon)}<span>${escapeHtml(label)}</span></div>` : `<span>${escapeHtml(label)}</span>`}<strong>${escapeHtml(value)}</strong></div>`;
   }
 
   function fixedMeta(items){
@@ -1398,8 +1401,8 @@
     return `<div class="fixed-map-block" data-map-mode="${escapeHtml(mode)}"><div class="fixed-map-title">${reportIcon("map")}<span>${escapeHtml(title)}</span></div><div id="reportVisualMap" class="report-map fixed-report-map"></div></div>`;
   }
 
-  function reportConclusion(text, icon="conclusion"){
-    return `<div class="fixed-conclusion">${reportIcon(icon)}<div><strong>Conclusión</strong><span>${escapeHtml(text)}</span></div><i>${reportIcon("conclusion")}</i></div>`;
+  function reportConclusion(text, icon="conclusion", rightIcon="leaf"){
+    return `<div class="fixed-conclusion">${reportIcon(icon)}<div><strong>Conclusión</strong><span>${escapeHtml(text)}</span></div><i>${reportIcon(rightIcon)}</i></div>`;
   }
 
   function eventCounts(w){
@@ -1539,29 +1542,31 @@
     const day = w.day || {};
     const status = w.status === "finalizado" ? "Finalizado" : "Provisional";
     const body = `
-      <div class="fixed-kpi-row">
-        ${fixedKpi("Tiempo total", fmtDurationCompact(reportTotalMs(w)), "clock")}
-        ${fixedKpi("Distancia", distanceKmCompactText(w), "map")}
-        ${fixedKpi("Recargas", String(w.refills || 0), "work")}
-        ${fixedKpi("Incidencias", String((w.incidents || []).length), "incidents")}
+      <div class="summary-template">
+        <div class="fixed-kpi-row summary-kpis">
+          ${fixedKpi("Tiempo total", fmtDurationCompact(reportTotalMs(w)), "clock")}
+          ${fixedKpi("Distancia", distanceKmCompactText(w), "map")}
+          ${fixedKpi("Recargas", String(w.refills || 0), "work")}
+          ${fixedKpi("Incidencias", String((w.incidents || []).length), "incidents")}
+        </div>
+        ${fixedMeta([
+          {icon:"conclusion", label:status},
+          {icon:"events", label:reportDateText(w)},
+          {icon:"work", label:"Operario:", value:day.operator || "—"},
+          {icon:"work", label:"Tractor:", value:day.tractor || "—"}
+        ])}
+        ${fixedMapBlock("Mapa de la parcela y recorrido", "summary")}
+        <h3 class="fixed-subtitle">${reportIcon("clock")}<span>Datos del trabajo</span></h3>
+        <div class="fixed-mini-grid fixed-mini-grid-3 summary-data-grid">
+          ${fixedMini("Parcela", w.parcel || "—", "parcel")}
+          ${fixedMini("Labor", w.type || "—", "labor")}
+          ${fixedMini("Estado", status, "conclusion")}
+          ${fixedMini("Inicio", reportTimeText(w.startedAt), "clock")}
+          ${fixedMini("Fin", reportTimeText(w.finishedAt), "clock")}
+          ${fixedMini("Tiempo activo", fmtDurationCompact(reportEffectiveActiveMs(w)), "clock")}
+        </div>
+        ${reportConclusion(w.status === "finalizado" ? `El trabajo se completó correctamente. Se realizaron ${w.refills || 0} recargas y se registraron ${(w.incidents || []).length} incidencias durante la aplicación.` : "El trabajo continúa pendiente. El informe se completará al finalizar la parcela.")}
       </div>
-      ${fixedMeta([
-        {icon:"conclusion", label:status},
-        {icon:"events", label:reportDateText(w)},
-        {icon:"work", label:"Operario:", value:day.operator || "—"},
-        {icon:"work", label:"Tractor:", value:day.tractor || "—"}
-      ])}
-      ${fixedMapBlock("Mapa de la parcela y recorrido", "summary")}
-      <h3 class="fixed-subtitle">${reportIcon("clock")}<span>Datos del trabajo</span></h3>
-      <div class="fixed-mini-grid fixed-mini-grid-3">
-        ${fixedMini("Parcela", w.parcel || "—")}
-        ${fixedMini("Labor", w.type || "—")}
-        ${fixedMini("Estado", status, "conclusion")}
-        ${fixedMini("Inicio", reportTimeText(w.startedAt), "clock")}
-        ${fixedMini("Fin", reportTimeText(w.finishedAt), "clock")}
-        ${fixedMini("Tiempo activo", fmtDurationCompact(reportEffectiveActiveMs(w)), "clock")}
-      </div>
-      ${reportConclusion(w.status === "finalizado" ? `El trabajo se completó correctamente. Se realizaron ${w.refills || 0} recargas y se registraron ${(w.incidents || []).length} incidencias durante la aplicación.` : "El trabajo continúa pendiente. El informe se completará al finalizar la parcela.")}
     `;
     $("reportContent").innerHTML = reportScreen("Resumen general", "summary", body);
   }

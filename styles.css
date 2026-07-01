@@ -692,7 +692,7 @@ input,select,textarea{
 .history-status.pending{background:#fff4e6!important;color:#8b520e!important;border-color:#ead0a9!important}
 .history-status.completed{background:#edf7ef!important;color:#2f7d44!important;border-color:#bfd9c5!important}
 
-/* Beta 1.9 reconstruida desde 1.2: integración exclusiva de cambios pendientes */
+/* Beta 1.10 reconstruida desde 1.2: integración exclusiva de cambios pendientes */
 .privacy-stack{display:grid;gap:8px}
 .privacy-box{display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:start}
 .privacy-box strong{display:block;font-weight:900;white-space:nowrap}
@@ -751,7 +751,7 @@ input,select,textarea{
 #screen-map-load .privacy-stack .privacy-box + .privacy-box{border-top:1px solid var(--champagne-border-soft)!important}
 #screen-map-load .privacy-box::before{width:24px;height:24px}
 
-/* Beta 1.9: integración visual fiel de pantallas fijadas de informe */
+/* Beta 1.10: integración visual fiel de pantallas fijadas de informe */
 #screen-report .status-chip,
 #screen-report .report-cards-compact,
 #screen-report > .report-map,
@@ -774,7 +774,7 @@ input,select,textarea{
 @media (max-height:760px){.fixed-report-card{padding:10px;gap:8px}.fixed-kpi{min-height:78px}.fixed-report-map{height:180px!important;min-height:165px!important}.fixed-conclusion{min-height:68px}.fixed-conclusion strong{font-size:17px}.fixed-conclusion span{font-size:12px}}
 
 
-/* Beta 1.9: correcciones obligatorias reales de ajuste visual en iPhone */
+/* Beta 1.10: correcciones obligatorias reales de ajuste visual en iPhone */
 #screen-map-load .panel{overflow-y:auto!important;overflow-x:hidden!important;padding-bottom:24px!important}
 #screen-map-load .privacy-stack{overflow:visible!important;max-height:none!important}
 #screen-map-load .privacy-stack .privacy-box{min-height:auto!important;overflow:visible!important}
@@ -815,4 +815,58 @@ input,select,textarea{
   .fixed-mini-card strong{font-size:11px!important}
   .history-main{grid-template-columns:minmax(0,1fr) 98px!important}
   .history-status{min-width:90px!important;max-width:98px!important;font-size:10px!important}
+}
+
+
+/* Beta 1.10 — corrección dedicada de Informe > Resumen general */
+.summary-template{display:grid;gap:12px}
+.summary-template .fixed-kpi-row{gap:12px}
+.summary-template .fixed-kpi{min-height:98px;padding:11px 6px;border-radius:20px}
+.summary-template .fixed-kpi span{font-size:10px;line-height:1.2;min-height:2.2em}
+.summary-template .fixed-kpi em .report-icon-svg{width:23px;height:23px}
+.summary-template .fixed-kpi strong{font-size:clamp(21px,7vw,28px)}
+.summary-template .fixed-meta-strip{display:flex;flex-wrap:nowrap;align-items:center;justify-content:flex-start;gap:7px;padding:12px 14px;overflow:hidden}
+.summary-template .fixed-meta-strip span{font-size:11px;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;min-width:0}
+.summary-template .fixed-meta-strip span strong{font-size:12px;white-space:nowrap}
+.summary-template .fixed-meta-strip .report-icon-svg{width:16px;height:16px}
+.summary-template .fixed-meta-strip b{font-size:12px}
+.summary-template .fixed-map-block{min-height:245px;border-radius:24px}
+.summary-template .fixed-report-map{height:265px!important;min-height:245px!important}
+.summary-template .fixed-map-title{left:14px;top:14px;font-size:15px;line-height:1.15;max-width:86%}
+.summary-template .fixed-map-title span{display:block}
+.summary-template .report-map-notice{left:18px;right:18px;bottom:16px;border-radius:22px;padding:12px 16px;font-size:13px;line-height:1.25}
+.summary-template .fixed-subtitle{font-size:20px;margin-top:2px}
+.summary-template .fixed-mini-grid{gap:10px}
+.summary-template .fixed-mini-card{min-height:98px;padding:14px 16px;border-radius:18px;align-content:start;gap:8px}
+.summary-template .fixed-mini-card>span{font-size:12px;line-height:1.2}
+.summary-template .fixed-mini-card strong{font-size:17px;line-height:1.15;-webkit-line-clamp:3;overflow-wrap:normal;word-break:normal}
+.summary-template .fixed-mini-card.has-icon{grid-template-rows:auto 1fr}
+.summary-template .fixed-mini-head{display:flex;align-items:center;gap:8px;color:#b1882a}
+.summary-template .fixed-mini-head .report-icon-svg{width:22px;height:22px;color:#b1882a}
+.summary-template .fixed-mini-head span{font-size:12px;line-height:1.15;color:var(--muted)}
+.summary-template .fixed-mini-card.has-icon strong{padding-left:30px;font-size:16px}
+.summary-template .fixed-conclusion{grid-template-columns:auto minmax(0,1fr) auto;padding:16px 18px;border-radius:22px;min-height:120px}
+.summary-template .fixed-conclusion>.report-icon-svg{width:30px;height:30px}
+.summary-template .fixed-conclusion strong{font-size:21px;margin-bottom:8px}
+.summary-template .fixed-conclusion span{font-size:13px;line-height:1.4}
+.summary-template .fixed-conclusion i{width:74px;height:74px}
+.summary-template .fixed-conclusion i .report-icon-svg{width:40px;height:40px}
+.summary-template .fixed-conclusion i .report-icon-svg{stroke-width:1.6}
+@media (max-width:390px){
+  .summary-template .fixed-kpi-row{gap:10px}
+  .summary-template .fixed-kpi{min-height:94px;padding:10px 5px}
+  .summary-template .fixed-kpi strong{font-size:clamp(18px,6.7vw,26px)}
+  .summary-template .fixed-meta-strip{padding:11px 12px;gap:6px}
+  .summary-template .fixed-meta-strip span{font-size:10px}
+  .summary-template .fixed-meta-strip span strong{font-size:11px}
+  .summary-template .fixed-map-block{min-height:230px}
+  .summary-template .fixed-report-map{height:252px!important;min-height:230px!important}
+  .summary-template .fixed-map-title{font-size:14px;max-width:84%}
+  .summary-template .fixed-mini-card{min-height:92px;padding:12px 14px}
+  .summary-template .fixed-mini-card strong{font-size:15px}
+  .summary-template .fixed-mini-card.has-icon strong{padding-left:28px;font-size:15px}
+  .summary-template .fixed-conclusion{padding:15px 16px;min-height:108px}
+  .summary-template .fixed-conclusion strong{font-size:18px}
+  .summary-template .fixed-conclusion i{width:66px;height:66px}
+  .summary-template .fixed-conclusion i .report-icon-svg{width:36px;height:36px}
 }
