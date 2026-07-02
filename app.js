@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 1.10 reconstruida desde Beta 1.2";
+  const VERSION = "Beta 1.2";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -88,19 +88,6 @@
     const s = total%60;
     if(h>0) return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
     return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-  }
-
-  function fmtDurationCompact(ms){
-    if(!isFinite(ms) || ms < 0) ms = 0;
-    const totalMinutes = Math.round(ms / 60000);
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-  }
-
-  function formatMetersDetailed(m){
-    if(m === null || m === undefined || !isFinite(m)) return "—";
-    return `±${Number(m).toFixed(1).replace(".", ",")} m`;
   }
   function haversine(a,b){
     if(!a || !b) return 0;
@@ -460,7 +447,7 @@
       drawImportedIncidents(map, "parcelImportedIncidents");
       drawParcelIncidentMarkers(map);
       const b = state.layers.parcelSelected.getBounds();
-      if(b && b.isValid()) stabilizeMap(map, b, [42,42]);
+      if(b.isValid()) stabilizeMap(map, b, [42,42]);
     });
   }
 
@@ -553,7 +540,6 @@
 
     state.work = {
       id: "trabajo-" + Date.now(),
-      createdAt: Date.now(),
       parcel: state.selectedParcelName,
       parcelFeature: state.selectedFeature,
       type: state.workType,
@@ -576,8 +562,6 @@
       gpsStats: { bad:0, doubtful:0, discarded:0, best:Infinity, worst:0, sum:0, count:0 },
       windReadings: [],
       nextWindPromptAt: null,
-      sessions: [],
-      currentSessionId: null,
       forcedStart: forced
     };
     storage.set(LS.active, state.work);
@@ -592,10 +576,9 @@
     waitForMapContainer("mapWork", () => {
       const map = makeMap("mapWork", "work");
       if(!map) return;
-      const feature = state.selectedFeature || state.work.parcelFeature || findParcelFeatureByName(state.work.parcel);
-      if(feature) state.layers.workParcel = L.geoJSON(feature, { style: parcelStyle(true) }).addTo(map).bringToFront();
+      state.layers.workParcel = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
       drawImportedIncidents(map, "workImportedIncidents");
-      const b = state.layers.workParcel?.getBounds ? state.layers.workParcel.getBounds() : null;
+      const b = state.layers.workParcel.getBounds();
       if(b.isValid()) stabilizeMap(map, b, [42,42]);
       updateRouteLayers();
     });
@@ -634,86 +617,21 @@
     updateWindUi();
   }
 
-  function ensureSessions(w){
-    if(!w.sessions) w.sessions = [];
-    return w.sessions;
-  }
-
-  function startWorkSession(w, at=Date.now(), notes=""){
-    const sessions = ensureSessions(w);
-    const id = "sesion-" + at + "-" + (sessions.length + 1);
-    const d = new Date(at);
-    sessions.push({
-      id,
-      date: d.toISOString().slice(0,10),
-      startAt: at,
-      startedAt: at,
-      endAt: null,
-      finishedAt: null,
-      activeMs: 0,
-      notes
-    });
-    w.currentSessionId = id;
-    return id;
-  }
-
-  function closeCurrentSession(w, at=Date.now(), notes=""){
-    const sessions = ensureSessions(w);
-    const session = sessions.find(s => s.id === w.currentSessionId) || sessions.find(s => !s.endAt);
-    if(!session || session.endAt) return;
-    const base = w.lastSegmentAt || session.startAt || at;
-    session.activeMs = Math.max(0, (session.activeMs || 0) + (at - base));
-    session.endAt = at;
-    session.finishedAt = at;
-    if(notes) session.notes = session.notes ? `${session.notes}; ${notes}` : notes;
-    w.currentSessionId = null;
-  }
-
-  function derivedSessions(w){
-    const sessions = ensureSessions(w).slice().sort((a,b)=>(a.startAt||a.startedAt||0)-(b.startAt||b.startedAt||0));
-    if(sessions.length) return sessions;
-    if(w.startedAt){
-      return [{id:"sesion-derivada", date:new Date(w.startedAt).toISOString().slice(0,10), startAt:w.startedAt, startedAt:w.startedAt, endAt:w.finishedAt || null, finishedAt:w.finishedAt || null, activeMs:reportEffectiveActiveMs(w), notes:"Sesión reconstruida desde el registro principal."}];
-    }
-    return [];
-  }
-
-  function sessionRows(w){
-    const sessions = derivedSessions(w);
-    return sessions.map((session, idx) => {
-      const start = session.startAt || session.startedAt || null;
-      const end = session.endAt || session.finishedAt || null;
-      const stopped = start && end ? Math.max(0, (end - start) - (session.activeMs || 0)) : 0;
-      return {
-        ...session,
-        index: idx + 1,
-        start,
-        end,
-        stoppedMs: stopped
-      };
-    });
-  }
-
   function beginWork(){
     if(!state.work) return;
-    const now = Date.now();
     state.work.status = "trabajando";
-    state.work.startedAt = state.work.startedAt || now;
-    state.work.lastSegmentAt = now;
-    state.work.pausedAt = null;
-    if(isPhytosanitaryWork(state.work)) state.work.nextWindPromptAt = now + 30*60*1000;
-    else { state.work.nextWindPromptAt = null; state.work.windReadings = []; }
-    startWorkSession(state.work, now, "Inicio del trabajo");
+    state.work.startedAt = Date.now();
+    state.work.lastSegmentAt = Date.now();
+    state.work.nextWindPromptAt = Date.now() + 30*60*1000;
     addEvent("Comienzo", "Punto inicial", "Inicio del trabajo");
     $("beginWorkBtn").classList.add("hidden");
     $("stopWorkBtn").classList.remove("hidden");
     $("continueWorkBtn").classList.add("hidden");
     setWorkStateUi("Trabajando");
-    updateWindUi();
     state.trackingFollow = true;
     startGpsWatch();
     centerWorkMapOnTractor(true);
-    if(isPhytosanitaryWork(state.work)) setTimeout(() => promptWindReading(false, "Registrar viento previsto inicial"), 600);
+    setTimeout(() => promptWindReading(false, "Registrar viento inicial"), 600);
     if(!state.tickerStarted){
       state.tickerStarted = true;
       tick();
@@ -753,94 +671,38 @@
     }
   }
 
-  function isPhytosanitaryWork(w=state.work){
-    const type = String(w?.type || state.workType || "").toLowerCase();
-    return type.includes("fitosanit");
-  }
-
   function formatWind(kmh){
     if(kmh === null || kmh === undefined || !isFinite(kmh)) return "—";
     const n = Number(kmh);
     return `${n.toFixed(n >= 10 ? 0 : 1).replace(".", ",")} km/h`;
   }
 
-  function windLevel(kmh){
-    const n = Number(kmh);
-    if(!isFinite(n)) return {label:"Sin datos", cls:"muted", dot:"•", color:"#706b5a", detail:"Sin dato de viento previsto."};
-    if(n <= 10.8) return {label:"Verde", cls:"good", dot:"●", color:"#2f7d44", detail:"Viento previsto dentro del rango recomendado."};
-    if(n <= 15.3) return {label:"Ámbar", cls:"warn", dot:"●", color:"#c47b32", detail:"Viento previsto en zona de precaución."};
-    return {label:"Rojo", cls:"bad", dot:"●", color:"#a8483a", detail:"Viento previsto por encima del umbral fijado."};
-  }
-
-  function normalizeWindDirection(dir){
-    const v = String(dir || "").trim().toUpperCase().replace(/\s+/g, "");
-    const aliases = {NORTE:"N", SUR:"S", ESTE:"E", OESTE:"O", W:"O", NW:"NO", SW:"SO"};
-    return aliases[v] || v || "—";
-  }
-
-  function directionToDegrees(dir){
-    const d = normalizeWindDirection(dir);
-    return ({N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5, S:180, SSO:202.5, SO:225, OSO:247.5, O:270, ONO:292.5, NO:315, NNO:337.5})[d] ?? 45;
-  }
-
   function windStats(readings){
     const arr = (readings || []).map(r => Number(r.kmh)).filter(v => isFinite(v));
-    const gusts = (readings || []).map(r => Number(r.gustKmh)).filter(v => isFinite(v));
-    const dirs = (readings || []).map(r => normalizeWindDirection(r.direction)).filter(v => v && v !== "—");
-    const dirCounts = dirs.reduce((acc,d)=>(acc[d]=(acc[d]||0)+1, acc), {});
-    const predominantDirection = Object.entries(dirCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || "—";
-    if(!arr.length) return { latest:null, avg:null, max:null, gustMax:gusts.length ? Math.max(...gusts) : null, count:0, predominantDirection, global:windLevel(null) };
-    const max = Math.max(...arr);
+    if(!arr.length) return { latest:null, avg:null, max:null, count:0 };
     return {
       latest: arr[arr.length-1],
       avg: arr.reduce((a,b)=>a+b,0)/arr.length,
-      max,
-      gustMax: gusts.length ? Math.max(...gusts) : null,
-      count: arr.length,
-      predominantDirection,
-      global: windLevel(max)
+      max: Math.max(...arr),
+      count: arr.length
     };
   }
 
-  function getWindReferencePoint(){
-    const p = state.currentPos || state.gpsCalibration?.last || null;
-    if(p && isFinite(p.lat) && isFinite(p.lng)) return {lat:p.lat, lng:p.lng, accuracy:p.accuracy || null, origin:"GPS del dispositivo"};
-    const feature = state.selectedFeature || state.work?.parcelFeature || findParcelFeatureByName(state.work?.parcel);
-    const b = feature ? getBoundsFromGeoJSON({type:"FeatureCollection", features:[feature]}) : null;
-    if(b && b.isValid && b.isValid()){
-      const c = b.getCenter();
-      return {lat:c.lat, lng:c.lng, accuracy:null, origin:"centro aproximado de la parcela"};
-    }
-    return {lat:null, lng:null, accuracy:null, origin:"sin referencia GPS disponible"};
-  }
-
-  function formatReferencePoint(ref){
-    if(!ref || !isFinite(ref.lat) || !isFinite(ref.lng)) return ref?.origin || "sin referencia GPS disponible";
-    return `${ref.lat.toFixed(6)}, ${ref.lng.toFixed(6)} · ${ref.origin || "referencia"}`;
-  }
-
   function updateWindUi(){
-    const card = $("windReadingBtn");
     const el = $("windSpeedValue");
-    const active = isPhytosanitaryWork();
-    if(card){
-      card.classList.toggle("hidden", !active);
-      card.closest(".work-stats-secondary")?.classList.toggle("no-wind", !active);
-    }
     if(!el) return;
-    if(!active){ el.textContent = "—"; return; }
     const stats = windStats(state.work?.windReadings || []);
     el.textContent = formatWind(stats.latest);
   }
 
-  function promptWindReading(auto=false, title="Registrar viento previsto"){
-    if(!state.work || !isPhytosanitaryWork(state.work)) return;
+  function promptWindReading(auto=false, title="Registrar viento"){
+    if(!state.work) return;
     if(state.windPromptOpen) return;
     state.windPromptOpen = true;
     try{
       const stats = windStats(state.work.windReadings || []);
       const base = stats.latest !== null ? String(stats.latest).replace(".", ",") : "";
-      const raw = prompt(`${title}. Dato de PRONÓSTICO meteorológico, no medición directa en parcela. Viento previsto en km/h:`, base);
+      const raw = prompt(`${title}. Velocidad del viento en km/h:`, base);
       state.work.nextWindPromptAt = Date.now() + 30*60*1000;
       if(raw === null || String(raw).trim() === ""){
         storage.set(LS.active, state.work);
@@ -848,28 +710,14 @@
       }
       const value = Number(String(raw).replace(",", "."));
       if(!isFinite(value) || value < 0 || value > 150){
-        toast("Valor de viento previsto no válido. Introduce km/h entre 0 y 150.");
+        toast("Valor de viento no válido. Introduce km/h entre 0 y 150.");
         storage.set(LS.active, state.work);
         return;
       }
-      const gustRaw = prompt("Racha prevista en km/h:", "");
-      const gustValue = gustRaw === null || String(gustRaw).trim() === "" ? null : Number(String(gustRaw).replace(",", "."));
-      if(gustValue !== null && (!isFinite(gustValue) || gustValue < 0 || gustValue > 180)){
-        toast("Valor de racha no válido. Se guardará el registro sin racha prevista.");
-      }
-      const dir = normalizeWindDirection(prompt("Dirección prevista dominante (N, NE, E, SE, S, SO, O, NO):", stats.predominantDirection !== "—" ? stats.predominantDirection : ""));
-      const source = String(prompt("Fuente del pronóstico meteorológico:", "Pronóstico meteorológico consultado por el operario") || "Pronóstico meteorológico consultado por el operario").trim();
-      const ref = getWindReferencePoint();
       const reading = {
         at: new Date().toISOString(),
         timeLabel: new Date().toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}),
         kmh: value,
-        gustKmh: gustValue !== null && isFinite(gustValue) ? gustValue : null,
-        direction: dir,
-        source,
-        reference: ref,
-        forecast: true,
-        note: "Dato procedente de pronóstico meteorológico, no de medición directa en parcela.",
         autoPrompt: !!auto
       };
       state.work.windReadings = state.work.windReadings || [];
@@ -882,9 +730,9 @@
   }
 
   function checkWindPrompt(){
-    if(!state.work || state.work.status !== "trabajando" || !isPhytosanitaryWork(state.work)) return;
+    if(!state.work || state.work.status !== "trabajando") return;
     if(!state.work.nextWindPromptAt) state.work.nextWindPromptAt = Date.now() + 30*60*1000;
-    if(Date.now() >= state.work.nextWindPromptAt) promptWindReading(true, "Registro periódico de viento previsto");
+    if(Date.now() >= state.work.nextWindPromptAt) promptWindReading(true, "Registro periódico de viento");
   }
   function onGpsError(err){
     $("liveAccuracy").textContent = "Error";
@@ -1014,11 +862,9 @@
 
     if(reason === "Fin de tratamiento de la parcela"){
       addEvent("Fin de tratamiento", "Punto final", "Parcela finalizada");
-      closeCurrentSession(state.work, now, "Fin de tratamiento de la parcela");
       state.work.status = "finalizado";
       state.work.finishedAt = now;
       state.work.activeMs += now - (state.work.lastSegmentAt || now);
-      state.work.pausedAt = null;
       $("stopWorkBtn").classList.add("hidden");
       $("continueWorkBtn").classList.add("hidden");
       $("beginWorkBtn").classList.add("hidden");
@@ -1036,7 +882,6 @@
     if(reason === "Recarga cisterna") state.work.refills += 1;
     const n = reason === "Recarga cisterna" ? state.work.refills : state.work.stops;
     addEvent("Parada", `${reason}${reason === "Recarga cisterna" ? " " + n : ""}`, "Punto de continuidad");
-    closeCurrentSession(state.work, now, reason);
     state.work.status = "parado";
     state.work.pausedAt = now;
     state.work.activeMs += now - (state.work.lastSegmentAt || now);
@@ -1049,22 +894,15 @@
   }
 
   function continueWork(){
-    if(!state.work || !["parado", "pendiente"].includes(state.work.status)) return;
+    if(!state.work || state.work.status !== "parado") return;
     const now = Date.now();
     if(state.work.pausedAt) state.work.stoppedMs += now - state.work.pausedAt;
-    addEvent("Continuar", "Reanudación", "Continúa el mismo trabajo");
+    addEvent("Continuar", "Reanudación", "Continúa el trabajo");
     state.work.status = "trabajando";
     state.work.lastSegmentAt = now;
-    state.work.pausedAt = null;
-    if(isPhytosanitaryWork(state.work)) state.work.nextWindPromptAt = now + 30*60*1000;
-    else { state.work.nextWindPromptAt = null; state.work.windReadings = []; }
-    startWorkSession(state.work, now, "Reanudación");
-    $("beginWorkBtn").classList.add("hidden");
     $("stopWorkBtn").classList.remove("hidden");
     $("continueWorkBtn").classList.add("hidden");
     setWorkStateUi("Trabajando");
-    updateWindUi();
-    startGpsWatch();
     storage.set(LS.active, state.work);
   }
 
@@ -1235,33 +1073,10 @@
     return state.reportWork || state.work || storage.get(LS.history, [])[0] || null;
   }
 
-  function reportTabOrder(w=getReportWork()){
-    const tabs = ["summary", "work", "events", "gps"];
-    if(isPhytosanitaryWork(w)) tabs.push("wind");
-    tabs.push("incidents", "export");
-    return tabs;
-  }
-
-  function setActiveReportTab(tab){
-    qsa("[data-report-tab]").forEach(t => t.classList.remove("active"));
-    const target = document.querySelector(`[data-report-tab="${tab}"]`) || document.querySelector('[data-report-tab="summary"]');
-    if(target) target.classList.add("active");
-  }
-
   function resetReportTabs(){
-    setActiveReportTab("summary");
-  }
-
-  function moveReportTab(step){
-    const w = getReportWork();
-    if(!w) return;
-    const order = reportTabOrder(w);
-    const current = activeReportTab();
-    let idx = order.indexOf(current);
-    if(idx < 0) idx = 0;
-    idx = Math.max(0, Math.min(order.length - 1, idx + step));
-    setActiveReportTab(order[idx]);
-    renderReport();
+    qsa(".tab").forEach(t => t.classList.remove("active"));
+    const first = document.querySelector('[data-report-tab="summary"]');
+    if(first) first.classList.add("active");
   }
 
   function openReportForWork(work, origin="work"){
@@ -1300,418 +1115,185 @@
     return `<div class="report-kpi"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>`;
   }
 
-  function activeReportTab(){
-    return document.querySelector(".report-tabs .tab.active")?.dataset.reportTab || "summary";
-  }
-
   function renderReport(){
     const w = getReportWork();
     if(!w){
       $("reportContent").innerHTML = reportEmpty("No hay trabajo para informar.");
-      const oldMap = $("reportMap");
-      if(oldMap) oldMap.classList.add("hidden");
+      $("reportMap").classList.add("hidden");
       return;
     }
 
-    $("reportSubtitle").textContent = `${w.parcel || "—"} · ${w.type || "—"}`;
+    $("reportSubtitle").textContent = `${w.parcel} · ${w.type}`;
     $("reportStatusChip").textContent = w.status === "finalizado" ? "Informe definitivo" : "Resumen provisional";
     $("reportStatusChip").style.background = w.status === "finalizado" ? "#eaf6e9" : "#fff4e6";
     $("reportStatusChip").style.color = w.status === "finalizado" ? "#2f7d44" : "#8b520e";
-    $("reportTotal").textContent = fmtDurationCompact(reportTotalMs(w));
-    $("reportDistance").textContent = distanceKmCompactText(w);
+    $("reportTotal").textContent = fmtTime(reportTotalMs(w));
+    $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
     $("reportRefills").textContent = String(w.refills || 0);
-    $("reportIncidentsTop").textContent = String((w.incidents || []).length);
-    const windTab = $("reportWindTab");
-    if(windTab) windTab.classList.toggle("hidden", !isPhytosanitaryWork(w));
-    if(!isPhytosanitaryWork(w) && activeReportTab() === "wind") resetReportTabs();
+    const ws = windStats(w.windReadings || []);
+    $("reportWind").textContent = ws.latest === null ? "—" : formatWind(ws.latest);
 
-    const tab = activeReportTab();
-    if(tab === "summary") renderReportSummary(w);
-    if(tab === "work") renderReportWork(w);
-    if(tab === "events") renderReportEvents(w);
-    if(tab === "gps") renderReportGps(w);
-    if(tab === "wind") renderReportWind(w);
-    if(tab === "incidents") renderReportIncidents(w);
-    if(tab === "export") renderReportExport(w);
-    renderReportMap(w, activeReportTab());
+    renderReportSummary(w);
+    const hasMapData = (w.pointsClean || []).length > 1 || (w.events || []).some(e=>e.lat && e.lng) || (w.incidents || []).some(i=>i.lat && i.lng);
+    if(hasMapData) renderReportMap(w); else $("reportMap").classList.add("hidden");
   }
 
-  function distanceKmText(w){
-    return `${((w.distanceM || 0)/1000).toFixed(2).replace(".", ",")} km`;
-  }
-
-  function distanceKmCompactText(w){
-    const km = ((w?.distanceM || 0) / 1000);
-    const digits = km < 0.1 ? 2 : 1;
-    return `${km.toFixed(digits).replace(".", ",")} km`;
-  }
-
-  function reportDateText(w){
-    const raw = w?.finishedAt || w?.startedAt || Date.now();
-    return new Date(raw).toLocaleDateString("es-ES");
-  }
-
-  function reportTimeText(raw){
-    if(!raw) return "—";
-    return new Date(raw).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"});
-  }
-
-  function reportIcon(name){
-    const path = {
-      summary:'<path d="M4 7h16"/><path d="M4 12h13"/><path d="M4 17h10"/><circle cx="6" cy="7" r="1.3" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="17" r="1.3" fill="currentColor" stroke="none"/>',
-      work:'<path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/>',
-      events:'<rect x="5" y="5" width="14" height="15" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M8 11h8"/><path d="M8 15h5"/>',
-      gps:'<path d="M12 18a6 6 0 0 0 0-12"/><path d="M12 22a10 10 0 0 0 0-20"/><circle cx="8" cy="12" r="2"/>',
-      wind:'<path d="M4 8h10a3 3 0 1 0-3-3"/><path d="M4 13h14a3 3 0 1 1-3 3"/><path d="M4 18h7"/>',
-      incidents:'<path d="M12 5l8 14H4z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/>',
-      map:'<path d="M12 21s7-5.5 7-12a7 7 0 1 0-14 0c0 6.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.2"/>',
-      clock:'<circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/>',
-      parcel:'<path d="M4 17c2.5-2 5.5-2 8 0"/><path d="M12 17c2.5-2 5.5-2 8 0"/><path d="M7 17v-4"/><path d="M17 17v-4"/><path d="M4 13c1.2-1.2 2.6-1.8 4-1.8s2.8.6 4 1.8"/><path d="M12 13c1.2-1.2 2.6-1.8 4-1.8s2.8.6 4 1.8"/><path d="M7 11V7"/><path d="M17 11V7"/>',
-      labor:'<path d="M7 20v-5"/><path d="M11 20v-8"/><path d="M15 20v-6"/><path d="M4 9c2-1 4-3 5-5 1 2 3 4 5 5"/><path d="M16 5l4 4"/><path d="M18 3v4h-4"/>',
-      leaf:'<path d="M18.5 5.5c-6.5-.7-10.6 2.3-11.9 8.4-.5 2.4.4 4.8 2.2 6.1 1.8 1.3 4.2 1.5 6.2.4 5.3-2.8 5.2-8.8 3.5-14.9z"/><path d="M8 15c2.5-1.3 4.8-3.5 6.5-6.5"/><path d="M7 20l3-3"/>',
-      conclusion:'<path d="M7 12l3 3 7-7"/><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6"/>'
-    }[name] || '<circle cx="12" cy="12" r="8"/>';
-    return `<svg class="report-icon-svg" viewBox="0 0 24 24" aria-hidden="true">${path}</svg>`;
-  }
-
-  function reportScreen(title, icon, body, opts={}){
-    const note = opts.note ? `<div class="fixed-report-note">${reportIcon("clock")}<span>${escapeHtml(opts.note)}</span></div>` : "";
-    return `<div class="scroll-box fixed-report-screen">
-      <section class="fixed-report-card fixed-report-main">
-        <h2 class="fixed-report-title">${reportIcon(icon)}<span>${escapeHtml(title)}</span></h2>
-        ${body}
-      </section>
-      ${note}
-    </div>`;
-  }
-
-  function fixedKpi(label, value, icon="", tone=""){
-    return `<div class="fixed-kpi ${tone}"><span>${escapeHtml(label)}</span>${icon ? `<em>${reportIcon(icon)}</em>` : ""}<strong>${escapeHtml(value)}</strong></div>`;
-  }
-
-  function fixedMini(label, value, icon=""){
-    return `<div class="fixed-mini-card${icon ? " has-icon" : ""}">${icon ? `<div class="fixed-mini-head">${reportIcon(icon)}<span>${escapeHtml(label)}</span></div>` : `<span>${escapeHtml(label)}</span>`}<strong>${escapeHtml(value)}</strong></div>`;
-  }
-
-  function fixedMeta(items){
-    return `<div class="fixed-meta-strip">${items.map(it => `<span>${it.icon ? reportIcon(it.icon) : ""}${escapeHtml(it.label)}${it.value ? ` <strong>${escapeHtml(it.value)}</strong>` : ""}</span>`).join('<b>·</b>')}</div>`;
-  }
-
-  function fixedMapBlock(title, mode="summary"){
-    return `<div class="fixed-map-block" data-map-mode="${escapeHtml(mode)}"><div class="fixed-map-title">${reportIcon("map")}<span>${escapeHtml(title)}</span></div><div id="reportVisualMap" class="report-map fixed-report-map"></div></div>`;
-  }
-
-  function reportConclusion(text, icon="conclusion", rightIcon="leaf"){
-    return `<div class="fixed-conclusion">${reportIcon(icon)}<div><strong>Conclusión</strong><span>${escapeHtml(text)}</span></div><i>${reportIcon(rightIcon)}</i></div>`;
-  }
-
-  function eventCounts(w){
-    const events = w.events || [];
-    const paradas = events.filter(e => e.type === "Parada" && !/recarga/i.test(`${e.label || ""} ${e.notes || ""}`)).length;
-    return {events:events.length, paradas, recargas:w.refills || 0, incidencias:(w.incidents || []).length};
-  }
-
-  function incidentBreakdown(incidents){
-    const map = new Map();
-    (incidents || []).forEach(i => map.set(i.type || "Otra", (map.get(i.type || "Otra") || 0) + 1));
-    return Array.from(map.entries()).slice(0,4);
-  }
-
-  function routeColorByQuality(p){
-    const acc = Number(p?.accuracy);
-    if(isFinite(acc)){
-      if(acc <= 5) return "#2f7d44";
-      if(acc <= 10) return "#d6a43b";
-      if(acc <= 15) return "#c47b32";
-      return "#a8483a";
+  function renderReportMap(w){
+    const el = $("reportMap");
+    el.classList.remove("hidden");
+    if(state.maps.report){
+      state.maps.report.remove();
+      state.maps.report = null;
     }
-    if(p?.quality === "valido") return "#2f7d44";
-    if(p?.quality === "dudoso") return "#c47b32";
-    return "#a8483a";
-  }
-
-  function drawRouteOnMap(map, pts, mode="summary"){
-    if(!pts || pts.length < 2) return null;
-    if(mode === "gps"){
-      let bounds = null;
-      for(let i=1;i<pts.length;i++){
-        const a = pts[i-1], b = pts[i];
-        const seg = L.polyline([[a.lat,a.lng],[b.lat,b.lng]], {color:routeColorByQuality(b), weight:5, opacity:.95}).addTo(map);
-        bounds = bounds && bounds.isValid() ? bounds.extend(seg.getBounds()) : seg.getBounds();
-      }
-      return bounds;
-    }
-    const routeColor = mode === "wind" ? "#d6a43b" : "#96c34b";
-    const route = L.polyline(pts.map(p=>[p.lat,p.lng]), {color: routeColor, weight:5, opacity:.96}).addTo(map);
-    return route.getBounds();
-  }
-
-  function makeWindIcon(reading){
-    const level = windLevel(reading.kmh);
-    const deg = directionToDegrees(reading.direction);
-    return L.divIcon({
-      className:"wind-arrow-marker",
-      html:`<div class="wind-arrow" style="--wind-color:${level.color};--wind-rot:${deg}deg">➜</div>`,
-      iconSize:[28,28],
-      iconAnchor:[14,14]
-    });
-  }
-
-  function addReportMapNotice(text, target=null){
-    const el = target || $("reportVisualMap") || $("reportMap");
-    if(!el) return;
-    const notice = document.createElement("div");
-    notice.className = "report-map-notice";
-    notice.textContent = text;
-    el.appendChild(notice);
-  }
-
-  function renderReportMap(w, mode="summary"){
-    const legacy = $("reportMap");
-    if(legacy) legacy.classList.add("hidden");
-    const el = $("reportVisualMap");
-    if(!el){
-      if(state.maps.report){ try{ state.maps.report.off(); state.maps.report.remove(); }catch{} state.maps.report = null; }
+    el.innerHTML = "";
+    if(!ensureLeaflet()){
+      el.classList.add("hidden");
       return;
     }
-    waitForMapContainer("reportVisualMap", () => {
-      if(state.maps.report){
-        try{ state.maps.report.off(); state.maps.report.remove(); }catch{}
-        state.maps.report = null;
-      }
-      el.innerHTML = "";
-      if(!ensureLeaflet()){
-        addReportMapNotice("No se pudo cargar el mapa satelital.", el);
-        return;
-      }
-      const map = L.map(el, { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false, preferCanvas:true, fadeAnimation:false, zoomAnimation:false, markerZoomAnimation:false });
-      state.maps.report = map;
-      const tile = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom:20, keepBuffer:4 }).addTo(map);
-      map._pbgpsTile = tile;
-      const reportFeature = w.parcelFeature || findParcelFeatureByName(w.parcel) || (w.parcel === state.selectedParcelName ? state.selectedFeature : null);
-      let bounds = null;
-      if(reportFeature) {
-        const lyr = L.geoJSON(reportFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
-        bounds = lyr.getBounds();
-      }
-      drawImportedIncidents(map, "reportImportedIncidents");
-      const pts = (w.pointsClean || []).filter(p=>isFinite(p.lat) && isFinite(p.lng));
-      const needsRoute = ["summary", "gps", "wind"].includes(mode);
-      if(needsRoute){
-        const routeBounds = drawRouteOnMap(map, pts, mode);
-        if(routeBounds) bounds = bounds && bounds.isValid() ? bounds.extend(routeBounds) : routeBounds;
-      }
-      if(["summary", "events"].includes(mode)){
-        (w.events || []).forEach(ev => {
-          if(ev.lat && ev.lng) L.circleMarker([ev.lat,ev.lng], {radius:6,color:"#fff",weight:2,fillColor:ev.type.includes("Fin")?"#a8483a":ev.type==="Comienzo"?"#2f7d44":"#c47b32",fillOpacity:1}).bindTooltip(ev.label || ev.type, {permanent:false}).addTo(map);
-        });
-      }
-      if(["summary", "incidents"].includes(mode)){
-        (w.incidents || []).forEach(inc => {
-          if(inc.lat && inc.lng) L.circleMarker([inc.lat,inc.lng], {radius:8,color:"#fff",weight:2,fillColor:getIncidentColor(inc.type),fillOpacity:1}).bindTooltip(inc.type || "Incidencia", {permanent:mode === "incidents", direction:"right", className:"imported-incident-label"}).addTo(map);
-        });
-      }
-      if(mode === "wind" && isPhytosanitaryWork(w)){
-        (w.windReadings || []).forEach((r, idx) => {
-          const ref = r.reference || {};
-          let lat = Number(ref.lat), lng = Number(ref.lng);
-          if((!isFinite(lat) || !isFinite(lng)) && pts.length){
-            const p = pts[Math.min(pts.length-1, Math.round((idx/(Math.max(1,(w.windReadings||[]).length-1))) * (pts.length-1)))];
-            lat = p.lat; lng = p.lng;
-          }
-          if(isFinite(lat) && isFinite(lng)){
-            L.marker([lat,lng], {icon: makeWindIcon(r)}).bindTooltip(`${formatWind(r.kmh)} · ${normalizeWindDirection(r.direction)}`, {permanent:false}).addTo(map);
-          }
-        });
-      }
-      if(bounds && bounds.isValid()) stabilizeMap(map, bounds, [18,18]);
-      else stabilizeMap(map, null, [18,18]);
-      if(needsRoute && !pts.length) addReportMapNotice("No hay recorrido GPS registrado para este trabajo", el);
+    const map = L.map(el, { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
+    state.maps.report = map;
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom:20 }).addTo(map);
+    const reportFeature = w.parcelFeature || findParcelFeatureByName(w.parcel) || (w.parcel === state.selectedParcelName ? state.selectedFeature : null);
+    let bounds = null;
+    if(reportFeature) {
+      const lyr = L.geoJSON(reportFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
+      bounds = lyr.getBounds();
+    }
+    drawImportedIncidents(map, "reportImportedIncidents");
+    const pts = (w.pointsClean || []).map(p=>[p.lat,p.lng]);
+    if(pts.length > 1) {
+      const route = L.polyline(pts, {color:"#1f7ed0",weight:4}).addTo(map);
+      bounds = bounds && bounds.isValid() ? bounds.extend(route.getBounds()) : route.getBounds();
+    }
+    (w.events || []).forEach(ev => {
+      if(ev.lat && ev.lng) L.circleMarker([ev.lat,ev.lng], {radius:6,color:"#fff",weight:2,fillColor:ev.type.includes("Fin")?"#a8483a":ev.type==="Comienzo"?"#2f7d44":"#c47b32",fillOpacity:1}).addTo(map);
     });
+    (w.incidents || []).forEach(inc => {
+      if(inc.lat && inc.lng) L.circleMarker([inc.lat,inc.lng], {radius:6,color:"#fff",weight:2,fillColor:getIncidentColor(inc.type),fillOpacity:1}).addTo(map);
+    });
+    if(bounds && bounds.isValid()) stabilizeMap(map, bounds, [18,18]);
+    else stabilizeMap(map, null, [18,18]);
   }
 
   function reportWarning(w){
     const gps = w.gpsStats || {};
     if(w.forcedStart || gps.discarded > 0 || (gps.worst && gps.worst > 15)){
-      return `<div class="report-warning slim"><strong>Advertencia GPS:</strong> el trazado debe interpretarse como aproximado en algunos tramos. Se conservaron los puntos originales y se generó una ruta depurada para visualización e informe.</div>`;
+      return `<div class="report-warning"><strong>Advertencia GPS:</strong> el trazado debe interpretarse como aproximado en algunos tramos. Se conservaron los puntos originales y se generó una ruta depurada para visualización e informe.</div>`;
     }
     return "";
   }
 
   function renderReportSummary(w){
     const day = w.day || {};
+    const ws = windStats(w.windReadings || []);
     const status = w.status === "finalizado" ? "Finalizado" : "Provisional";
-    const body = `
-      <div class="summary-template">
-        <div class="fixed-kpi-row summary-kpis">
-          ${fixedKpi("Tiempo total", fmtDurationCompact(reportTotalMs(w)), "clock")}
-          ${fixedKpi("Distancia", distanceKmCompactText(w), "map")}
-          ${fixedKpi("Recargas", String(w.refills || 0), "work")}
-          ${fixedKpi("Incidencias", String((w.incidents || []).length), "incidents")}
+    $("reportContent").innerHTML = `
+      <div class="scroll-box report-visual">
+        ${reportWarning(w)}
+        <div class="report-section-title">Datos del trabajo</div>
+        <div class="report-grid">
+          ${reportKpi("Parcela", w.parcel || "—")}
+          ${reportKpi("Labor", w.type || "—")}
+          ${reportKpi("Estado", status)}
+          ${reportKpi("Inicio", w.startedAt ? new Date(w.startedAt).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}) : "—")}
         </div>
-        ${fixedMeta([
-          {icon:"conclusion", label:status},
-          {icon:"events", label:reportDateText(w)},
-          {icon:"work", label:"Operario:", value:day.operator || "—"},
-          {icon:"work", label:"Tractor:", value:day.tractor || "—"}
-        ])}
-        ${fixedMapBlock("Mapa de la parcela y recorrido", "summary")}
-        <h3 class="fixed-subtitle">${reportIcon("clock")}<span>Datos del trabajo</span></h3>
-        <div class="fixed-mini-grid fixed-mini-grid-3 summary-data-grid">
-          ${fixedMini("Parcela", w.parcel || "—", "parcel")}
-          ${fixedMini("Labor", w.type || "—", "labor")}
-          ${fixedMini("Estado", status, "conclusion")}
-          ${fixedMini("Inicio", reportTimeText(w.startedAt), "clock")}
-          ${fixedMini("Fin", reportTimeText(w.finishedAt), "clock")}
-          ${fixedMini("Tiempo activo", fmtDurationCompact(reportEffectiveActiveMs(w)), "clock")}
+        <div class="report-section-title">Jornada</div>
+        <div class="report-list">
+          <div><span>Operario</span><strong>${escapeHtml(day.operator || "—")}</strong></div>
+          <div><span>Tractor</span><strong>${escapeHtml(day.tractor || "—")}</strong></div>
+          <div><span>Atomizador / cisterna</span><strong>${escapeHtml(day.sprayer || "—")}</strong></div>
+          <div><span>Observaciones</span><strong>${escapeHtml(day.notes || "—")}</strong></div>
         </div>
-        ${reportConclusion(w.status === "finalizado" ? `El trabajo se completó correctamente. Se realizaron ${w.refills || 0} recargas y se registraron ${(w.incidents || []).length} incidencias durante la aplicación.` : "El trabajo continúa pendiente. El informe se completará al finalizar la parcela.")}
+        <div class="report-section-title">Resumen visual</div>
+        <div class="report-grid">
+          ${reportKpi("Tiempo total", fmtTime(reportTotalMs(w)))}
+          ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
+          ${reportKpi("Recargas", String(w.refills || 0))}
+          ${reportKpi("Viento último", ws.latest === null ? "—" : formatWind(ws.latest), ws.count ? `${ws.count} registros` : "sin registros")}
+        </div>
+        ${(!w.startedAt && !(w.events||[]).length) ? reportEmpty("Todavía no hay datos suficientes. El informe se completará al iniciar y registrar el trabajo.") : ""}
       </div>
     `;
-    $("reportContent").innerHTML = reportScreen("Resumen general", "summary", body);
   }
 
   function renderReportWork(w){
-    const rows = sessionRows(w);
-    const active = rows.reduce((a,s)=>a+(s.activeMs||0), 0) || reportEffectiveActiveMs(w);
-    const stopped = rows.reduce((a,s)=>a+(s.stoppedMs||0), 0) || (w.stoppedMs || 0);
-    const sessionsHtml = rows.map((s) => `
-      <div class="fixed-session-row tone-${((s.index-1)%3)+1}">
-        <span class="fixed-session-index">${s.index}</span>
-        <strong>${s.start ? new Date(s.start).toLocaleDateString("es-ES") : "—"}</strong>
-        <span>${reportTimeText(s.start)}<small>Inicio</small></span>
-        <b>→</b>
-        <span>${reportTimeText(s.end)}<small>Fin</small></span>
-        <em>${fmtDurationCompact(s.activeMs || 0)}<small>Activo</small></em>
-      </div>`).join("");
-    const tableRows = rows.map(s => `<tr><td><span class="quality-dot tone-${((s.index-1)%3)+1}">●</span> ${s.start ? new Date(s.start).toLocaleDateString("es-ES") : "—"}</td><td>${reportTimeText(s.start)}</td><td>${reportTimeText(s.end)}</td><td>${fmtDurationCompact(s.activeMs || 0)}</td><td>${fmtDurationCompact(s.stoppedMs || 0)}</td></tr>`).join("");
-    const body = `
-      <div class="fixed-kpi-row">
-        ${fixedKpi("Tiempo activo", fmtDurationCompact(active), "clock")}
-        ${fixedKpi("Tiempo parado", fmtDurationCompact(stopped), "clock", "amber")}
-        ${fixedKpi("Sesiones", String(rows.length), "work")}
-        ${fixedKpi("Recargas", String(w.refills || 0), "events", "amber")}
-      </div>
-      <div class="fixed-legend-row">${rows.map(s=>`<span><b class="quality-dot tone-${((s.index-1)%3)+1}">●</b> Sesión ${s.index} ${fmtDurationCompact(s.activeMs || 0)}</span>`).join('<b>·</b>')}</div>
-      <h3 class="fixed-subtitle">${reportIcon("clock")}<span>Sesiones de trabajo</span></h3>
-      <div class="fixed-session-list">${sessionsHtml || reportEmpty("Sin sesiones registradas todavía.")}</div>
-      <h3 class="fixed-subtitle">${reportIcon("clock")}<span>Detalle por sesiones</span></h3>
-      <table class="report-table fixed-table"><thead><tr><th>Fecha</th><th>Inicio</th><th>Fin</th><th>Activo</th><th>Parado</th></tr></thead><tbody>${tableRows || `<tr><td colspan="5">Sin datos.</td></tr>`}</tbody></table>
-      ${reportConclusion(rows.length > 1 ? `La parcela se completó en ${rows.length} jornadas de trabajo. El tiempo total de aplicación efectiva fue de ${fmtDurationCompact(active)}.` : `Tiempo activo acumulado: ${fmtDurationCompact(active)}.`)}
-    `;
-    $("reportContent").innerHTML = reportScreen("Resumen de trabajo", "wind", body, isPhytosanitaryWork(w) ? {note:"Dato procedente de pronóstico meteorológico, no de medición directa en parcela."} : {});
+    const avg = reportAverageSpeed(w);
+    const started = w.startedAt ? new Date(w.startedAt).toLocaleString("es-ES") : "—";
+    const finished = w.finishedAt ? new Date(w.finishedAt).toLocaleString("es-ES") : "—";
+    $("reportContent").innerHTML = `
+      <div class="scroll-box report-visual">
+        <div class="report-section-title">Tiempos y recorrido</div>
+        <div class="report-grid">
+          ${reportKpi("Tiempo total", fmtTime(reportTotalMs(w)))}
+          ${reportKpi("Tiempo efectivo", fmtTime(reportEffectiveActiveMs(w)))}
+          ${reportKpi("Tiempo parado", fmtTime(w.stoppedMs || 0))}
+          ${reportKpi("Velocidad media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
+          ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
+          ${reportKpi("Paradas", String(w.stops || 0))}
+          ${reportKpi("Recargas", String(w.refills || 0))}
+          ${reportKpi("Incidencias", String((w.incidents || []).length))}
+        </div>
+        <div class="report-section-title">Inicio y fin</div>
+        <div class="report-list">
+          <div><span>Inicio</span><strong>${escapeHtml(started)}</strong></div>
+          <div><span>Fin</span><strong>${escapeHtml(finished)}</strong></div>
+        </div>
+      </div>`;
   }
 
   function renderReportEvents(w){
     const events = w.events || [];
-    const counts = eventCounts(w);
-    const rows = events.map(ev => {
-      const kind = ev.type.includes("Fin") ? "bad" : ev.type === "Comienzo" || ev.type === "Continuar" ? "good" : /incid/i.test(ev.type) ? "bad" : "warn";
-      const label = ev.notes || ev.label || "—";
-      return `<div class="fixed-timeline-row"><time>${escapeHtml(ev.timeLabel || "—")}</time><span class="timeline-line-dot ${kind}"></span><i>${reportIcon(/incid/i.test(ev.type) ? "incidents" : ev.type === "Parada" ? "clock" : "work")}</i><div><strong>${escapeHtml(ev.type || "—")}</strong><small>${escapeHtml(label)}</small></div></div>`;
-    }).join("");
-    const tableRows = events.map(ev => `<tr><td>${escapeHtml(ev.timeLabel || "—")}</td><td>${escapeHtml(ev.type || "—")}</td><td>${escapeHtml(ev.notes || ev.label || "—")}</td></tr>`).join("");
-    const body = `
-      <div class="fixed-kpi-row">
-        ${fixedKpi("Eventos", String(counts.events))}
-        ${fixedKpi("Paradas", String(counts.paradas), "clock", "amber")}
-        ${fixedKpi("Recargas", String(counts.recargas), "work")}
-        ${fixedKpi("Incidencias", String(counts.incidencias), "incidents", "danger")}
-      </div>
-      ${fixedMeta([{icon:"clock", label:"Inicio", value:reportTimeText(w.startedAt)}, {icon:"clock", label:"Último evento", value:events.at(-1)?.timeLabel || reportTimeText(w.finishedAt)}, {icon:"conclusion", label:"Estado", value:w.status === "finalizado" ? "Finalizado" : "Pendiente"}])}
-      <h3 class="fixed-subtitle">${reportIcon("clock")}<span>Cronología del trabajo</span></h3>
-      <div class="fixed-timeline-list">${rows || reportEmpty("Sin eventos registrados todavía.")}</div>
-      <h3 class="fixed-subtitle">${reportIcon("summary")}<span>Detalle de eventos</span></h3>
-      <table class="report-table fixed-table"><thead><tr><th>Hora</th><th>Evento</th><th>Observación</th></tr></thead><tbody>${tableRows || `<tr><td colspan="3">Sin datos.</td></tr>`}</tbody></table>
-      ${reportConclusion(events.length ? `La actividad se completó con ${counts.paradas} paradas y ${counts.recargas} recargas. Todos los eventos relevantes fueron registrados correctamente.` : "Sin eventos registrados todavía.")}
-    `;
-    $("reportContent").innerHTML = reportScreen("Resumen de eventos", "events", body);
+    const rows = events.map(ev => `<div class="report-event"><strong>${escapeHtml(ev.type)}</strong><span>${escapeHtml(ev.timeLabel || "—")} · ${escapeHtml(ev.label || "—")}</span><small>GPS ${formatMeters(ev.accuracy)}${ev.notes ? " · " + escapeHtml(ev.notes) : ""}</small></div>`).join("");
+    $("reportContent").innerHTML = `<div class="scroll-box report-visual"><div class="report-section-title">Eventos del trabajo</div>${rows || reportEmpty("Sin eventos registrados todavía.")}</div>`;
   }
 
   function renderReportIncidents(w){
     const incidents = w.incidents || [];
-    const pending = incidents.filter(i => String(i.status || "").toLowerCase().includes("pendiente")).length;
-    const resolved = incidents.filter(i => /reparada|resuelta|revisada|descartada/i.test(i.status || "")).length;
-    const photos = incidents.filter(i => i.photo).length;
-    const breakdown = incidentBreakdown(incidents);
-    const tableRows = incidents.map(i => `<tr><td>${escapeHtml(i.timeLabel || "—")}</td><td><span class="quality-dot" style="background:${getIncidentColor(i.type)}"></span> ${escapeHtml(i.type || "—")}</td><td><span class="fixed-pill ${String(i.status||"").toLowerCase().includes("pendiente") ? "pending" : "resolved"}">${escapeHtml(i.status || "—")}</span></td><td>${i.photo ? "📷" : "—"}</td></tr>`).join("");
-    const body = `
-      <div class="fixed-kpi-row">
-        ${fixedKpi("Total", String(incidents.length))}
-        ${fixedKpi("Pendientes", String(pending), "incidents", "amber")}
-        ${fixedKpi("Resueltas", String(resolved), "conclusion")}
-        ${fixedKpi("Fotos", String(photos), "map", "amber")}
-      </div>
-      <div class="fixed-legend-row">${breakdown.map(([type,count])=>`<span><b class="quality-dot" style="background:${getIncidentColor(type)}"></b> ${escapeHtml(type)} ${count}</span>`).join('<b>·</b>') || '<span>Sin incidencias</span>'}</div>
-      ${fixedMapBlock("Mapa de incidencias", "incidents")}
-      <h3 class="fixed-subtitle">${reportIcon("summary")}<span>Detalle de incidencias</span></h3>
-      <table class="report-table fixed-table"><thead><tr><th>Hora</th><th>Tipo de incidencia</th><th>Estado</th><th>Foto</th></tr></thead><tbody>${tableRows || `<tr><td colspan="4">Sin incidencias registradas.</td></tr>`}</tbody></table>
-      ${reportConclusion(incidents.length ? `Se registraron ${incidents.length} incidencias durante el trabajo. Se resolvieron ${resolved} y ${pending} queda pendiente de revisión.` : "No se registraron incidencias durante este trabajo.")}
-    `;
-    $("reportContent").innerHTML = reportScreen("Resumen de incidencias", "incidents", body, isPhytosanitaryWork(w) ? {note:"Dato procedente de pronóstico meteorológico, no de medición directa en parcela."} : {});
+    const rows = incidents.map(i => `<div class="report-event"><strong>${escapeHtml(i.type)}</strong><span>${escapeHtml(i.timeLabel || "—")} · ${escapeHtml(i.status || "—")}</span><small>GPS ${formatMeters(i.accuracy)}${i.gpsMissing ? " · Sin coordenada" : ""}${i.notes ? " · " + escapeHtml(i.notes) : ""}</small>${i.photo ? `<img class="incident-thumb" src="${i.photo}" alt="Foto incidencia" />` : ""}</div>`).join("");
+    $("reportContent").innerHTML = `<div class="scroll-box report-visual"><div class="report-section-title">Incidencias</div>${rows || reportEmpty("Sin incidencias registradas.")}</div>`;
   }
 
   function renderReportGps(w){
+    const cal = w.gpsCalibration || {};
     const gps = w.gpsStats || {};
     const avgAcc = gps.count ? (gps.sum / gps.count) : null;
-    const points = (w.pointsClean || []).length;
-    const intervals = gpsIntervals(w);
-    const tableRows = intervals.map(r => `<tr><td>${escapeHtml(r.interval)}</td><td>${formatMetersDetailed(r.avg)}</td><td><span class="quality-dot ${gpsClass(r.avg).cls}">●</span> ${gpsClass(r.avg).label}</td></tr>`).join("");
-    const body = `
-      ${reportWarning(w)}
-      <div class="fixed-kpi-row">
-        ${fixedKpi("Precisión media", formatMetersDetailed(avgAcc), "gps")}
-        ${fixedKpi("Mejor", formatMetersDetailed(gps.best), "gps")}
-        ${fixedKpi("Peor", formatMetersDetailed(gps.worst), "gps")}
-        ${fixedKpi("Puntos válidos", String(points), "gps")}
-      </div>
-      <div class="fixed-legend-row"><span><b class="quality-dot good"></b> Buena 0–5 m</span><span><b class="quality-dot accept"></b> Aceptable 5–10 m</span><span><b class="quality-dot warn"></b> Insuficiente 10–15 m</span><span><b class="quality-dot bad"></b> Mala &gt;15 m</span></div>
-      ${fixedMapBlock("Mapa de la parcela y trazado GPS", "gps")}
-      <h3 class="fixed-subtitle">${reportIcon("clock")}<span>Detalle por intervalos</span></h3>
-      <table class="report-table fixed-table"><thead><tr><th>Intervalo</th><th>Precisión</th><th>Estado</th></tr></thead><tbody>${tableRows || `<tr><td colspan="3">Sin datos GPS por intervalos.</td></tr>`}</tbody></table>
-      ${reportConclusion(points ? "La mayor parte del trazado se registró con buena calidad GPS, con algunos intervalos puntuales de menor precisión." : "No hay recorrido GPS registrado para este trabajo.", "gps")}
-    `;
-    $("reportContent").innerHTML = reportScreen("Resumen GPS", "gps", body);
-  }
-
-  function gpsIntervals(w){
-    const pts = (w.pointsClean || []).filter(p => p.time && isFinite(p.accuracy));
-    if(!pts.length) return [];
-    const buckets = {};
-    pts.forEach(p => {
-      const d = new Date(p.time);
-      const startMin = Math.floor(d.getMinutes()/30)*30;
-      const start = new Date(d); start.setMinutes(startMin,0,0);
-      const end = new Date(start.getTime()+30*60000);
-      const key = `${start.toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"})}–${end.toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"})}`;
-      buckets[key] = buckets[key] || [];
-      buckets[key].push(Number(p.accuracy));
-    });
-    return Object.entries(buckets).map(([interval, vals]) => ({interval, avg: vals.reduce((a,b)=>a+b,0)/vals.length}));
+    $("reportContent").innerHTML = `
+      <div class="scroll-box report-visual">
+        ${reportWarning(w)}
+        <div class="report-section-title">Calidad GPS</div>
+        <div class="report-grid">
+          ${reportKpi("Calibración", cal.quality || "—")}
+          ${reportKpi("Mejor previa", formatMeters(cal.best))}
+          ${reportKpi("Media previa", formatMeters(cal.avg))}
+          ${reportKpi("Inicio forzado", w.forcedStart ? "Sí" : "No")}
+          ${reportKpi("Media trabajo", formatMeters(avgAcc))}
+          ${reportKpi("Peor trabajo", formatMeters(gps.worst))}
+          ${reportKpi("Puntos originales", String((w.pointsOriginal || []).length))}
+          ${reportKpi("Ruta depurada", String((w.pointsClean || []).length))}
+          ${reportKpi("Dudosos", String(gps.doubtful || 0))}
+          ${reportKpi("Descartados", String(gps.discarded || 0))}
+        </div>
+      </div>`;
   }
 
   function renderReportWind(w){
-    if(!isPhytosanitaryWork(w)){
-      $("reportContent").innerHTML = reportScreen("Resumen de viento", "wind", reportEmpty("El viento solo se muestra y registra en trabajos de Aplicación de fitosanitarios."));
-      return;
-    }
     const readings = w.windReadings || [];
     const ws = windStats(readings);
-    const tableRows = readings.map(r => { const level = windLevel(r.kmh); return `<tr><td>${escapeHtml(r.timeLabel || "—")}</td><td>${formatWind(r.kmh)}</td><td>${formatWind(r.gustKmh)}</td><td>${escapeHtml(normalizeWindDirection(r.direction))}</td><td><span class="quality-dot ${level.cls}">●</span> ${level.label}</td></tr>`; }).join("");
-    const body = `
-      <div class="fixed-kpi-row">
-        ${fixedKpi("Viento medio", ws.avg === null ? "—" : formatWind(ws.avg), "wind")}
-        ${fixedKpi("Viento máximo", ws.max === null ? "—" : formatWind(ws.max), "wind")}
-        ${fixedKpi("Dirección predominante", ws.predominantDirection || "—", "wind")}
-        ${fixedKpi("Estado global", ws.global.label, "wind", ws.global.cls === "bad" ? "danger" : ws.global.cls === "warn" ? "amber" : "")}
-      </div>
-      <div class="fixed-legend-row"><span><b class="quality-dot good"></b> Verde 0–10,8 km/h</span><span><b class="quality-dot warn"></b> Ámbar 10,9–15,3 km/h</span><span><b class="quality-dot bad"></b> Rojo &gt;15,3 km/h</span></div>
-      ${fixedMapBlock("Mapa de la parcela y recorrido", "wind")}
-      <h3 class="fixed-subtitle">${reportIcon("clock")}<span>Detalle por intervalos</span></h3>
-      <table class="report-table fixed-table"><thead><tr><th>Intervalo</th><th>Viento</th><th>Dirección</th><th>Estado</th></tr></thead><tbody>${readings.map(r=>{ const level=windLevel(r.kmh); return `<tr><td>${escapeHtml(r.timeLabel || "—")}</td><td>${formatWind(r.kmh)}</td><td>${escapeHtml(normalizeWindDirection(r.direction))}</td><td><span class="quality-dot ${level.cls}">●</span> ${level.label}</td></tr>`; }).join("") || `<tr><td colspan="4">Sin registros de viento previsto.</td></tr>`}</tbody></table>
-      ${reportConclusion(readings.length ? `${ws.global.detail} Se registraron intervalos de viento previsto durante el trabajo.` : "Sin registros de viento previsto durante el trabajo.", "wind")}
-    `;
-    $("reportContent").innerHTML = reportScreen("Resumen de viento", "wind", body, {note:"Dato procedente de pronóstico meteorológico, no de medición directa en parcela."});
+    const rows = readings.map(r => `<div class="report-event"><strong>${formatWind(r.kmh)}</strong><span>${escapeHtml(r.timeLabel || "—")}</span><small>${r.autoPrompt ? "Registro periódico" : "Registro manual/inicial"}</small></div>`).join("");
+    const warning = ws.max !== null && ws.max >= 20 ? `<div class="report-warning"><strong>Aviso viento:</strong> se registró un valor máximo de ${formatWind(ws.max)}. Revisar idoneidad de aplicación según criterio técnico y normativa aplicable.</div>` : "";
+    $("reportContent").innerHTML = `
+      <div class="scroll-box report-visual">
+        ${warning}
+        <div class="report-section-title">Viento durante la aplicación</div>
+        <div class="report-grid">
+          ${reportKpi("Último", ws.latest === null ? "—" : formatWind(ws.latest))}
+          ${reportKpi("Media", ws.avg === null ? "—" : formatWind(ws.avg))}
+          ${reportKpi("Máximo", ws.max === null ? "—" : formatWind(ws.max))}
+          ${reportKpi("Registros", String(ws.count))}
+        </div>
+        <div class="report-section-title">Registros cada 30 minutos</div>
+        ${rows || reportEmpty("Sin registros de viento. Durante el trabajo la app pedirá el dato cada 30 minutos y también puede registrarse tocando la tarjeta Viento.")}
+      </div>`;
   }
 
   function renderReportExport(w){
@@ -1720,7 +1302,7 @@
         <button class="btn primary full" id="shareReport">Compartir resumen</button>
         <button class="btn ghost full" id="downloadJson">Exportar JSON completo</button>
         <button class="btn ghost full" id="downloadCsv">Exportar CSV eventos</button>
-        ${isPhytosanitaryWork(w) ? `<button class="btn ghost full" id="downloadWindCsv">Exportar CSV viento</button>` : ""}
+        <button class="btn ghost full" id="downloadWindCsv">Exportar CSV viento</button>
         <button class="btn ghost full" id="downloadGeojson">Exportar ruta GeoJSON</button>
         <button class="btn ghost full" id="downloadGpx">Exportar ruta GPX</button>
         <button class="btn ghost full" id="downloadKml">Exportar ruta KML</button>
@@ -1730,7 +1312,7 @@
     $("shareReport").onclick = () => shareReportSummary(w);
     $("downloadJson").onclick = () => downloadBlob(safeFilename(w, "trabajo", "json"), JSON.stringify(w, null, 2), "application/json");
     $("downloadCsv").onclick = () => exportEventsCsv(w);
-    if($("downloadWindCsv")) $("downloadWindCsv").onclick = () => exportWindCsv(w);
+    $("downloadWindCsv").onclick = () => exportWindCsv(w);
     $("downloadGeojson").onclick = () => exportRouteGeoJSON(w);
     $("downloadGpx").onclick = () => exportRouteGPX(w);
     $("downloadKml").onclick = () => exportRouteKML(w);
@@ -1757,8 +1339,8 @@
   }
 
   function exportWindCsv(w){
-    const header = "hora,viento_kmh,racha_kmh,direccion,fuente,referencia,tipo_registro,nota\n";
-    const rows = (w.windReadings || []).map(r => [r.timeLabel, r.kmh, r.gustKmh, r.direction, r.source, formatReferencePoint(r.reference), r.autoPrompt ? "periodico" : "manual", "pronostico meteorologico; no medicion directa en parcela"].map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
+    const header = "hora,kmh,tipo_registro\n";
+    const rows = (w.windReadings || []).map(r => [r.timeLabel, r.kmh, r.autoPrompt ? "periodico" : "manual"].map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
     downloadBlob(safeFilename(w, "viento", "csv"), header + rows, "text/csv");
   }
 
@@ -1817,45 +1399,11 @@
   function upsertPendingWorkInHistory(){
     if(!state.work || workIsCompleted(state.work)) return;
     const hist = storage.get(LS.history, []);
-    const now = Date.now();
     const snap = serializeWork({...state.work, status:"pendiente"});
-    if(state.work.status === "trabajando" && state.work.lastSegmentAt){
-      closeCurrentSession(snap, now, "Trabajo pendiente");
-      snap.activeMs = (snap.activeMs || 0) + Math.max(0, now - (state.work.lastSegmentAt || now));
-      snap.pausedAt = now;
-      snap.lastSegmentAt = null;
-    }
     const idx = hist.findIndex(w => w.id === snap.id);
     if(idx >= 0) hist[idx] = snap;
     else hist.unshift(snap);
     storage.set(LS.history, hist.slice(0, 200));
-  }
-
-  function resumePendingWorkFromHistory(index){
-    const hist = storage.get(LS.history, []);
-    const w = hist[index];
-    if(!w || workIsCompleted(w)) return;
-    state.selectedParcelName = w.parcel || "";
-    state.selectedFeature = w.parcelFeature || findParcelFeatureByName(w.parcel);
-    state.workType = w.type || "";
-    state.gpsCalibration = w.gpsCalibration || null;
-    state.work = serializeWork({...w});
-    state.work.status = state.work.startedAt ? "parado" : "preparado";
-    if(state.work.startedAt && !state.work.pausedAt) state.work.pausedAt = Date.now();
-    state.work.currentSessionId = null;
-    if(!isPhytosanitaryWork(state.work)){ state.work.windReadings = []; state.work.nextWindPromptAt = null; }
-    state.reportWork = null;
-    state.reportOrigin = "work";
-    storage.set(LS.active, state.work);
-    const header = $("workHeader");
-    if(header) header.textContent = `${state.selectedParcelName} · ${state.workType}`;
-    resetLiveUi();
-    $("beginWorkBtn").classList.toggle("hidden", Boolean(state.work.startedAt));
-    $("continueWorkBtn").classList.toggle("hidden", !state.work.startedAt);
-    $("stopWorkBtn").classList.add("hidden");
-    setWorkStateUi(state.work.startedAt ? "Parado" : "Preparado");
-    updateLiveStats();
-    show("screen-work");
   }
 
   function renderHistory(){
@@ -1871,17 +1419,13 @@
     $("historyList").innerHTML = filtered.length ? filtered.map(({w, originalIndex}) => {
       const status = workHistoryStatus(w);
       const cls = status === "Pendiente" ? "pending" : "completed";
-      const pendingButton = !workIsCompleted(w) ? `<button class="btn primary history-continue" data-history-continue="${originalIndex}">Continuar trabajo</button>` : "";
       return `
-      <div class="history-card history-card-v11 history-entry">
-        <button class="history-main" data-history-index="${originalIndex}">
-          <span class="history-date">${escapeHtml(workHistoryDate(w))}</span>
-          <strong>${escapeHtml(w.parcel || "Parcela sin nombre")}</strong>
-          <span class="history-type">${escapeHtml(w.type || "Trabajo sin tipo")}</span>
-          <span class="history-status ${cls}">${status}</span>
-        </button>
-        ${pendingButton}
-      </div>`;
+      <button class="history-card history-button history-card-v11" data-history-index="${originalIndex}">
+        <span class="history-date">${escapeHtml(workHistoryDate(w))}</span>
+        <strong>${escapeHtml(w.parcel || "Parcela sin nombre")}</strong>
+        <span class="history-type">${escapeHtml(w.type || "Trabajo sin tipo")}</span>
+        <span class="history-status ${cls}">${status}</span>
+      </button>`;
     }).join("") : `<div class="history-empty">${filter === "pending" ? "No hay trabajos pendientes." : filter === "completed" ? "No hay trabajos completados." : "No hay trabajos guardados."}</div>`;
 
     qsa("[data-history-index]").forEach(card => {
@@ -1889,12 +1433,6 @@
         const latest = storage.get(LS.history, []);
         const w = latest[Number(card.dataset.historyIndex)];
         if(w) openReportForWork(w, "history");
-      });
-    });
-    qsa("[data-history-continue]").forEach(btn => {
-      btn.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        resumePendingWorkFromHistory(Number(btn.dataset.historyContinue));
       });
     });
   }
@@ -2018,10 +1556,14 @@
       b.classList.add("active");
       const w = getReportWork();
       if(!w) return;
-      renderReport();
+      if(b.dataset.reportTab === "summary") renderReportSummary(w);
+      if(b.dataset.reportTab === "work") renderReportWork(w);
+      if(b.dataset.reportTab === "events") renderReportEvents(w);
+      if(b.dataset.reportTab === "gps") renderReportGps(w);
+      if(b.dataset.reportTab === "wind") renderReportWind(w);
+      if(b.dataset.reportTab === "incidents") renderReportIncidents(w);
+      if(b.dataset.reportTab === "export") renderReportExport(w);
     }));
-
-    installReportGestures();
 
     $("clearHistory").onclick = () => {
       if(!confirm("ATENCIÓN: vas a borrar todo el historial local de trabajos de este dispositivo. ¿Continuar?")) return;
@@ -2031,29 +1573,6 @@
       storage.remove(LS.history);
       renderHistory();
     };
-  }
-
-  function installReportGestures(){
-    const host = $("reportContent");
-    if(!host || host.dataset.swipeReady === "1") return;
-    let startX = 0, startY = 0, startT = 0;
-    host.addEventListener("touchstart", ev => {
-      const t = ev.touches?.[0];
-      if(!t) return;
-      startX = t.clientX; startY = t.clientY; startT = Date.now();
-    }, {passive:true});
-    host.addEventListener("touchend", ev => {
-      const t = ev.changedTouches?.[0];
-      if(!t) return;
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
-      const dt = Date.now() - startT;
-      if(dt > 700) return;
-      if(Math.abs(dx) < 60) return;
-      if(Math.abs(dx) < Math.abs(dy) * 1.4) return;
-      moveReportTab(dx < 0 ? 1 : -1);
-    }, {passive:true});
-    host.dataset.swipeReady = "1";
   }
 
   function init(){

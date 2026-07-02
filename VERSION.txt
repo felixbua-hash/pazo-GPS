@@ -1,15 +1,11 @@
-Pazo Baion GPS — Beta 1.10 reconstruida desde Beta 1.2
+Pazo Baion GPS — Beta 1.2
 
-Cambios integrados exclusivamente en esta versión:
-- Pantalla de carga local y privacidad separada en Datos locales y Servicios externos.
-- Viento previsto solo en trabajos de Aplicación de fitosanitarios, con racha, dirección, fuente, hora y coordenada de referencia.
-- Mapas de informe recreados al estar visibles, con aviso si no hay recorrido GPS.
-- Continuación de trabajos pendientes desde historial sin crear un trabajo nuevo.
-- Sesiones de trabajo por fecha, inicio, fin, tiempo activo y tiempo parado.
-- Pantallas de informe: Resumen, Trabajo, Eventos, GPS, Viento e Incidencias según composición fijada.
+Cambios integrados:
+- Nueva pantalla de carga aprobada, mostrada durante 4 segundos.
+- Estilo de botones e iconos Champán elegante.
+- Marco ornamental sutil como fondo de todas las pantallas internas, excepto pantalla de carga.
 
 Privacidad:
 - No incluye PARCELAS.geojson real.
 - No incluye INCIDENCIAS_.geojson real.
-- No incluye coordenadas reales ni rutas GPS reales.
 - Las capas reales se cargan localmente en el dispositivo.

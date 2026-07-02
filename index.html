@@ -7,15 +7,15 @@
   <title>Pazo Baion GPS</title>
 
   <!-- Leaflet JS se carga desde CDN; el CSS crítico de Leaflet está integrado localmente en styles.css para evitar fallos de visualización en iPhone. -->
-  <link rel="stylesheet" href="./styles.css?v=1.10" />
-  <link rel="manifest" href="./manifest.json?v=1.10" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="manifest" href="./manifest.json" />
 </head>
 <body>
   <div id="app">
 
     <!-- Pantalla de carga -->
     <section id="screen-splash" class="screen active splash-screen">
-      <img class="splash-img" src="./splash.png?v=1.10" alt="Pazo Baion GPS" />
+      <img class="splash-img" src="./splash.png" alt="Pazo Baion GPS" />
     </section>
 
     <!-- Carga local de capas -->
@@ -30,17 +30,10 @@
 
       <main class="panel">
         <h1>Cargar capas del mapa</h1>
-        <p class="lead">Selecciona desde este terminal las dos capas exportadas desde SW Maps: <strong>PARCELAS.geojson</strong> e <strong>INCIDENCIAS_.geojson</strong>.</p>
+        <p class="lead">Selecciona desde este terminal las dos capas exportadas desde SW Maps: <strong>PARCELAS.geojson</strong> e <strong>INCIDENCIAS_.geojson</strong>. No se subirán a GitHub ni a terceros.</p>
 
-        <div class="privacy-stack">
-          <div class="privacy-box privacy-local">
-            <strong>Datos locales</strong>
-            <span>Parcelas, incidencias, recorridos, fotos e informes permanecen en este dispositivo.</span>
-          </div>
-          <div class="privacy-box privacy-external">
-            <strong>Servicios externos</strong>
-            <span>El mapa satelital y el viento previsto pueden consultar proveedores externos usando la ubicación de referencia.</span>
-          </div>
+        <div class="privacy-box">
+          <strong>Privacidad:</strong> las coordenadas quedan guardadas localmente en este dispositivo. El mapa satelital online puede consultar imágenes de la zona al proveedor del mapa durante esta beta.
         </div>
 
         <div class="layer-load-grid">
@@ -306,7 +299,7 @@
           <div><span>Tiempo total</span><strong id="reportTotal">—</strong></div>
           <div><span>Distancia</span><strong id="reportDistance">—</strong></div>
           <div><span>Recargas</span><strong id="reportRefills">—</strong></div>
-          <div id="reportIncidentsCard"><span>Incidencias</span><strong id="reportIncidentsTop">—</strong></div>
+          <div><span>Viento</span><strong id="reportWind">—</strong></div>
         </div>
 
         <nav class="tabs report-tabs">
@@ -314,7 +307,7 @@
           <button class="tab" data-report-tab="work">Trabajo</button>
           <button class="tab" data-report-tab="events">Eventos</button>
           <button class="tab" data-report-tab="gps">GPS</button>
-          <button id="reportWindTab" class="tab" data-report-tab="wind">Viento</button>
+          <button class="tab" data-report-tab="wind">Viento</button>
           <button class="tab" data-report-tab="incidents">Incidencias</button>
           <button class="tab" data-report-tab="export">Exportar</button>
         </nav>
@@ -395,7 +388,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="./data.js?v=1.10"></script>
-  <script src="./app.js?v=1.10"></script>
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
