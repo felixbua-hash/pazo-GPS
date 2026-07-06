@@ -1,12 +1,20 @@
-# Pazo Baion GPS — Beta 1.2
+# Pazo Baion GPS — Beta 3.0
 
 ## Cambios de esta beta
 
-Esta versión integra únicamente los cambios visuales definidos para la Beta 1.2:
+Esta versión toma como base la Beta 1.2 e integra únicamente el cambio visual ordenado para la pantalla “Informe de trabajo”.
 
-- Nueva pantalla de carga aprobada, mostrada durante 4 segundos.
-- Estilo de botones e iconos tipo Champán elegante.
-- Marco ornamental sutil como fondo de todas las pantallas internas, excepto la pantalla de carga.
+La pantalla de informe queda adaptada a la referencia visual fijada:
+
+- Cabecera centrada con botón circular de vuelta.
+- Resumen de trabajo con cuatro tarjetas: tiempo activo, tiempo parado, sesiones y recargas.
+- Leyenda de sesiones con puntos de color.
+- Bloque “Sesiones de trabajo” con línea temporal, numeración, fecha, inicio, fin y tiempo activo.
+- Bloque “Detalle por sesiones” en tabla.
+- Bloque “Conclusión”.
+- Aviso inferior con icono de información.
+
+No se han integrado cambios funcionales ajenos a esta instrucción.
 
 ## Privacidad
 
@@ -33,7 +41,7 @@ Todos los archivos están en raíz para subirlos juntos a GitHub:
 
 1. Sube todos los archivos del ZIP a la raíz de GitHub.
 2. Abre la app desde GitHub Pages.
-3. Comprueba que la pantalla de carga se muestra durante 4 segundos.
-4. Carga primero `PARCELAS.geojson`.
-5. Carga después `INCIDENCIAS_.geojson`, aunque esté vacío.
-6. Revisa que las pantallas internas usan el nuevo marco y los botones Champán elegante.
+3. Carga `PARCELAS.geojson`.
+4. Carga `INCIDENCIAS_.geojson`, aunque esté vacío.
+5. Genera o abre un informe de trabajo.
+6. Comprueba que la pantalla “Informe de trabajo” sigue la referencia visual fijada.

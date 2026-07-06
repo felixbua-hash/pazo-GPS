@@ -1,9 +1,8 @@
-Pazo Baion GPS — Beta 1.2
+Pazo Baion GPS — Beta 3.0
 
 Cambios integrados:
-- Nueva pantalla de carga aprobada, mostrada durante 4 segundos.
-- Estilo de botones e iconos Champán elegante.
-- Marco ornamental sutil como fondo de todas las pantallas internas, excepto pantalla de carga.
+- Pantalla “Informe de trabajo” adaptada a la referencia visual fijada: disposición, tarjetas, iconos, paleta, sesiones, detalle por sesiones, conclusión y aviso inferior.
+- Se mantiene la base funcional de Beta 1.2 sin integrar cambios ajenos a esta instrucción.
 
 Privacidad:
 - No incluye PARCELAS.geojson real.
