@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta 3.0";
+  const VERSION = "Beta v4.0";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -1183,212 +1183,35 @@
     return "";
   }
 
-  function reportToMs(value){
-    if(value === null || value === undefined || value === "") return null;
-    if(typeof value === "number" && isFinite(value)) return value;
-    const n = Number(value);
-    if(isFinite(n) && String(value).length >= 10) return n;
-    const d = new Date(value);
-    const t = d.getTime();
-    return isNaN(t) ? null : t;
-  }
-
-  function reportEventMs(ev){
-    return reportToMs(ev?.at || ev?.time || ev?.timestamp || null);
-  }
-
-  function fmtReportHm(ms){
-    if(!isFinite(ms) || ms < 0) ms = 0;
-    const totalMinutes = Math.round(ms / 60000);
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-  }
-
-  function fmtReportDurationText(ms){
-    if(!isFinite(ms) || ms < 0) ms = 0;
-    const totalMinutes = Math.round(ms / 60000);
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    const hText = h === 1 ? "1 hora" : `${h} horas`;
-    const mText = m === 1 ? "1 minuto" : `${m} minutos`;
-    if(h <= 0) return mText;
-    if(m <= 0) return hText;
-    return `${hText} ${mText}`;
-  }
-
-  function reportDateLabel(ms){
-    return isFinite(ms) ? new Date(ms).toLocaleDateString("es-ES", {day:"2-digit", month:"2-digit", year:"numeric"}) : "—";
-  }
-
-  function reportTimeLabel(ms){
-    return isFinite(ms) ? new Date(ms).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}) : "—";
-  }
-
-  function reportColorClass(i){
-    return ["green", "gold", "red"][i % 3];
-  }
-
-  function reportIcon(name){
-    const icons = {
-      wind: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h9a3 3 0 1 0-3-3"/><path d="M4 13h13a3 3 0 1 1-3 3"/><path d="M4 18h6"/></svg>',
-      stopwatch: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 13l3-3"/><path d="M9 2h6"/><path d="M12 2v3"/></svg>',
-      pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M10 8v8"/><path d="M14 8v8"/></svg>',
-      users: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7" r="3"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/><circle cx="5" cy="10" r="2"/><path d="M2 20v-1a4 4 0 0 1 4-4"/><circle cx="19" cy="10" r="2"/><path d="M22 20v-1a4 4 0 0 0-4-4"/></svg>',
-      battery: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="16" height="8" rx="2"/><path d="M21 11v2"/></svg>',
-      clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v6l4 2"/></svg>',
-      calendar: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="15" rx="2"/><path d="M8 3v4"/><path d="M16 3v4"/><path d="M5 10h14"/></svg>',
-      clipboard: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="8" y="3" width="8" height="4" rx="1"/><path d="M9 14l2 2 4-5"/></svg>',
-      info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></svg>',
-      leaf: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4c-7 0-12 4-12 10 0 3 2 5 5 5 6 0 9-7 7-15z"/><path d="M4 20c4-6 8-9 14-13"/><path d="M10 15l-3 3"/></svg>'
-    };
-    return icons[name] || "";
-  }
-
-  function reportSessions(w){
-    const events = (w.events || [])
-      .map(ev => ({...ev, ms: reportEventMs(ev)}))
-      .filter(ev => isFinite(ev.ms))
-      .sort((a,b) => a.ms - b.ms);
-    const segments = [];
-    let current = null;
-
-    events.forEach(ev => {
-      const type = String(ev.type || "");
-      const isStart = type === "Comienzo" || type === "Continuar";
-      const isEnd = type === "Parada" || type.includes("Fin");
-      if(isStart){
-        if(current && !current.endMs){
-          current.endMs = ev.ms;
-          current.end = ev;
-          segments.push(current);
-        }
-        current = { start: ev, startMs: ev.ms, end: null, endMs: null };
-      } else if(isEnd && current){
-        current.end = ev;
-        current.endMs = ev.ms;
-        segments.push(current);
-        current = null;
-      }
-    });
-
-    if(current){
-      current.endMs = reportToMs(w.finishedAt) || Date.now();
-      current.end = null;
-      segments.push(current);
-    }
-
-    if(!segments.length && w.startedAt){
-      const startMs = reportToMs(w.startedAt);
-      const endMs = reportToMs(w.finishedAt) || Date.now();
-      if(isFinite(startMs) && isFinite(endMs)) segments.push({ start:null, startMs, end:null, endMs });
-    }
-
-    const mapped = segments.map((seg, i) => {
-      const startMs = seg.startMs;
-      const endMs = Math.max(seg.endMs || startMs, startMs);
-      const nextStart = segments[i+1]?.startMs || null;
-      const stoppedMs = nextStart ? Math.max(0, nextStart - endMs) : 0;
-      return {
-        index: i + 1,
-        color: reportColorClass(i),
-        date: reportDateLabel(startMs),
-        start: reportTimeLabel(startMs),
-        end: reportTimeLabel(endMs),
-        activeMs: Math.max(0, endMs - startMs),
-        stoppedMs
-      };
-    });
-
-    const totalStopped = Math.max(0, w.stoppedMs || 0);
-    const sumStopped = mapped.reduce((a,s) => a + (s.stoppedMs || 0), 0);
-    const residualStopped = Math.max(0, totalStopped - sumStopped);
-    if(residualStopped && mapped.length) mapped[mapped.length - 1].stoppedMs += residualStopped;
-    return mapped;
-  }
-
   function renderReportSummary(w){
-    const sessions = reportSessions(w);
-    const activeMs = reportEffectiveActiveMs(w);
-    const stoppedMs = Math.max(0, w.stoppedMs || 0);
-    const sessionCount = sessions.length;
-    const sessionsLabel = sessionCount === 1 ? "una sesión" : `${sessionCount || 0} sesiones`;
-    const legendHtml = sessions.map((s, i) => `
-      <span class="pb3-legend-item"><i class="${s.color}"></i><b>Sesión ${i + 1}</b><strong>${fmtReportHm(s.activeMs)}</strong></span>
-      ${i < sessions.length - 1 ? '<span class="pb3-legend-sep">·</span>' : ''}
-    `).join("");
-
-    const sessionRows = sessions.map((s, i) => `
-      <div class="pb3-timeline-row ${s.color}">
-        <div class="pb3-marker">${i + 1}</div>
-        <div class="pb3-session-card">
-          <div class="pb3-date-cell"><span class="pb3-row-icon">${reportIcon("calendar")}</span><strong>${escapeHtml(s.date)}</strong></div>
-          <div class="pb3-time-cell"><span class="pb3-row-icon">${reportIcon("clock")}</span><strong>${escapeHtml(s.start)}</strong><small>Inicio</small></div>
-          <div class="pb3-arrow">→</div>
-          <div class="pb3-time-cell"><span class="pb3-row-icon">${reportIcon("clock")}</span><strong>${escapeHtml(s.end)}</strong><small>Fin</small></div>
-          <div class="pb3-active-cell"><span class="pb3-row-icon">${reportIcon("stopwatch")}</span><strong>${fmtReportHm(s.activeMs)}</strong><small>Activo</small></div>
-        </div>
-      </div>
-    `).join("");
-
-    const detailRows = sessions.map(s => `
-      <tr class="${s.color}">
-        <td><i></i></td>
-        <td>${escapeHtml(s.date)}</td>
-        <td>${escapeHtml(s.start)}</td>
-        <td>${escapeHtml(s.end)}</td>
-        <td>${fmtReportHm(s.activeMs)}</td>
-        <td>${fmtReportHm(s.stoppedMs)}</td>
-      </tr>
-    `).join("");
-
-    const empty = !w.startedAt && !(w.events || []).length;
-    const conclusion = empty
-      ? "El informe se completará cuando se inicie y finalice el trabajo en la parcela."
-      : `La parcela ${w.status === "finalizado" ? "se completó" : "está registrada"} en ${sessionsLabel} de trabajo.<br>El tiempo total de aplicación efectiva fue de ${fmtReportDurationText(activeMs)}.`;
-
+    const day = w.day || {};
+    const ws = windStats(w.windReadings || []);
+    const status = w.status === "finalizado" ? "Finalizado" : "Provisional";
     $("reportContent").innerHTML = `
-      <div class="pb3-report-scroll">
+      <div class="scroll-box report-visual">
         ${reportWarning(w)}
-        <section class="pb3-card pb3-summary-card">
-          <h2><span class="pb3-title-icon gold">${reportIcon("wind")}</span>Resumen de trabajo</h2>
-          <div class="pb3-metric-grid">
-            <div class="pb3-metric green"><span>${reportIcon("stopwatch")}</span><small>Tiempo activo</small><strong>${fmtReportHm(activeMs)}</strong></div>
-            <div class="pb3-metric gold"><span>${reportIcon("pause")}</span><small>Tiempo parado</small><strong>${fmtReportHm(stoppedMs)}</strong></div>
-            <div class="pb3-metric green"><span>${reportIcon("users")}</span><small>Sesiones</small><strong>${sessionCount || 0}</strong></div>
-            <div class="pb3-metric gold"><span>${reportIcon("battery")}</span><small>Recargas</small><strong>${w.refills || 0}</strong></div>
-          </div>
-          <div class="pb3-legend">${legendHtml || '<span class="pb3-empty-inline">Sin sesiones registradas</span>'}</div>
-        </section>
-
-        <section class="pb3-card pb3-sessions-card">
-          <h2><span class="pb3-title-icon gold">${reportIcon("clock")}</span>Sesiones de trabajo</h2>
-          <div class="pb3-timeline">
-            <div class="pb3-line"></div>
-            ${sessionRows || '<div class="pb3-empty-block">Sin sesiones de trabajo registradas todavía.</div>'}
-          </div>
-        </section>
-
-        <section class="pb3-card pb3-detail-card">
-          <h2><span class="pb3-title-icon gold">${reportIcon("clock")}</span>Detalle por sesiones</h2>
-          <table class="pb3-detail-table">
-            <thead><tr><th></th><th>Fecha</th><th>Inicio</th><th>Fin</th><th>Activo</th><th>Parado</th></tr></thead>
-            <tbody>${detailRows || '<tr><td colspan="6">Sin datos registrados.</td></tr>'}</tbody>
-          </table>
-        </section>
-
-        <section class="pb3-conclusion-card">
-          <div>
-            <h2><span class="pb3-title-icon green">${reportIcon("clipboard")}</span>Conclusión</h2>
-            <p>${conclusion}</p>
-          </div>
-          <span class="pb3-leaf">${reportIcon("leaf")}</span>
-        </section>
-
-        <section class="pb3-weather-note">
-          <span>${reportIcon("info")}</span>
-          <p>Dato procedente de pronóstico meteorológico,<br>no de medición directa en parcela.</p>
-        </section>
+        <div class="report-section-title">Datos del trabajo</div>
+        <div class="report-grid">
+          ${reportKpi("Parcela", w.parcel || "—")}
+          ${reportKpi("Labor", w.type || "—")}
+          ${reportKpi("Estado", status)}
+          ${reportKpi("Inicio", w.startedAt ? new Date(w.startedAt).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}) : "—")}
+        </div>
+        <div class="report-section-title">Jornada</div>
+        <div class="report-list">
+          <div><span>Operario</span><strong>${escapeHtml(day.operator || "—")}</strong></div>
+          <div><span>Tractor</span><strong>${escapeHtml(day.tractor || "—")}</strong></div>
+          <div><span>Atomizador / cisterna</span><strong>${escapeHtml(day.sprayer || "—")}</strong></div>
+          <div><span>Observaciones</span><strong>${escapeHtml(day.notes || "—")}</strong></div>
+        </div>
+        <div class="report-section-title">Resumen visual</div>
+        <div class="report-grid">
+          ${reportKpi("Tiempo total", fmtTime(reportTotalMs(w)))}
+          ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
+          ${reportKpi("Recargas", String(w.refills || 0))}
+          ${reportKpi("Viento último", ws.latest === null ? "—" : formatWind(ws.latest), ws.count ? `${ws.count} registros` : "sin registros")}
+        </div>
+        ${(!w.startedAt && !(w.events||[]).length) ? reportEmpty("Todavía no hay datos suficientes. El informe se completará al iniciar y registrar el trabajo.") : ""}
       </div>
     `;
   }

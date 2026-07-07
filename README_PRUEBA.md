@@ -1,20 +1,17 @@
-# Pazo Baion GPS — Beta 3.0
+# Pazo Baion GPS — Beta v4.0
 
 ## Cambios de esta beta
 
-Esta versión toma como base la Beta 1.2 e integra únicamente el cambio visual ordenado para la pantalla “Informe de trabajo”.
+Esta versión aplica únicamente cambios de visualización conforme a la **Opción A · Premium vitícola ornamental**:
 
-La pantalla de informe queda adaptada a la referencia visual fijada:
+- Fondo marfil/pergamino y marco ornamental vitícola.
+- Paleta visual verde oscuro, oro viejo, marfil y beige cálido.
+- Botones, tarjetas, avisos, modales, paneles y controles adaptados al estilo premium ornamental.
+- Pantalla de entrada actualizada para mostrar **Beta v4.0**.
 
-- Cabecera centrada con botón circular de vuelta.
-- Resumen de trabajo con cuatro tarjetas: tiempo activo, tiempo parado, sesiones y recargas.
-- Leyenda de sesiones con puntos de color.
-- Bloque “Sesiones de trabajo” con línea temporal, numeración, fecha, inicio, fin y tiempo activo.
-- Bloque “Detalle por sesiones” en tabla.
-- Bloque “Conclusión”.
-- Aviso inferior con icono de información.
+## Alcance
 
-No se han integrado cambios funcionales ajenos a esta instrucción.
+No se han introducido cambios funcionales deliberados sobre GPS, mapas, almacenamiento local, cálculos, incidencias, historial ni exportaciones.
 
 ## Privacidad
 
@@ -41,7 +38,7 @@ Todos los archivos están en raíz para subirlos juntos a GitHub:
 
 1. Sube todos los archivos del ZIP a la raíz de GitHub.
 2. Abre la app desde GitHub Pages.
-3. Carga `PARCELAS.geojson`.
-4. Carga `INCIDENCIAS_.geojson`, aunque esté vacío.
-5. Genera o abre un informe de trabajo.
-6. Comprueba que la pantalla “Informe de trabajo” sigue la referencia visual fijada.
+3. Comprueba que la pantalla de entrada muestra **Beta v4.0**.
+4. Carga primero `PARCELAS.geojson`.
+5. Carga después `INCIDENCIAS_.geojson`, aunque esté vacío.
+6. Revisa que las pantallas internas mantienen la línea visual Premium vitícola ornamental.

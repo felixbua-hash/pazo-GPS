@@ -1,8 +1,10 @@
-Pazo Baion GPS — Beta 3.0
+Pazo Baion GPS — Beta v4.0
 
 Cambios integrados:
-- Pantalla “Informe de trabajo” adaptada a la referencia visual fijada: disposición, tarjetas, iconos, paleta, sesiones, detalle por sesiones, conclusión y aviso inferior.
-- Se mantiene la base funcional de Beta 1.2 sin integrar cambios ajenos a esta instrucción.
+- Aplicada la línea visual Opción A · Premium vitícola ornamental.
+- Paleta marfil, verde oscuro y oro viejo.
+- Botones, tarjetas, ventanas, avisos y paneles adaptados al estilo premium vitícola ornamental.
+- Pantalla de entrada actualizada para mostrar Beta v4.0.
 
 Privacidad:
 - No incluye PARCELAS.geojson real.

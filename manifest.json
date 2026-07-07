@@ -3,8 +3,8 @@
   "short_name": "Baion GPS",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#f4efe3",
-  "theme_color": "#163d29",
-  "description": "Beta 0.8 profesional privada para registro GPS de trabajos en parcelas de viñedo, con módulo de mapa reprogramado para iPhone/Safari.",
+  "background_color": "#f8f3e8",
+  "theme_color": "#184b34",
+  "description": "Beta v4.0 de Pazo Baion GPS con visualización Premium vitícola ornamental para registro GPS de trabajos en parcelas de viñedo.",
   "icons": []
 }
