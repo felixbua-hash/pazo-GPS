@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v5.0";
+  const VERSION = "Beta v6.0";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -566,6 +566,9 @@
       gpsStats: { bad:0, doubtful:0, discarded:0, best:Infinity, worst:0, sum:0, count:0 },
       windReadings: [],
       nextWindPromptAt: null,
+      lastGpsAt: null,
+      lastEventAt: null,
+      finalSnapshot: null,
       forcedStart: forced
     };
     storage.set(LS.active, state.work);
@@ -630,6 +633,78 @@
     return ms ? new Date(ms).toLocaleString("es-ES") : "—";
   }
 
+  function toMs(value){
+    if(value === null || value === undefined || value === "") return null;
+    if(typeof value === "number" && isFinite(value)) return value;
+    const n = Number(value);
+    if(isFinite(n) && String(value).trim() !== "") return n;
+    const d = new Date(value);
+    const t = d.getTime();
+    return isFinite(t) ? t : null;
+  }
+
+  function eventMs(ev){
+    return toMs(ev?.at) || toMs(ev?.time) || null;
+  }
+
+  function lastKnownWorkAt(w){
+    if(!w) return null;
+    const times = [];
+    const push = v => { const n = toMs(v); if(isFinite(n)) times.push(n); };
+    push(w.startedAt);
+    push(w.finishedAt);
+    push(w.lastGpsAt);
+    push(w.lastEventAt);
+    push(w.pausedAt);
+    (w.segments || []).forEach(seg => { push(seg.startAt); push(seg.endAt); });
+    (w.stopLog || []).forEach(stop => { push(stop.at); push(stop.resumedAt); });
+    (w.events || []).forEach(ev => push(eventMs(ev)));
+    (w.pointsOriginal || []).forEach(pt => push(pt.time));
+    (w.pointsClean || []).forEach(pt => push(pt.time));
+    return times.length ? Math.max(...times) : null;
+  }
+
+  function reportClock(w, now=Date.now()){
+    if(!w) return now;
+    if(workIsCompleted(w)) return toMs(w.finishedAt) || toMs(w.finalSnapshot?.finishedAt) || lastKnownWorkAt(w) || now;
+    // En informes provisionales no se usa Date.now() para evitar que un trabajo abierto
+    // siga sumando horas si la app quedó en segundo plano o no se cerró correctamente.
+    return lastKnownWorkAt(w) || now;
+  }
+
+  function liveClock(w, now=Date.now()){
+    if(!w) return now;
+    if(workIsCompleted(w)) return reportClock(w, now);
+    return now;
+  }
+
+  function buildFinalSnapshot(w){
+    if(!w) return null;
+    ensureTimeline(w);
+    const clock = reportClock(w);
+    const active = activeElapsedMs(w, clock, {live:false});
+    const stopped = stoppedElapsedMs(w, clock, {live:false});
+    const elapsed = w.startedAt ? Math.max(0, clock - w.startedAt) : 0;
+    return {
+      frozenAt: new Date().toISOString(),
+      startedAt: w.startedAt || null,
+      finishedAt: w.finishedAt || null,
+      activeMs: active,
+      stoppedMs: stopped,
+      elapsedMs: elapsed,
+      distanceM: w.distanceM || 0,
+      refills: w.refills || 0,
+      stops: (w.stopLog || []).length || w.stops || 0,
+      incidents: (w.incidents || []).length || 0
+    };
+  }
+
+  function freezeFinalSnapshot(w){
+    if(!w) return null;
+    w.finalSnapshot = buildFinalSnapshot(w);
+    return w.finalSnapshot;
+  }
+
   function ensureTimeline(w){
     if(!w) return w;
     if(!Array.isArray(w.segments)) w.segments = [];
@@ -689,32 +764,41 @@
     return seg;
   }
 
-  function currentSegmentMs(w, now=Date.now()){
+  function currentSegmentMs(w, now=Date.now(), options={}){
     ensureTimeline(w);
+    const clock = options.live ? liveClock(w, now) : reportClock(w, now);
     const open = (w.segments || []).find(s => !s.endAt);
-    if(open && w.status === "trabajando") return Math.max(0, now - (open.startAt || now));
+    if(open && w.status === "trabajando") return Math.max(0, clock - (open.startAt || clock));
     const last = (w.segments || []).at(-1);
     return Math.max(0, last?.activeMs || 0);
   }
 
-  function activeElapsedMs(w, now=Date.now()){
+  function activeElapsedMs(w, now=Date.now(), options={}){
     ensureTimeline(w);
+    if(workIsCompleted(w) && w.finalSnapshot && isFinite(Number(w.finalSnapshot.activeMs))){
+      return Math.max(0, Number(w.finalSnapshot.activeMs));
+    }
+    const clock = options.live ? liveClock(w, now) : reportClock(w, now);
     if((w.segments || []).length){
       return (w.segments || []).reduce((sum, seg) => {
-        if(!seg.endAt && w.status === "trabajando") return sum + Math.max(0, now - (seg.startAt || now));
+        if(!seg.endAt && w.status === "trabajando") return sum + Math.max(0, clock - (seg.startAt || clock));
         return sum + Math.max(0, seg.activeMs || 0);
       }, 0);
     }
     let ms = w?.activeMs || 0;
-    if(w?.status === "trabajando" && w.lastSegmentAt) ms += now - w.lastSegmentAt;
+    if(w?.status === "trabajando" && w.lastSegmentAt) ms += Math.max(0, clock - w.lastSegmentAt);
     return Math.max(0, ms);
   }
 
-  function stoppedElapsedMs(w, now=Date.now()){
+  function stoppedElapsedMs(w, now=Date.now(), options={}){
     ensureTimeline(w);
+    if(workIsCompleted(w) && w.finalSnapshot && isFinite(Number(w.finalSnapshot.stoppedMs))){
+      return Math.max(0, Number(w.finalSnapshot.stoppedMs));
+    }
+    const clock = options.live ? liveClock(w, now) : reportClock(w, now);
     const logged = (w.stopLog || []).reduce((sum, stop) => sum + Math.max(0, stop.stoppedMs || 0), 0);
     let ms = Math.max(w?.stoppedMs || 0, logged);
-    if(w?.status === "parado" && w.pausedAt) ms += Math.max(0, now - w.pausedAt);
+    if(w?.status === "parado" && w.pausedAt) ms += Math.max(0, clock - w.pausedAt);
     return ms;
   }
 
@@ -934,6 +1018,7 @@
     const prevClean = state.work.pointsClean.at(-1);
     const cls = force ? "valido" : classifyPoint(p, prevClean);
     state.work.pointsOriginal.push({...p, quality: cls});
+    if(isFinite(Number(p.time))) state.work.lastGpsAt = p.time;
     const st = state.work.gpsStats;
     st.best = Math.min(st.best, p.accuracy);
     st.worst = Math.max(st.worst, p.accuracy);
@@ -1036,6 +1121,7 @@
       accuracy: isFinite(Number(p?.accuracy)) ? p.accuracy : null
     };
     state.work.events.push(ev);
+    state.work.lastEventAt = atMs;
     return ev;
   }
 
@@ -1054,14 +1140,16 @@
       addEvent("Fin de tratamiento", "Punto final", "Parcela finalizada", p, now);
       state.work.status = "finalizado";
       state.work.finishedAt = now;
+      freezeFinalSnapshot(state.work);
       $("stopWorkBtn").classList.add("hidden");
       $("continueWorkBtn").classList.add("hidden");
       $("beginWorkBtn").classList.add("hidden");
       setWorkStateUi("Finalizado");
       stopGpsWatch();
       updateLiveStats();
+      const finalReport = serializeWork(state.work);
       const saved = saveFinishedWork();
-      state.reportWork = null;
+      state.reportWork = finalReport;
       state.reportOrigin = "work";
       resetReportTabs();
       show("screen-report");
@@ -1128,8 +1216,8 @@
   function tick(){
     if(state.work){
       const now = Date.now();
-      $("totalTime").textContent = fmtTime(activeElapsedMs(state.work, now));
-      $("partialTime").textContent = fmtTime(currentSegmentMs(state.work, now));
+      $("totalTime").textContent = fmtTime(activeElapsedMs(state.work, now, {live:true}));
+      $("partialTime").textContent = fmtTime(currentSegmentMs(state.work, now, {live:true}));
       checkWindPrompt();
     }
     requestAnimationFrame(() => setTimeout(tick, 1000));
@@ -1138,6 +1226,7 @@
   function saveFinishedWork(){
     if(!state.work) return false;
     ensureTimeline(state.work);
+    if(workIsCompleted(state.work)) freezeFinalSnapshot(state.work);
     state.work.savedAt = new Date().toISOString();
     const finished = serializeWork(state.work);
     let ok = saveHistorySnapshot(finished);
@@ -1153,6 +1242,7 @@
       parcelFeature: w.parcelFeature || state.selectedFeature || null
     };
     ensureTimeline(out);
+    if(workIsCompleted(out) && !out.finalSnapshot) out.finalSnapshot = buildFinalSnapshot(out);
     return out;
   }
 
@@ -1332,11 +1422,20 @@
   }
 
   function reportTotalMs(w){
-    return w?.startedAt ? (w.finishedAt || Date.now()) - w.startedAt : 0;
+    if(!w?.startedAt) return 0;
+    if(workIsCompleted(w) && w.finalSnapshot && isFinite(Number(w.finalSnapshot.elapsedMs))){
+      return Math.max(0, Number(w.finalSnapshot.elapsedMs));
+    }
+    const clock = reportClock(w);
+    return Math.max(0, clock - w.startedAt);
   }
 
   function reportEffectiveActiveMs(w){
-    return w ? activeElapsedMs(w, Date.now()) : 0;
+    return w ? activeElapsedMs(w, reportClock(w), {live:false}) : 0;
+  }
+
+  function reportStoppedMs(w){
+    return w ? stoppedElapsedMs(w, reportClock(w), {live:false}) : 0;
   }
 
   function reportAverageSpeed(w){
@@ -1363,9 +1462,10 @@
       }
       ensureTimeline(w);
       $("reportSubtitle").textContent = `${w.parcel} · ${w.type}`;
-      $("reportStatusChip").textContent = w.status === "finalizado" ? "Informe definitivo" : "Resumen provisional";
-      $("reportStatusChip").style.background = w.status === "finalizado" ? "#eaf6e9" : "#fff4e6";
-      $("reportStatusChip").style.color = w.status === "finalizado" ? "#2f7d44" : "#8b520e";
+      const completed = workIsCompleted(w);
+      $("reportStatusChip").textContent = completed ? "Informe definitivo" : "Resumen provisional · tramos no cerrados";
+      $("reportStatusChip").style.background = completed ? "#eaf6e9" : "#fff4e6";
+      $("reportStatusChip").style.color = completed ? "#2f7d44" : "#8b520e";
       $("reportTotal").textContent = fmtTime(reportEffectiveActiveMs(w));
       $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
       $("reportRefills").textContent = String(w.refills || 0);
@@ -1433,9 +1533,11 @@
   function renderReportSummary(w){
     const day = w.day || {};
     const ws = windStats(w.windReadings || []);
-    const status = w.status === "finalizado" ? "Finalizado" : "Provisional";
+    const completed = workIsCompleted(w);
+    const status = completed ? "Finalizado" : "Provisional";
     $("reportContent").innerHTML = `
       <div class="scroll-box report-visual">
+        ${!workIsCompleted(w) ? `<div class="report-warning"><strong>Resumen provisional:</strong> hay un tramo sin cerrar. Los tiempos se calculan solo con registros guardados de GPS/eventos para no sumar horas en segundo plano.</div>` : ""}
         ${reportWarning(w)}
         <div class="report-section-title">Datos del trabajo</div>
         <div class="report-grid">
@@ -1471,24 +1573,26 @@
     const finished = w.finishedAt ? dateTimeLabelFromMs(w.finishedAt) : "—";
     const segments = w.segments || [];
     const stops = w.stopLog || [];
+    const clock = reportClock(w);
     const segmentRows = segments.map((seg, i) => {
       const end = seg.endAt ? seg.endLabel : (w.status === "trabajando" ? "en curso" : "—");
-      const ms = !seg.endAt && w.status === "trabajando" ? Math.max(0, Date.now() - (seg.startAt || Date.now())) : (seg.activeMs || 0);
+      const ms = !seg.endAt && w.status === "trabajando" ? Math.max(0, clock - (seg.startAt || clock)) : (seg.activeMs || 0);
       const reason = seg.closeReason ? ` · cierre: ${escapeHtml(seg.closeReason)}` : "";
       return `<div><span>Tramo ${i+1}: ${escapeHtml(seg.startLabel || "—")} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
     }).join("");
     const stopRows = stops.map((stop, i) => {
-      const duration = stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" && stop.id === w.currentStopId ? fmtTime(Date.now() - stop.at) : "—");
+      const duration = stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" && stop.id === w.currentStopId ? fmtTime(Math.max(0, clock - stop.at)) : "—");
       const resume = stop.resumedLabel ? ` · continúa ${escapeHtml(stop.resumedLabel)}` : "";
       return `<div><span>Parada ${i+1}: ${escapeHtml(stop.timeLabel || "—")} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
     }).join("");
     $("reportContent").innerHTML = `
       <div class="scroll-box report-visual">
+        ${!workIsCompleted(w) ? `<div class="report-warning"><strong>Trabajo no finalizado:</strong> para un informe definitivo pulsa Parada → Fin de tratamiento. Este resumen no suma tiempo posterior al último registro guardado.</div>` : ""}
         <div class="report-section-title">Tiempos y recorrido</div>
         <div class="report-grid">
           ${reportKpi("Tiempo acumulado", fmtTime(reportEffectiveActiveMs(w)))}
           ${reportKpi("Tiempo transcurrido", fmtTime(reportTotalMs(w)))}
-          ${reportKpi("Tiempo parado", fmtTime(stoppedElapsedMs(w)))}
+          ${reportKpi("Tiempo parado", fmtTime(reportStoppedMs(w)))}
           ${reportKpi("Velocidad GPS media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
           ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
           ${reportKpi("Paradas", String(stops.length || w.stops || 0))}

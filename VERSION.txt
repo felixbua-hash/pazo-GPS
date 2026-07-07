@@ -1,14 +1,6 @@
-Pazo Baion GPS — Beta v5.0
+Pazo Baion GPS — Beta v6.0
 
-Cambios integrados:
-- Mantiene la línea visual Opción A · Premium vitícola ornamental de Beta v4.0.
-- Corrige registro de tiempos: hora de inicio, tramos entre paradas, hora de cada parada, tiempo parado y tiempo acumulado.
-- Corrige el punto de comienzo para que se guarde con coordenada GPS válida cuando esté disponible.
-- Refuerza el botón Resumen para abrir el informe después de mostrar la pantalla y evitar fallos del mapa.
-- Refuerza el guardado en historial y la recuperación de trabajos activos.
-- La velocidad se muestra como velocidad GPS estimada y suavizada.
+Base: Beta v5.0.
+Línea visual: Opción A · Premium vitícola ornamental.
 
-Privacidad:
-- No incluye PARCELAS.geojson real.
-- No incluye INCIDENCIAS_.geojson real.
-- Las capas reales se cargan localmente en el dispositivo.
+Corrección específica: motor de tiempos, informe provisional/definitivo, snapshot final congelado e historial.

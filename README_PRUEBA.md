@@ -1,55 +1,41 @@
-# Pazo Baion GPS — Beta v5.0
+# Pazo Baion GPS — Beta v6.0
 
-## Cambios de esta beta
+Versión generada a partir de Beta v5.0.
 
-Esta versión mantiene la línea visual **Opción A · Premium vitícola ornamental** de la Beta v4.0 y corrige únicamente los fallos funcionales detectados en la prueba de campo:
+Mantiene la línea visual **Opción A · Premium vitícola ornamental** y corrige únicamente el motor de tiempos, informe provisional/definitivo y guardado asociado.
 
-- Velocidad mostrada como **velocidad GPS estimada**, con cálculo suavizado para evitar saltos erráticos.
-- Registro de tiempos corregido:
-  - hora de inicio,
-  - tramos de trabajo entre paradas,
-  - hora de cada parada,
-  - tiempo parado,
-  - tiempo acumulado de trabajo.
-- Punto de **Comienzo** guardado con coordenada GPS válida cuando esté disponible.
-- Botón **Resumen** reforzado para abrir el informe de forma estable.
-- Guardado en **Historial** reforzado, con recuperación de trabajos activos y respaldo compacto si el almacenamiento local no acepta el registro completo.
+## Correcciones Beta v6.0
 
-## Alcance
+- El informe provisional ya no suma horas usando `Date.now()` indefinidamente si el trabajo quedó abierto o la app estuvo en segundo plano.
+- Los informes usan un reloj de trabajo basado en registros guardados: eventos, GPS, paradas, reanudaciones y fin.
+- Al finalizar, se congela un `finalSnapshot` con tiempo activo, tiempo parado, tiempo transcurrido, distancia, recargas, paradas e incidencias.
+- El informe definitivo se abre desde ese snapshot congelado y no desde un trabajo abierto.
+- Se mantienen los tramos de trabajo entre paradas, hora de inicio, hora de parada, hora de continuación y hora de fin.
+- Se refuerza la diferencia entre resumen provisional y informe definitivo.
 
-No se han introducido cambios visuales nuevos sobre la línea Premium vitícola ornamental.  
-No se han modificado mapas, parcelas reales, incidencias reales ni datos de usuario.
+## No modificado
 
-## Privacidad
+- Visualización ornamental de Beta v4/v5.
+- Estructura visual de pantallas.
+- CSS visual.
+- Mapas, capas GeoJSON, incidencias y configuración de jornada salvo uso de datos ya existentes para cálculo de tiempos.
 
-Esta versión NO incluye `PARCELAS.geojson` real ni `INCIDENCIAS_.geojson` real.  
-Las capas se cargan localmente desde el dispositivo y se guardan en el navegador del terminal.
-
-Advertencia: el mapa satelital online consulta teselas del proveedor de mapas. No sube los GeoJSON, pero sí consulta imágenes de la zona visualizada.
-
-## Archivos
-
-Todos los archivos están en raíz para subirlos juntos a GitHub:
+## Archivos incluidos
 
 - index.html
 - styles.css
 - app.js
 - data.js
 - manifest.json
-- VERSION.txt
-- README_PRUEBA.md
 - splash.png
 - app-frame.png
+- VERSION.txt
 
-## Prueba recomendada
+No se incluyen `PARCELAS.geojson` ni `INCIDENCIAS_.geojson` reales.
 
-1. Sube todos los archivos del ZIP a la raíz de GitHub.
-2. Abre la app desde GitHub Pages.
-3. Comprueba que la pantalla de entrada muestra **Beta v5.0**.
-4. Carga `PARCELAS.geojson` y `INCIDENCIAS_.geojson` desde el dispositivo.
-5. Inicia un trabajo de prueba.
-6. Comprueba que aparece el punto de comienzo.
-7. Realiza una parada y una continuación.
-8. Finaliza el trabajo.
-9. Pulsa Resumen y verifica que se abre el informe.
-10. Abre Historial y comprueba que aparece el trabajo finalizado.
+## Prueba mínima obligatoria
+
+1. Iniciar trabajo y abrir resumen sin finalizar: debe indicar resumen provisional y no inflar horas sin registros.
+2. Iniciar → parada → continuar → fin: el informe definitivo debe congelar tramos y tiempos.
+3. Abrir historial: el trabajo finalizado debe aparecer como completado.
+4. Volver a abrir el informe desde historial: los tiempos deben permanecer iguales, sin seguir sumando.
