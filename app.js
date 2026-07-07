@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v4.0";
+  const VERSION = "Beta v5.0";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -30,7 +30,8 @@
     reportWork: null,
     reportOrigin: "work",
     tickerStarted: false,
-    historyFilter: "all"
+    historyFilter: "all",
+    liveSpeedKmh: null
   };
 
   const $ = (id) => document.getElementById(id);
@@ -40,7 +41,10 @@
     get(key, fallback=null){
       try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
     },
-    set(key, value){ localStorage.setItem(key, JSON.stringify(value)); },
+    set(key, value){
+      try{ localStorage.setItem(key, JSON.stringify(value)); return true; }
+      catch(err){ console.warn("No se pudo guardar en almacenamiento local", key, err); return false; }
+    },
     remove(key){ localStorage.removeItem(key); }
   };
 
@@ -608,6 +612,7 @@
     $("stopWorkBtn").classList.add("hidden");
     $("continueWorkBtn").classList.add("hidden");
     setWorkStateUi("Preparado");
+    state.liveSpeedKmh = null;
     $("liveSpeed").textContent = "0,0";
     $("partialTime").textContent = "00:00";
     $("totalTime").textContent = "00:00";
@@ -617,24 +622,171 @@
     updateWindUi();
   }
 
-  function beginWork(){
+  function timeLabelFromMs(ms){
+    return new Date(ms).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"});
+  }
+
+  function dateTimeLabelFromMs(ms){
+    return ms ? new Date(ms).toLocaleString("es-ES") : "—";
+  }
+
+  function ensureTimeline(w){
+    if(!w) return w;
+    if(!Array.isArray(w.segments)) w.segments = [];
+    if(!Array.isArray(w.stopLog)) w.stopLog = [];
+    if(w.startedAt && !w.segments.length && (w.activeMs || w.finishedAt)){
+      const endAt = w.finishedAt || null;
+      w.segments.push({
+        id: "seg-legacy-1",
+        index: 1,
+        startAt: w.startedAt,
+        startLabel: timeLabelFromMs(w.startedAt),
+        endAt,
+        endLabel: endAt ? timeLabelFromMs(endAt) : null,
+        activeMs: w.activeMs || (endAt ? Math.max(0, endAt - w.startedAt) : 0),
+        closeReason: endAt ? "Fin" : ""
+      });
+    }
+    return w;
+  }
+
+  function openWorkSegment(now=Date.now()){
+    if(!state.work) return null;
+    ensureTimeline(state.work);
+    const open = state.work.segments.find(s => !s.endAt);
+    if(open){
+      state.work.currentSegmentId = open.id;
+      state.work.lastSegmentAt = open.startAt;
+      return open;
+    }
+    const seg = {
+      id: "seg-" + now,
+      index: state.work.segments.length + 1,
+      startAt: now,
+      startLabel: timeLabelFromMs(now),
+      endAt: null,
+      endLabel: null,
+      activeMs: 0,
+      closeReason: ""
+    };
+    state.work.segments.push(seg);
+    state.work.currentSegmentId = seg.id;
+    state.work.lastSegmentAt = now;
+    return seg;
+  }
+
+  function closeWorkSegment(now=Date.now(), reason=""){
+    if(!state.work) return null;
+    ensureTimeline(state.work);
+    const seg = state.work.segments.find(s => s.id === state.work.currentSegmentId && !s.endAt) || state.work.segments.find(s => !s.endAt);
+    if(!seg) return null;
+    seg.endAt = now;
+    seg.endLabel = timeLabelFromMs(now);
+    seg.activeMs = Math.max(0, now - (seg.startAt || now));
+    seg.closeReason = reason;
+    state.work.activeMs = (state.work.activeMs || 0) + seg.activeMs;
+    state.work.currentSegmentId = null;
+    return seg;
+  }
+
+  function currentSegmentMs(w, now=Date.now()){
+    ensureTimeline(w);
+    const open = (w.segments || []).find(s => !s.endAt);
+    if(open && w.status === "trabajando") return Math.max(0, now - (open.startAt || now));
+    const last = (w.segments || []).at(-1);
+    return Math.max(0, last?.activeMs || 0);
+  }
+
+  function activeElapsedMs(w, now=Date.now()){
+    ensureTimeline(w);
+    if((w.segments || []).length){
+      return (w.segments || []).reduce((sum, seg) => {
+        if(!seg.endAt && w.status === "trabajando") return sum + Math.max(0, now - (seg.startAt || now));
+        return sum + Math.max(0, seg.activeMs || 0);
+      }, 0);
+    }
+    let ms = w?.activeMs || 0;
+    if(w?.status === "trabajando" && w.lastSegmentAt) ms += now - w.lastSegmentAt;
+    return Math.max(0, ms);
+  }
+
+  function stoppedElapsedMs(w, now=Date.now()){
+    ensureTimeline(w);
+    const logged = (w.stopLog || []).reduce((sum, stop) => sum + Math.max(0, stop.stoppedMs || 0), 0);
+    let ms = Math.max(w?.stoppedMs || 0, logged);
+    if(w?.status === "parado" && w.pausedAt) ms += Math.max(0, now - w.pausedAt);
+    return ms;
+  }
+
+  function markCurrentStopResumed(now=Date.now()){
     if(!state.work) return;
-    state.work.status = "trabajando";
-    state.work.startedAt = Date.now();
-    state.work.lastSegmentAt = Date.now();
-    state.work.nextWindPromptAt = Date.now() + 30*60*1000;
-    addEvent("Comienzo", "Punto inicial", "Inicio del trabajo");
-    $("beginWorkBtn").classList.add("hidden");
-    $("stopWorkBtn").classList.remove("hidden");
-    $("continueWorkBtn").classList.add("hidden");
-    setWorkStateUi("Trabajando");
-    state.trackingFollow = true;
-    startGpsWatch();
-    centerWorkMapOnTractor(true);
-    setTimeout(() => promptWindReading(false, "Registrar viento inicial"), 600);
-    if(!state.tickerStarted){
-      state.tickerStarted = true;
-      tick();
+    ensureTimeline(state.work);
+    const stop = (state.work.stopLog || []).find(s => s.id === state.work.currentStopId && !s.resumedAt) || (state.work.stopLog || []).slice().reverse().find(s => !s.resumedAt);
+    if(stop){
+      stop.resumedAt = now;
+      stop.resumedLabel = timeLabelFromMs(now);
+      stop.stoppedMs = Math.max(0, now - (stop.at || now));
+    }
+    state.work.currentStopId = null;
+  }
+
+  async function resolveEventPosition(){
+    let p = freshPosition(state.currentPos) ? state.currentPos : null;
+    if(!p){
+      try{
+        p = await getCurrentGpsPosition();
+        state.currentPos = p;
+        drawCurrentPosition(p);
+      }catch(err){
+        p = state.currentPos || state.gpsCalibration?.last || null;
+      }
+    }
+    return p;
+  }
+
+  function persistActiveWork(){
+    if(state.work && !workIsCompleted(state.work)) storage.set(LS.active, state.work);
+  }
+
+  async function beginWork(){
+    if(!state.work || state.work.status === "trabajando") return;
+    const btn = $("beginWorkBtn");
+    btn.disabled = true;
+    const previousText = btn.querySelector("small")?.textContent;
+    if(btn.querySelector("small")) btn.querySelector("small").textContent = "Obteniendo GPS inicial...";
+    try{
+      startGpsWatch();
+      const now = Date.now();
+      const p = await resolveEventPosition();
+      state.work.status = "trabajando";
+      state.work.startedAt = now;
+      state.work.lastSegmentAt = now;
+      state.work.nextWindPromptAt = now + 30*60*1000;
+      ensureTimeline(state.work);
+      openWorkSegment(now);
+      addEvent("Comienzo", "Punto inicial", "Inicio del trabajo", p, now);
+      if(p){
+        state.currentPos = p;
+        appendGpsPointToWork(p, true);
+        drawCurrentPosition(p);
+      }
+      $("beginWorkBtn").classList.add("hidden");
+      $("stopWorkBtn").classList.remove("hidden");
+      $("continueWorkBtn").classList.add("hidden");
+      setWorkStateUi("Trabajando");
+      state.trackingFollow = true;
+      updateRouteLayers();
+      updateLiveStats();
+      persistActiveWork();
+      centerWorkMapOnTractor(false);
+      setTimeout(() => promptWindReading(false, "Registrar viento inicial"), 600);
+      if(!state.tickerStarted){
+        state.tickerStarted = true;
+        tick();
+      }
+    } finally {
+      btn.disabled = false;
+      if(btn.querySelector("small") && previousText) btn.querySelector("small").textContent = previousText;
     }
   }
 
@@ -751,27 +903,36 @@
     return "valido";
   }
 
-  function onPosition(pos){
-    state.currentPos = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-      accuracy: pos.coords.accuracy,
-      speed: pos.coords.speed,
-      time: pos.timestamp,
-      device: navigator.userAgent
-    };
-    const p = state.currentPos;
-    $("liveAccuracy").textContent = formatMeters(p.accuracy);
-    const spd = (p.speed !== null && isFinite(p.speed)) ? p.speed*3.6 : 0;
-    $("liveSpeed").textContent = spd.toFixed(1).replace(".", ",");
-
-    if(!state.work || state.work.status !== "trabajando") {
-      drawCurrentPosition(p);
-      return;
+  function liveSpeedKmhFromPosition(p){
+    const values = [];
+    if(p.speed !== null && p.speed !== undefined && isFinite(p.speed) && p.speed > 0.15) values.push(p.speed * 3.6);
+    const prev = state.work?.pointsClean?.at(-1) || state.work?.pointsOriginal?.at(-1) || null;
+    if(prev && p.time && prev.time && p.time > prev.time){
+      const dt = (p.time - prev.time) / 1000;
+      const derived = haversine(prev, p) / Math.max(1, dt) * 3.6;
+      if(dt >= 2 && dt <= 30 && isFinite(derived) && derived <= 18) values.push(derived);
     }
+    if(!values.length && p.speed !== null && p.speed !== undefined && isFinite(p.speed) && p.speed >= 0) values.push(p.speed * 3.6);
+    const raw = values.length ? values.reduce((a,b)=>a+b,0) / values.length : 0;
+    state.liveSpeedKmh = state.liveSpeedKmh === null || !isFinite(state.liveSpeedKmh) ? raw : (state.liveSpeedKmh * 0.65 + raw * 0.35);
+    return Math.max(0, state.liveSpeedKmh);
+  }
 
+  function ensureStartEventHasPosition(p){
+    if(!state.work || !p) return;
+    const ev = (state.work.events || []).find(e => e.type === "Comienzo");
+    if(ev && (!isFinite(Number(ev.lat)) || !isFinite(Number(ev.lng)))){
+      ev.lat = p.lat;
+      ev.lng = p.lng;
+      ev.accuracy = p.accuracy || null;
+    }
+  }
+
+  function appendGpsPointToWork(p, force=false){
+    if(!state.work || !p) return null;
+    ensureTimeline(state.work);
     const prevClean = state.work.pointsClean.at(-1);
-    const cls = classifyPoint(p, prevClean);
+    const cls = force ? "valido" : classifyPoint(p, prevClean);
     state.work.pointsOriginal.push({...p, quality: cls});
     const st = state.work.gpsStats;
     st.best = Math.min(st.best, p.accuracy);
@@ -783,17 +944,41 @@
     if(cls !== "descartado"){
       if(prevClean){
         const d = haversine(prevClean, p);
-        if(d >= 1.5){
-          state.work.distanceM += d;
+        if(force || d >= 1.5){
+          if(d >= 1.5) state.work.distanceM += d;
           state.work.pointsClean.push({...p, quality: cls});
         }
       } else {
         state.work.pointsClean.push({...p, quality: cls});
       }
+      ensureStartEventHasPosition(p);
     }
+    return cls;
+  }
+
+  function onPosition(pos){
+    state.currentPos = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      accuracy: pos.coords.accuracy,
+      speed: pos.coords.speed,
+      time: pos.timestamp,
+      device: navigator.userAgent
+    };
+    const p = state.currentPos;
+    $("liveAccuracy").textContent = formatMeters(p.accuracy);
+    const spd = liveSpeedKmhFromPosition(p);
+    $("liveSpeed").textContent = spd.toFixed(1).replace(".", ",");
+
+    if(!state.work || state.work.status !== "trabajando") {
+      drawCurrentPosition(p);
+      return;
+    }
+
+    appendGpsPointToWork(p);
     updateRouteLayers();
     updateLiveStats();
-    storage.set(LS.active, state.work);
+    persistActiveWork();
   }
 
   function drawCurrentPosition(p){
@@ -838,13 +1023,17 @@
     });
   }
 
-  function addEvent(type, label, notes=""){
-    const p = state.currentPos || state.gpsCalibration?.last || null;
+  function addEvent(type, label, notes="", position=null, atMs=Date.now()){
+    if(!state.work) return null;
+    const p = position || state.currentPos || state.gpsCalibration?.last || null;
     const ev = {
-      at: new Date().toISOString(),
-      timeLabel: new Date().toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}),
+      id: "ev-" + atMs + "-" + Math.random().toString(16).slice(2),
+      at: new Date(atMs).toISOString(),
+      timeLabel: timeLabelFromMs(atMs),
       type, label, notes,
-      lat: p?.lat || null, lng: p?.lng || null, accuracy: p?.accuracy || null
+      lat: isFinite(Number(p?.lat)) ? p.lat : null,
+      lng: isFinite(Number(p?.lng)) ? p.lng : null,
+      accuracy: isFinite(Number(p?.accuracy)) ? p.accuracy : null
     };
     state.work.events.push(ev);
     return ev;
@@ -853,57 +1042,80 @@
   function openStopModal(){ $("stopModal").classList.remove("hidden"); }
   function closeStopModal(){ $("stopModal").classList.add("hidden"); }
 
-  function handleStop(reason){
+  async function handleStop(reason){
     closeStopModal();
     if(!state.work || state.work.status !== "trabajando") return;
 
     const now = Date.now();
-    state.work.stops += 1;
+    const p = await resolveEventPosition();
 
     if(reason === "Fin de tratamiento de la parcela"){
-      addEvent("Fin de tratamiento", "Punto final", "Parcela finalizada");
+      closeWorkSegment(now, "Fin de tratamiento");
+      addEvent("Fin de tratamiento", "Punto final", "Parcela finalizada", p, now);
       state.work.status = "finalizado";
       state.work.finishedAt = now;
-      state.work.activeMs += now - (state.work.lastSegmentAt || now);
       $("stopWorkBtn").classList.add("hidden");
       $("continueWorkBtn").classList.add("hidden");
       $("beginWorkBtn").classList.add("hidden");
       setWorkStateUi("Finalizado");
       stopGpsWatch();
-      saveFinishedWork();
+      updateLiveStats();
+      const saved = saveFinishedWork();
       state.reportWork = null;
       state.reportOrigin = "work";
       resetReportTabs();
-      renderReport();
       show("screen-report");
+      if(!saved) toast("El trabajo finalizó, pero no se pudo guardar completo en el historial. Se conserva como trabajo activo para recuperación.");
       return;
     }
 
-    if(reason === "Recarga cisterna") state.work.refills += 1;
+    state.work.stops = (state.work.stops || 0) + 1;
+    if(reason === "Recarga cisterna") state.work.refills = (state.work.refills || 0) + 1;
     const n = reason === "Recarga cisterna" ? state.work.refills : state.work.stops;
-    addEvent("Parada", `${reason}${reason === "Recarga cisterna" ? " " + n : ""}`, "Punto de continuidad");
+    closeWorkSegment(now, reason);
+    const ev = addEvent("Parada", `${reason}${reason === "Recarga cisterna" ? " " + n : ""}`, "Punto de continuidad", p, now);
+    ensureTimeline(state.work);
+    const stop = {
+      id: "stop-" + now,
+      eventId: ev?.id || null,
+      at: now,
+      timeLabel: timeLabelFromMs(now),
+      reason,
+      refillNumber: reason === "Recarga cisterna" ? state.work.refills : null,
+      resumedAt: null,
+      resumedLabel: null,
+      stoppedMs: 0
+    };
+    state.work.stopLog.push(stop);
+    state.work.currentStopId = stop.id;
     state.work.status = "parado";
     state.work.pausedAt = now;
-    state.work.activeMs += now - (state.work.lastSegmentAt || now);
 
     $("stopWorkBtn").classList.add("hidden");
     $("continueWorkBtn").classList.remove("hidden");
     setWorkStateUi("Parado");
     $("refillCount").textContent = String(state.work.refills);
-    storage.set(LS.active, state.work);
+    updateLiveStats();
+    persistActiveWork();
+    upsertPendingWorkInHistory();
   }
 
-  function continueWork(){
+  async function continueWork(){
     if(!state.work || state.work.status !== "parado") return;
     const now = Date.now();
-    if(state.work.pausedAt) state.work.stoppedMs += now - state.work.pausedAt;
-    addEvent("Continuar", "Reanudación", "Continúa el trabajo");
+    const p = await resolveEventPosition();
+    if(state.work.pausedAt) state.work.stoppedMs = (state.work.stoppedMs || 0) + Math.max(0, now - state.work.pausedAt);
+    markCurrentStopResumed(now);
+    addEvent("Continuar", "Reanudación", "Continúa el trabajo", p, now);
     state.work.status = "trabajando";
-    state.work.lastSegmentAt = now;
+    state.work.pausedAt = null;
+    openWorkSegment(now);
     $("stopWorkBtn").classList.remove("hidden");
     $("continueWorkBtn").classList.add("hidden");
     setWorkStateUi("Trabajando");
-    storage.set(LS.active, state.work);
+    updateLiveStats();
+    persistActiveWork();
+    upsertPendingWorkInHistory();
   }
 
   function updateLiveStats(){
@@ -916,31 +1128,59 @@
   function tick(){
     if(state.work){
       const now = Date.now();
-      const totalMs = state.work.startedAt ? (state.work.finishedAt || now) - state.work.startedAt : 0;
-      let partialMs = 0;
-      if(state.work.status === "trabajando") partialMs = now - (state.work.lastSegmentAt || now);
-      else if(state.work.status === "parado") partialMs = now - (state.work.pausedAt || now);
-      $("totalTime").textContent = fmtTime(totalMs);
-      $("partialTime").textContent = fmtTime(partialMs);
+      $("totalTime").textContent = fmtTime(activeElapsedMs(state.work, now));
+      $("partialTime").textContent = fmtTime(currentSegmentMs(state.work, now));
       checkWindPrompt();
     }
     requestAnimationFrame(() => setTimeout(tick, 1000));
   }
 
   function saveFinishedWork(){
-    const hist = storage.get(LS.history, []);
+    if(!state.work) return false;
+    ensureTimeline(state.work);
+    state.work.savedAt = new Date().toISOString();
     const finished = serializeWork(state.work);
-    const idx = hist.findIndex(w => w.id === finished.id);
-    if(idx >= 0) hist[idx] = finished;
-    else hist.unshift(finished);
-    storage.set(LS.history, hist.slice(0, 200));
-    storage.remove(LS.active);
+    let ok = saveHistorySnapshot(finished);
+    if(!ok) ok = saveHistorySnapshot(compactWorkForHistory(finished));
+    if(ok) storage.remove(LS.active);
+    else storage.set(LS.active, state.work);
+    return ok;
   }
+
   function serializeWork(w){
-    return {
+    const out = {
       ...w,
       parcelFeature: w.parcelFeature || state.selectedFeature || null
     };
+    ensureTimeline(out);
+    return out;
+  }
+
+  function downsamplePoints(points=[], max=1600){
+    if(!Array.isArray(points) || points.length <= max) return points || [];
+    const step = Math.ceil(points.length / max);
+    return points.filter((_, i) => i === 0 || i === points.length - 1 || i % step === 0);
+  }
+
+  function compactWorkForHistory(w){
+    const copy = serializeWork(w);
+    return {
+      ...copy,
+      parcelFeature: null,
+      pointsOriginal: downsamplePoints(copy.pointsOriginal || [], 600),
+      pointsClean: downsamplePoints(copy.pointsClean || [], 1600),
+      incidents: (copy.incidents || []).map(i => ({...i, photo: null})),
+      compactedForStorage: true
+    };
+  }
+
+  function saveHistorySnapshot(work){
+    const hist = storage.get(LS.history, []);
+    const snap = serializeWork(work);
+    const idx = hist.findIndex(w => w.id === snap.id);
+    if(idx >= 0) hist[idx] = snap;
+    else hist.unshift(snap);
+    return storage.set(LS.history, hist.slice(0, 200));
   }
 
   function openIncident(context="work"){
@@ -1096,9 +1336,7 @@
   }
 
   function reportEffectiveActiveMs(w){
-    let ms = w?.activeMs || 0;
-    if(w?.status === "trabajando" && w.lastSegmentAt) ms += Date.now() - w.lastSegmentAt;
-    return ms;
+    return w ? activeElapsedMs(w, Date.now()) : 0;
   }
 
   function reportAverageSpeed(w){
@@ -1116,26 +1354,35 @@
   }
 
   function renderReport(){
-    const w = getReportWork();
-    if(!w){
-      $("reportContent").innerHTML = reportEmpty("No hay trabajo para informar.");
+    try{
+      const w = getReportWork();
+      if(!w){
+        $("reportContent").innerHTML = reportEmpty("No hay trabajo para informar.");
+        $("reportMap").classList.add("hidden");
+        return;
+      }
+      ensureTimeline(w);
+      $("reportSubtitle").textContent = `${w.parcel} · ${w.type}`;
+      $("reportStatusChip").textContent = w.status === "finalizado" ? "Informe definitivo" : "Resumen provisional";
+      $("reportStatusChip").style.background = w.status === "finalizado" ? "#eaf6e9" : "#fff4e6";
+      $("reportStatusChip").style.color = w.status === "finalizado" ? "#2f7d44" : "#8b520e";
+      $("reportTotal").textContent = fmtTime(reportEffectiveActiveMs(w));
+      $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
+      $("reportRefills").textContent = String(w.refills || 0);
+      const ws = windStats(w.windReadings || []);
+      $("reportWind").textContent = ws.latest === null ? "—" : formatWind(ws.latest);
+
+      renderReportSummary(w);
+      const hasMapData = (w.pointsClean || []).length > 1 || (w.events || []).some(e=>e.lat && e.lng) || (w.incidents || []).some(i=>i.lat && i.lng);
+      if(hasMapData){
+        $("reportMap").classList.remove("hidden");
+        waitForMapContainer("reportMap", () => renderReportMap(w));
+      } else $("reportMap").classList.add("hidden");
+    }catch(err){
+      console.error("Error al generar resumen", err);
+      $("reportContent").innerHTML = reportEmpty("No se pudo abrir el resumen. El trabajo queda guardado localmente para recuperarlo desde el historial.");
       $("reportMap").classList.add("hidden");
-      return;
     }
-
-    $("reportSubtitle").textContent = `${w.parcel} · ${w.type}`;
-    $("reportStatusChip").textContent = w.status === "finalizado" ? "Informe definitivo" : "Resumen provisional";
-    $("reportStatusChip").style.background = w.status === "finalizado" ? "#eaf6e9" : "#fff4e6";
-    $("reportStatusChip").style.color = w.status === "finalizado" ? "#2f7d44" : "#8b520e";
-    $("reportTotal").textContent = fmtTime(reportTotalMs(w));
-    $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
-    $("reportRefills").textContent = String(w.refills || 0);
-    const ws = windStats(w.windReadings || []);
-    $("reportWind").textContent = ws.latest === null ? "—" : formatWind(ws.latest);
-
-    renderReportSummary(w);
-    const hasMapData = (w.pointsClean || []).length > 1 || (w.events || []).some(e=>e.lat && e.lng) || (w.incidents || []).some(i=>i.lat && i.lng);
-    if(hasMapData) renderReportMap(w); else $("reportMap").classList.add("hidden");
   }
 
   function renderReportMap(w){
@@ -1206,7 +1453,8 @@
         </div>
         <div class="report-section-title">Resumen visual</div>
         <div class="report-grid">
-          ${reportKpi("Tiempo total", fmtTime(reportTotalMs(w)))}
+          ${reportKpi("Tiempo acumulado", fmtTime(reportEffectiveActiveMs(w)))}
+          ${reportKpi("Transcurrido", fmtTime(reportTotalMs(w)))}
           ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
           ${reportKpi("Recargas", String(w.refills || 0))}
           ${reportKpi("Viento último", ws.latest === null ? "—" : formatWind(ws.latest), ws.count ? `${ws.count} registros` : "sin registros")}
@@ -1217,27 +1465,45 @@
   }
 
   function renderReportWork(w){
+    ensureTimeline(w);
     const avg = reportAverageSpeed(w);
-    const started = w.startedAt ? new Date(w.startedAt).toLocaleString("es-ES") : "—";
-    const finished = w.finishedAt ? new Date(w.finishedAt).toLocaleString("es-ES") : "—";
+    const started = dateTimeLabelFromMs(w.startedAt);
+    const finished = w.finishedAt ? dateTimeLabelFromMs(w.finishedAt) : "—";
+    const segments = w.segments || [];
+    const stops = w.stopLog || [];
+    const segmentRows = segments.map((seg, i) => {
+      const end = seg.endAt ? seg.endLabel : (w.status === "trabajando" ? "en curso" : "—");
+      const ms = !seg.endAt && w.status === "trabajando" ? Math.max(0, Date.now() - (seg.startAt || Date.now())) : (seg.activeMs || 0);
+      const reason = seg.closeReason ? ` · cierre: ${escapeHtml(seg.closeReason)}` : "";
+      return `<div><span>Tramo ${i+1}: ${escapeHtml(seg.startLabel || "—")} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
+    }).join("");
+    const stopRows = stops.map((stop, i) => {
+      const duration = stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" && stop.id === w.currentStopId ? fmtTime(Date.now() - stop.at) : "—");
+      const resume = stop.resumedLabel ? ` · continúa ${escapeHtml(stop.resumedLabel)}` : "";
+      return `<div><span>Parada ${i+1}: ${escapeHtml(stop.timeLabel || "—")} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
+    }).join("");
     $("reportContent").innerHTML = `
       <div class="scroll-box report-visual">
         <div class="report-section-title">Tiempos y recorrido</div>
         <div class="report-grid">
-          ${reportKpi("Tiempo total", fmtTime(reportTotalMs(w)))}
-          ${reportKpi("Tiempo efectivo", fmtTime(reportEffectiveActiveMs(w)))}
-          ${reportKpi("Tiempo parado", fmtTime(w.stoppedMs || 0))}
-          ${reportKpi("Velocidad media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
+          ${reportKpi("Tiempo acumulado", fmtTime(reportEffectiveActiveMs(w)))}
+          ${reportKpi("Tiempo transcurrido", fmtTime(reportTotalMs(w)))}
+          ${reportKpi("Tiempo parado", fmtTime(stoppedElapsedMs(w)))}
+          ${reportKpi("Velocidad GPS media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
           ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
-          ${reportKpi("Paradas", String(w.stops || 0))}
+          ${reportKpi("Paradas", String(stops.length || w.stops || 0))}
           ${reportKpi("Recargas", String(w.refills || 0))}
           ${reportKpi("Incidencias", String((w.incidents || []).length))}
         </div>
         <div class="report-section-title">Inicio y fin</div>
         <div class="report-list">
-          <div><span>Inicio</span><strong>${escapeHtml(started)}</strong></div>
-          <div><span>Fin</span><strong>${escapeHtml(finished)}</strong></div>
+          <div><span>Hora de inicio</span><strong>${escapeHtml(started)}</strong></div>
+          <div><span>Hora de fin</span><strong>${escapeHtml(finished)}</strong></div>
         </div>
+        <div class="report-section-title">Tramos de trabajo entre paradas</div>
+        <div class="report-list">${segmentRows || reportEmpty("Sin tramos registrados todavía.")}</div>
+        <div class="report-section-title">Paradas registradas</div>
+        <div class="report-list">${stopRows || reportEmpty("Sin paradas intermedias registradas.")}</div>
       </div>`;
   }
 
@@ -1398,12 +1664,21 @@
 
   function upsertPendingWorkInHistory(){
     if(!state.work || workIsCompleted(state.work)) return;
-    const hist = storage.get(LS.history, []);
+    ensureTimeline(state.work);
     const snap = serializeWork({...state.work, status:"pendiente"});
-    const idx = hist.findIndex(w => w.id === snap.id);
-    if(idx >= 0) hist[idx] = snap;
-    else hist.unshift(snap);
-    storage.set(LS.history, hist.slice(0, 200));
+    let ok = saveHistorySnapshot(snap);
+    if(!ok) ok = saveHistorySnapshot(compactWorkForHistory(snap));
+    return ok;
+  }
+
+  function recoverActiveWorkToHistory(){
+    const active = storage.get(LS.active, null);
+    if(active && active.id && !workIsCompleted(active)){
+      ensureTimeline(active);
+      const snap = serializeWork({...active, status: active.status || "pendiente"});
+      let ok = saveHistorySnapshot(snap);
+      if(!ok) saveHistorySnapshot(compactWorkForHistory(snap));
+    }
   }
 
   function renderHistory(){
@@ -1450,6 +1725,7 @@
       storage.set(LS.incidentLayer, savedIncidents);
       renderIncidentLayerStatus(savedIncidents);
     }
+    recoverActiveWorkToHistory();
   }
 
   function bind(){
@@ -1529,7 +1805,7 @@
     $("stopWorkBtn").onclick = openStopModal;
     $("continueWorkBtn").onclick = continueWork;
     $("incidentWorkBtn").onclick = () => openIncident("work");
-    $("viewDraftReportBtn").onclick = () => { state.reportWork = null; state.reportOrigin = "work"; resetReportTabs(); renderReport(); show("screen-report"); };
+    $("viewDraftReportBtn").onclick = () => { state.reportWork = null; state.reportOrigin = "work"; resetReportTabs(); show("screen-report"); };
     $("backFromWork").onclick = () => {
       if(state.work && state.work.status !== "finalizado"){
         if(!confirm("Hay un trabajo en curso. ¿Volver sin finalizar?")) return;
