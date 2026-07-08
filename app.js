@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v8.0";
+  const VERSION = "Beta v9.0";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -1914,7 +1914,7 @@
     $("downloadGeojson").onclick = () => exportRouteGeoJSON(w);
     $("downloadGpx").onclick = () => exportRouteGPX(w);
     $("downloadKml").onclick = () => exportRouteKML(w);
-    $("printReport").onclick = () => window.print();
+    $("printReport").onclick = () => printReportPdf(w);
   }
 
   function safeFilename(w, base, ext){
@@ -1970,14 +1970,231 @@
     return String(s ?? "").replace(/[<>&"']/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;","\"":"&quot;","'":"&apos;"}[c]));
   }
 
+  function pad2(n){
+    return String(n).padStart(2,"0");
+  }
+
+  function dateLabelDMY(value){
+    const ms = toMs(value);
+    if(!ms) return "—";
+    const d = new Date(ms);
+    if(isNaN(d.getTime())) return "—";
+    return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`;
+  }
+
+  function timeLabelHMS(value){
+    const ms = toMs(value);
+    if(!ms) return "—";
+    const d = new Date(ms);
+    if(isNaN(d.getTime())) return "—";
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+
+  function reportDateSource(w){
+    return toMs(w?.startedAt) || toMs(w?.finishedAt) || toMs(w?.finalSnapshot?.startedAt) || toMs(w?.createdAt) || lastKnownWorkAt(w);
+  }
+
+  function eventByName(w, part){
+    const needle = String(part || "").toLowerCase();
+    return (w?.events || []).find(ev => String(ev.type || "").toLowerCase().includes(needle)) || null;
+  }
+
+  function routeAvailable(w){
+    return recoverRouteForReport(w).length > 1;
+  }
+
+  function averageGpsAccuracyText(w){
+    const gps = w?.gpsStats || {};
+    const avg = gps.count ? (gps.sum / gps.count) : null;
+    return avg === null || !isFinite(avg) ? "no consta" : formatMeters(avg);
+  }
+
+  function gpsWarningsTextList(w){
+    const gps = w?.gpsStats || {};
+    const out = [];
+    if((w?.distanceM || 0) > 20 && recoverRouteForReport(w).length < 2) out.push("distancia registrada sin puntos GPS suficientes para dibujar recorrido");
+    if(w?.routeRebuiltFromOriginal) out.push("ruta reconstruida desde puntos GPS originales");
+    if(w?.routeRebuiltFromEvents) out.push("ruta reconstruida desde eventos GPS");
+    if(w?.forcedStart) out.push("inicio forzado con precisión GPS insuficiente o sin calibración completa");
+    if((gps.discarded || 0) > 0) out.push(`${gps.discarded} puntos GPS descartados`);
+    if(gps.worst && gps.worst > 15) out.push(`precisión GPS peor registrada ${formatMeters(gps.worst)}`);
+    return out;
+  }
+
+  function shareWindText(w){
+    const readings = w?.windReadings || [];
+    if(!readings.length) return "- Sin medición directa registrada / o datos disponibles";
+    const ws = windStats(readings);
+    const last = readings[readings.length - 1];
+    return `- Registros disponibles: ${ws.count}\n- Último registro: ${ws.latest === null ? "—" : formatWind(ws.latest)}${last?.timeLabel ? ` (${last.timeLabel})` : ""}`;
+  }
+
+  function buildShareSummaryText(w){
+    const work = normalizeWorkForReport(w, state.reportOrigin || "work") || w || {};
+    const beginEvent = eventByName(work, "comienzo");
+    const endEvent = eventByName(work, "fin");
+    const startMs = toMs(work.startedAt) || eventMs(beginEvent) || toMs(work.finalSnapshot?.startedAt);
+    const endMs = toMs(work.finishedAt) || eventMs(endEvent) || toMs(work.finalSnapshot?.finishedAt);
+    const stopCount = (work.stopLog || []).length || work.stops || 0;
+    const gpsWarnings = gpsWarningsTextList(work);
+    const observations = (work.day && work.day.notes) ? String(work.day.notes).trim() : "";
+    const lines = [
+      "PAZO BAION GPS - RESUMEN DE TRABAJO",
+      "",
+      `Estado: ${workIsCompleted(work) ? "Informe definitivo" : "Resumen provisional"}`,
+      `Parcela: ${work.parcel || "—"}`,
+      `Trabajo: ${work.type || "—"}`,
+      `Fecha: ${dateLabelDMY(reportDateSource(work))}`,
+      "",
+      "TIEMPOS",
+      `- Inicio: ${timeLabelHMS(startMs)}`,
+      `- Fin: ${timeLabelHMS(endMs)}`,
+      `- Tiempo activo: ${fmtTime(reportEffectiveActiveMs(work))}`,
+      `- Tiempo parado: ${fmtTime(reportStoppedMs(work))}`,
+      `- Tiempo total/transcurrido: ${fmtTime(reportTotalMs(work))}`,
+      "",
+      "RECORRIDO Y TRABAJO",
+      `- Distancia: ${((work.distanceM || 0)/1000).toFixed(2).replace(".", ",")} km`,
+      `- Recargas: ${work.refills || 0}`,
+      `- Incidencias: ${(work.incidents || []).length}`,
+      `- Paradas: ${stopCount}`,
+      "",
+      "GPS Y RUTA",
+      `- Ruta GPS disponible: ${routeAvailable(work) ? "sí" : "no"}`,
+      `- Precisión media GPS: ${averageGpsAccuracyText(work)}`,
+      ...(gpsWarnings.length ? [`- Advertencias GPS: ${gpsWarnings.join("; ")}`] : []),
+      "",
+      "VIENTO",
+      shareWindText(work),
+      "",
+      "EVENTOS RELEVANTES",
+      `- Comienzo del trabajo: ${timeLabelHMS(eventMs(beginEvent) || startMs)}`,
+      `- Fin del trabajo: ${timeLabelHMS(eventMs(endEvent) || endMs)}`,
+      "",
+      "OBSERVACIONES",
+      `- ${observations || "Sin observaciones registradas."}`,
+      "",
+      "Generado localmente desde Pazo Baión GPS."
+    ];
+    return lines.join("\n");
+  }
+
+  function featureCoordinatePairs(feature){
+    const out = [];
+    const walk = (coords) => {
+      if(!Array.isArray(coords)) return;
+      if(coords.length >= 2 && isFinite(Number(coords[0])) && isFinite(Number(coords[1]))){
+        out.push({lng:Number(coords[0]), lat:Number(coords[1])});
+      } else coords.forEach(walk);
+    };
+    walk(feature?.geometry?.coordinates);
+    return out;
+  }
+
+  function routeSvgForPrint(w){
+    const route = recoverRouteForReport(w).filter(isValidRoutePoint);
+    const parcelPts = featureCoordinatePairs(w?.parcelFeature || findParcelFeatureByName(w?.parcel));
+    const all = [...route, ...parcelPts];
+    if(all.length < 2) return "";
+    const minLat = Math.min(...all.map(p=>Number(p.lat)));
+    const maxLat = Math.max(...all.map(p=>Number(p.lat)));
+    const minLng = Math.min(...all.map(p=>Number(p.lng)));
+    const maxLng = Math.max(...all.map(p=>Number(p.lng)));
+    const wBox = 640, hBox = 300, pad = 24;
+    const dx = maxLng - minLng || 0.000001;
+    const dy = maxLat - minLat || 0.000001;
+    const project = (p) => {
+      const x = pad + ((Number(p.lng)-minLng)/dx) * (wBox - pad*2);
+      const y = pad + ((maxLat-Number(p.lat))/dy) * (hBox - pad*2);
+      return [x,y];
+    };
+    const routeLine = route.length > 1 ? route.map(p=>project(p).map(n=>n.toFixed(1)).join(",")).join(" ") : "";
+    const parcelLine = parcelPts.length > 2 ? parcelPts.map(p=>project(p).map(n=>n.toFixed(1)).join(",")).join(" ") : "";
+    const start = route[0] ? project(route[0]) : null;
+    const end = route[route.length-1] ? project(route[route.length-1]) : null;
+    return `
+      <div class="print-map-box">
+        <div class="print-map-title">Ruta / mapa esquemático del trabajo</div>
+        <svg viewBox="0 0 ${wBox} ${hBox}" role="img" aria-label="Ruta GPS del trabajo">
+          <rect x="0" y="0" width="${wBox}" height="${hBox}" rx="18" fill="#f7f3e9"/>
+          ${parcelLine ? `<polyline points="${parcelLine}" fill="none" stroke="#d2bb7a" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+          ${routeLine ? `<polyline points="${routeLine}" fill="none" stroke="#1f7ed0" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+          ${start ? `<circle cx="${start[0].toFixed(1)}" cy="${start[1].toFixed(1)}" r="7" fill="#2f7d44" stroke="#fff" stroke-width="3"/>` : ""}
+          ${end ? `<circle cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="7" fill="#a8483a" stroke="#fff" stroke-width="3"/>` : ""}
+        </svg>
+        <div class="print-map-legend"><span>Verde: comienzo</span><span>Rojo: fin</span><span>Azul: recorrido GPS</span><span>Oro: parcela</span></div>
+      </div>`;
+  }
+
+  function reportRowsHtml(items){
+    return items.map(([k,v]) => `<div class="row"><span>${escapeHtml(k)}</span><strong>${escapeHtml(v)}</strong></div>`).join("");
+  }
+
+  function printableReportHtml(w){
+    const work = normalizeWorkForReport(w, state.reportOrigin || "work") || w || {};
+    const beginEvent = eventByName(work, "comienzo");
+    const endEvent = eventByName(work, "fin");
+    const startMs = toMs(work.startedAt) || eventMs(beginEvent) || toMs(work.finalSnapshot?.startedAt);
+    const endMs = toMs(work.finishedAt) || eventMs(endEvent) || toMs(work.finalSnapshot?.finishedAt);
+    const ws = windStats(work.windReadings || []);
+    const stopCount = (work.stopLog || []).length || work.stops || 0;
+    const gpsWarnings = gpsWarningsTextList(work);
+    const routeSvg = routeSvgForPrint(work);
+    const events = (work.events || []).map(ev => `<tr><td>${escapeHtml(ev.timeLabel || timeLabelHMS(eventMs(ev)))}</td><td>${escapeHtml(ev.type || "—")}</td><td>${escapeHtml(ev.label || "—")}</td><td>${escapeHtml(formatMeters(ev.accuracy))}</td><td>${escapeHtml(ev.notes || "")}</td></tr>`).join("");
+    const incidents = (work.incidents || []).map(inc => `<tr><td>${escapeHtml(inc.timeLabel || "—")}</td><td>${escapeHtml(inc.type || "—")}</td><td>${escapeHtml(inc.status || "—")}</td><td>${escapeHtml(formatMeters(inc.accuracy))}</td><td>${escapeHtml(inc.notes || "")}</td></tr>`).join("");
+    const windRows = (work.windReadings || []).map(r => `<tr><td>${escapeHtml(r.timeLabel || "—")}</td><td>${escapeHtml(formatWind(r.kmh))}</td><td>${escapeHtml(r.autoPrompt ? "Periódico" : "Manual/inicial")}</td></tr>`).join("");
+    const observations = (work.day && work.day.notes) ? String(work.day.notes).trim() : "Sin observaciones registradas.";
+    const routeWarning = (work.distanceM || 0) > 20 && recoverRouteForReport(work).length < 2 ? "Ruta no disponible: distancia registrada sin puntos GPS suficientes." : "";
+    const avgSpeed = reportAverageSpeed(work);
+    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informe Pazo Baión GPS</title>
+      <style>
+        @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#f8f3e8;color:#173f2b;font-family:Georgia,'Times New Roman',serif;font-size:12.5px;line-height:1.35}.page{max-width:820px;margin:0 auto;background:#fffdf7;border:1px solid #d9c998;border-radius:18px;padding:22px}.top{border-bottom:2px solid #d9c998;padding-bottom:12px;margin-bottom:16px}h1{margin:0;color:#103f2a;font-size:28px;letter-spacing:.02em}h2{margin:18px 0 8px;color:#103f2a;font-size:18px;border-bottom:1px solid #e3d7b8;padding-bottom:5px}.sub{font-family:Arial,sans-serif;color:#6d6a5d;font-size:13px;margin-top:4px}.chip{display:inline-block;margin-top:10px;border:1px solid #a8cdb1;background:#edf7ed;color:#2f7d44;border-radius:999px;padding:5px 12px;font-weight:700}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}.row{border:1px solid #e1d4ad;border-radius:10px;padding:8px 10px;background:#fffef9;display:flex;justify-content:space-between;gap:12px}.row span{font-family:Arial,sans-serif;color:#6d6a5d}.row strong{text-align:right;color:#103f2a}.warn{border:1px solid #e1c27a;background:#fff6dd;color:#7a520b;border-radius:12px;padding:10px 12px;margin:10px 0;font-family:Arial,sans-serif}.print-map-box{border:1px solid #d9c998;border-radius:14px;padding:10px;background:#fffaf0}.print-map-title{font-weight:bold;margin-bottom:7px}.print-map-legend{display:flex;gap:14px;flex-wrap:wrap;font-family:Arial,sans-serif;font-size:10px;color:#6d6a5d;margin-top:6px}table{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;background:#fffef9}th,td{border:1px solid #e1d4ad;padding:6px;text-align:left;vertical-align:top}th{background:#f5efd9;color:#103f2a}.footer{margin-top:20px;border-top:1px solid #e3d7b8;padding-top:10px;font-family:Arial,sans-serif;color:#6d6a5d;font-size:11px}@media print{body{background:white}.page{border:0;padding:0}.no-print{display:none!important}}
+      </style></head><body><main class="page">
+        <section class="top"><h1>PAZO BAION GPS - INFORME DE TRABAJO</h1><div class="sub">Generado localmente desde este dispositivo · ${escapeHtml(new Date().toLocaleString('es-ES'))}</div><div class="chip">${workIsCompleted(work) ? "Informe definitivo" : "Resumen provisional"}</div></section>
+        ${gpsWarnings.length ? `<div class="warn"><strong>Advertencias GPS:</strong> ${escapeHtml(gpsWarnings.join("; "))}</div>` : ""}
+        ${routeWarning ? `<div class="warn"><strong>${escapeHtml(routeWarning)}</strong></div>` : ""}
+        <h2>Cabecera</h2><div class="grid">${reportRowsHtml([["Parcela", work.parcel || "—"],["Trabajo", work.type || "—"],["Fecha", dateLabelDMY(reportDateSource(work))],["Estado", workIsCompleted(work) ? "Finalizado" : "Provisional"],["Inicio", timeLabelHMS(startMs)],["Fin", timeLabelHMS(endMs)]])}</div>
+        <h2>Tiempos y recorrido</h2><div class="grid">${reportRowsHtml([["Tiempo activo", fmtTime(reportEffectiveActiveMs(work))],["Tiempo parado", fmtTime(reportStoppedMs(work))],["Tiempo total/transcurrido", fmtTime(reportTotalMs(work))],["Distancia", ((work.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km"],["Recargas", String(work.refills || 0)],["Paradas", String(stopCount)],["Incidencias", String((work.incidents || []).length)],["Velocidad GPS media", avgSpeed === null ? "—" : avgSpeed.toFixed(1).replace(".", ",") + " km/h"]])}</div>
+        <h2>GPS y ruta</h2><div class="grid">${reportRowsHtml([["Ruta GPS disponible", routeAvailable(work) ? "Sí" : "No"],["Precisión media GPS", averageGpsAccuracyText(work)],["Puntos originales", String((work.pointsOriginal || []).length)],["Ruta depurada", String((work.pointsClean || []).length)]])}</div>${routeSvg || ""}
+        <h2>Viento</h2><div class="grid">${reportRowsHtml([["Último", ws.latest === null ? "—" : formatWind(ws.latest)],["Media", ws.avg === null ? "—" : formatWind(ws.avg)],["Máximo", ws.max === null ? "—" : formatWind(ws.max)],["Registros", String(ws.count)]])}</div>${windRows ? `<table><thead><tr><th>Hora</th><th>Viento</th><th>Tipo</th></tr></thead><tbody>${windRows}</tbody></table>` : `<div class="warn">Sin medición directa registrada.</div>`}
+        <h2>Eventos</h2>${events ? `<table><thead><tr><th>Hora</th><th>Tipo</th><th>Punto</th><th>GPS</th><th>Observación</th></tr></thead><tbody>${events}</tbody></table>` : `<div class="warn">Sin eventos registrados.</div>`}
+        <h2>Incidencias</h2>${incidents ? `<table><thead><tr><th>Hora</th><th>Tipo</th><th>Estado</th><th>GPS</th><th>Observación</th></tr></thead><tbody>${incidents}</tbody></table>` : `<div class="warn">Sin incidencias registradas.</div>`}
+        <h2>Observaciones</h2><div class="row"><span>Observaciones</span><strong>${escapeHtml(observations)}</strong></div>
+        <div class="footer">Pazo Baión GPS · ${escapeHtml(VERSION)}</div>
+      </main></body></html>`;
+  }
+
+  function printReportPdf(w){
+    try{
+      const html = printableReportHtml(w);
+      const win = window.open("", "_blank");
+      if(!win){
+        downloadBlob(safeFilename(w, "informe_imprimible", "html"), html, "text/html");
+        toast("No se pudo abrir la vista de impresión. Se descargó un informe HTML imprimible.");
+        return;
+      }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      setTimeout(() => {
+        try{ win.focus(); win.print(); }
+        catch(err){ console.warn("No se pudo lanzar impresión", err); }
+      }, 500);
+    }catch(err){
+      console.error("No se pudo generar informe imprimible", err);
+      toast("No se pudo generar el informe imprimible del trabajo.");
+    }
+  }
+
   async function shareReportSummary(w){
-    const text = `PAZO BAION GPS\nParcela: ${w.parcel}\nTrabajo: ${w.type}\nEstado: ${w.status}\nDistancia: ${((w.distanceM || 0)/1000).toFixed(2)} km\nRecargas: ${w.refills || 0}\nIncidencias: ${(w.incidents || []).length}`;
+    const text = buildShareSummaryText(w);
     if(navigator.share){
-      try{ await navigator.share({ title:"Informe Pazo Baion GPS", text }); return; } catch(err){}
+      try{ await navigator.share({ title:"Resumen Pazo Baion GPS", text }); return; } catch(err){}
     }
     try{ await navigator.clipboard.writeText(text); toast("Resumen copiado al portapapeles."); }
     catch{ toast(text); }
   }
+
 
   function workIsCompleted(w){
     return Boolean(

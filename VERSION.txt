@@ -1,6 +1,7 @@
-Pazo Baion GPS — Beta v8.0
+Pazo Baion GPS — Beta v9.0
 
-Base: Beta v7.0.
-Línea visual: Opción A · Premium vitícola ornamental.
+Base: Beta v8.0.
 
-Cambios específicos: protección del guardado compacto con aviso/backup, mejora visual de botones Añadir/Editar/Eliminar en jornada, borrado individual de fichas en historial, corrección del desbordamiento de Estado y pantalla de carga con versión integrada sin recuadro.
+Cambios aplicados:
+- Imprimir / Guardar PDF genera una vista imprimible propia del trabajo abierto.
+- Compartir resumen usa el formato literal aprobado.
