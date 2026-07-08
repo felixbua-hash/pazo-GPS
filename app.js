@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v7.0";
+  const VERSION = "Beta v8.0";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -1300,8 +1300,7 @@
     if(workIsCompleted(state.work)) freezeFinalSnapshot(state.work);
     state.work.savedAt = new Date().toISOString();
     const finished = normalizeWorkForReport(serializeWork(state.work), "history");
-    let ok = saveHistorySnapshot(finished);
-    if(!ok) ok = saveHistorySnapshot(compactWorkForHistory(finished));
+    const ok = saveHistorySnapshotProtected(finished, "trabajo finalizado");
     if(ok) storage.remove(LS.active);
     else storage.set(LS.active, state.work);
     return ok;
@@ -1343,6 +1342,71 @@
     if(idx >= 0) hist[idx] = snap;
     else hist.unshift(snap);
     return storage.set(LS.history, hist.slice(0, 200));
+  }
+
+  function safeFileNamePart(value){
+    return String(value || "trabajo").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50) || "trabajo";
+  }
+
+  function exportWorkBackup(work, reason="backup"){
+    try{
+      const snap = serializeWork(work);
+      const backup = {
+        exportedAt: new Date().toISOString(),
+        reason,
+        version: VERSION,
+        warning: "Copia completa previa a guardado compacto. Conservar este archivo si el historial local no puede guardar todos los datos.",
+        work: snap
+      };
+      const name = `PAZO_BAION_BACKUP_${safeFileNamePart(snap.parcel)}_${safeFileNamePart(snap.type)}_${Date.now()}.json`;
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+      return true;
+    }catch(err){
+      console.warn("No se pudo generar backup previo a compactación", err);
+      return false;
+    }
+  }
+
+  function authorizeCompactedHistorySave(work, context="trabajo"){
+    const ok = confirm(
+      "No se pudo guardar el " + context + " completo en el historial local.\n\n" +
+      "Para evitar pérdida silenciosa de datos, la app generará ahora una copia de seguridad completa en formato JSON antes de intentar un guardado compacto.\n\n" +
+      "El guardado compacto puede reducir puntos GPS y no conservar fotos dentro del historial local.\n\n" +
+      "¿Generar backup y continuar?"
+    );
+    if(!ok) return false;
+    const exported = exportWorkBackup(work, "previo_a_guardado_compacto_" + context.replace(/\s+/g, "_"));
+    if(!exported){
+      return confirm(
+        "No se pudo generar la copia de seguridad automática.\n\n" +
+        "¿Autorizar igualmente el guardado compacto?"
+      );
+    }
+    return confirm(
+      "Se ha solicitado la descarga de la copia de seguridad completa.\n\n" +
+      "¿Autorizar ahora el guardado compacto en el historial local?"
+    );
+  }
+
+  function saveHistorySnapshotProtected(work, context="trabajo"){
+    if(saveHistorySnapshot(work)) return true;
+    if(!authorizeCompactedHistorySave(work, context)){
+      toast("Guardado compacto cancelado. El trabajo no se ha compactado sin autorización.");
+      return false;
+    }
+    const compact = compactWorkForHistory(work);
+    const ok = saveHistorySnapshot(compact);
+    if(ok) toast("Se guardó una versión compacta en historial local. Conserva el backup descargado como copia completa.");
+    else toast("No se pudo guardar ni la versión compacta. Conserva el backup descargado.");
+    return ok;
   }
 
   function openIncident(context="work"){
@@ -1940,9 +2004,7 @@
     if(!state.work || workIsCompleted(state.work)) return;
     ensureTimeline(state.work);
     const snap = serializeWork({...state.work, status:"pendiente"});
-    let ok = saveHistorySnapshot(snap);
-    if(!ok) ok = saveHistorySnapshot(compactWorkForHistory(snap));
-    return ok;
+    return saveHistorySnapshotProtected(snap, "trabajo pendiente");
   }
 
   function recoverActiveWorkToHistory(){
@@ -1950,8 +2012,7 @@
     if(active && active.id && !workIsCompleted(active)){
       ensureTimeline(active);
       const snap = serializeWork({...active, status: active.status || "pendiente"});
-      let ok = saveHistorySnapshot(snap);
-      if(!ok) saveHistorySnapshot(compactWorkForHistory(snap));
+      saveHistorySnapshotProtected(snap, "trabajo pendiente recuperado");
     }
   }
 
@@ -1969,12 +2030,17 @@
       const status = workHistoryStatus(w);
       const cls = status === "Pendiente" ? "pending" : "completed";
       return `
-      <button class="history-card history-button history-card-v11" data-history-index="${originalIndex}">
-        <span class="history-date">${escapeHtml(workHistoryDate(w))}</span>
-        <strong>${escapeHtml(w.parcel || "Parcela sin nombre")}</strong>
-        <span class="history-type">${escapeHtml(w.type || "Trabajo sin tipo")}</span>
-        <span class="history-status ${cls}">${status}</span>
-      </button>`;
+      <div class="history-card history-card-v12">
+        <button class="history-main-button" data-history-index="${originalIndex}" aria-label="Abrir ficha de trabajo">
+          <span class="history-date">${escapeHtml(workHistoryDate(w))}</span>
+          <strong>${escapeHtml(w.parcel || "Parcela sin nombre")}</strong>
+          <span class="history-type">${escapeHtml(w.type || "Trabajo sin tipo")}</span>
+          <span class="history-status ${cls}">${status}</span>
+        </button>
+        <button class="history-delete-button" data-history-delete="${originalIndex}" aria-label="Eliminar esta ficha">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 12h6l1-12"/></svg>
+        </button>
+      </div>`;
     }).join("") : `<div class="history-empty">${filter === "pending" ? "No hay trabajos pendientes." : filter === "completed" ? "No hay trabajos completados." : "No hay trabajos guardados."}</div>`;
 
     qsa("[data-history-index]").forEach(card => {
@@ -1984,6 +2050,26 @@
         if(w) openReportForWork(w, "history");
       });
     });
+    qsa("[data-history-delete]").forEach(btn => {
+      btn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        deleteHistoryItem(Number(btn.dataset.historyDelete));
+      });
+    });
+  }
+
+  function deleteHistoryItem(index){
+    const hist = storage.get(LS.history, []);
+    const item = hist[index];
+    if(!item){ renderHistory(); return; }
+    const label = `${workHistoryDate(item)} · ${item.parcel || "Parcela sin nombre"} · ${item.type || "Trabajo sin tipo"}`;
+    if(!confirm("¿Eliminar solo esta ficha de trabajo?\n\n" + label)) return;
+    const text = prompt("Para confirmar el borrado individual, escribe ELIMINAR:");
+    if(text !== "ELIMINAR") { toast("Borrado cancelado."); return; }
+    hist.splice(index, 1);
+    if(storage.set(LS.history, hist)) renderHistory();
+    else toast("No se pudo eliminar la ficha del historial local.");
   }
 
   function restoreIfPossible(){

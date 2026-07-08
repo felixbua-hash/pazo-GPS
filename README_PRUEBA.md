@@ -1,21 +1,19 @@
-# Pazo Baion GPS — Beta v7.0
+# Pazo Baion GPS — Beta v8.0
 
-Versión generada a partir de Beta v6.0.
+Versión generada a partir de Beta v7.0.
 
-## Correcciones Beta v7.0
+## Cambios Beta v8.0
 
-Correcciones aplicadas únicamente sobre los fallos detectados tras la prueba de Beta v6.0:
+Cambios aplicados únicamente según la lista fijada para esta versión:
 
-- Separación más robusta entre trabajo activo, trabajo pendiente e informe abierto desde historial.
-- Normalización de fichas finalizadas antes de abrir informe.
-- Cierre automático de tramos abiertos cuando existe finalización real del trabajo.
-- Snapshot final congelado reconstruido sin depender de valores antiguos.
-- Recuperación de ruta en informe desde `pointsClean`; si falta, desde `pointsOriginal`; si tampoco existe, aviso explícito.
-- Mapa de informe destruido y recreado de forma segura para poder abrir la misma ficha varias veces.
-- Historial guardado con ficha final independiente del estado activo.
+- Protección del guardado compacto: si falla el guardado completo, la app avisa, ofrece descarga de backup completo en JSON y solo compacta con autorización.
+- Mejora visual de los botones Añadir, Editar y Eliminar en Configuración de jornada.
+- Borrado individual de fichas de trabajo en Historial, con confirmación previa.
+- Corrección del desbordamiento del campo Estado en Registro de trabajo.
+- Pantalla de carga actualizada a Beta v8.0 con la versión integrada sin recuadro.
 
 ## Sin cambios intencionados
 
-- No se modifica la visualización ornamental de Beta v6.0.
-- No se modifican pantallas, estilos ni composición visual.
+- No se modifica la lógica GPS, mapas, tiempos, informes o historial fuera de los puntos indicados.
+- No se modifica la línea visual Premium vitícola ornamental salvo los ajustes visuales solicitados.
 - No se incluyen `PARCELAS.geojson` ni `INCIDENCIAS_.geojson`.
