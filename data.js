@@ -1,5 +1,5 @@
 window.PAZO_BAION_DEFAULTS = {
-  version: "Beta v6.0 · Premium vitícola ornamental",
+  version: "Beta v7.0 · Premium vitícola ornamental",
   operators: ["Operario 1", "Operario 2", "Operario 3"],
   tractors: ["Tractor 1", "Tractor 2"],
   sprayers: ["Atomizador 1", "Atomizador 2"],

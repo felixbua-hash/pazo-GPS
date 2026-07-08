@@ -1,6 +1,6 @@
-Pazo Baion GPS — Beta v6.0
+Pazo Baion GPS — Beta v7.0
 
-Base: Beta v5.0.
+Base: Beta v6.0.
 Línea visual: Opción A · Premium vitícola ornamental.
 
-Corrección específica: motor de tiempos, informe provisional/definitivo, snapshot final congelado e historial.
+Corrección específica: apertura estable de informes históricos, guardado definitivo de fichas finalizadas, recuperación/dibujo de ruta en informes y cierre robusto del ciclo finalización → historial → informe.

@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v6.0";
+  const VERSION = "Beta v7.0";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -678,17 +678,80 @@
     return now;
   }
 
+  function timelineActiveMs(w, clock){
+    ensureTimeline(w);
+    const endClock = toMs(clock) || Date.now();
+    const fromSegments = (w.segments || []).reduce((sum, seg) => {
+      const start = toMs(seg.startAt);
+      const end = toMs(seg.endAt);
+      if(start && end) return sum + Math.max(0, end - start);
+      if(start && w.status === "trabajando") return sum + Math.max(0, endClock - start);
+      return sum + Math.max(0, Number(seg.activeMs) || 0);
+    }, 0);
+    return Math.max(fromSegments, Number(w.activeMs) || 0);
+  }
+
+  function timelineStoppedMs(w, clock){
+    ensureTimeline(w);
+    const endClock = toMs(clock) || Date.now();
+    const fromStops = (w.stopLog || []).reduce((sum, stop) => {
+      const start = toMs(stop.at);
+      const end = toMs(stop.resumedAt);
+      if(start && end) return sum + Math.max(0, end - start);
+      if(start && w.status === "parado") return sum + Math.max(0, endClock - start);
+      return sum + Math.max(0, Number(stop.stoppedMs) || 0);
+    }, 0);
+    return Math.max(fromStops, Number(w.stoppedMs) || 0);
+  }
+
+  function inferFinishedAt(w){
+    if(!w) return null;
+    let t = toMs(w.finishedAt) || toMs(w.finalSnapshot?.finishedAt);
+    if(t) return t;
+    const fin = (w.events || []).slice().reverse().find(ev => String(ev.type || "").toLowerCase().includes("fin"));
+    t = eventMs(fin);
+    return t || null;
+  }
+
+  function closeOpenTimelineForFinal(w, endAt){
+    if(!w) return w;
+    ensureTimeline(w);
+    const finishMs = toMs(endAt) || inferFinishedAt(w) || lastKnownWorkAt(w) || Date.now();
+    (w.segments || []).forEach(seg => {
+      const start = toMs(seg.startAt);
+      if(start && !toMs(seg.endAt)){
+        seg.endAt = finishMs;
+        seg.endLabel = timeLabelFromMs(finishMs);
+        seg.activeMs = Math.max(0, finishMs - start);
+        seg.closeReason = seg.closeReason || "Fin";
+      }
+    });
+    (w.stopLog || []).forEach(stop => {
+      const start = toMs(stop.at);
+      if(start && !toMs(stop.resumedAt)){
+        stop.resumedAt = finishMs;
+        stop.resumedLabel = timeLabelFromMs(finishMs);
+        stop.stoppedMs = Math.max(0, finishMs - start);
+      }
+    });
+    w.currentSegmentId = null;
+    w.currentStopId = null;
+    return w;
+  }
+
   function buildFinalSnapshot(w){
     if(!w) return null;
     ensureTimeline(w);
-    const clock = reportClock(w);
-    const active = activeElapsedMs(w, clock, {live:false});
-    const stopped = stoppedElapsedMs(w, clock, {live:false});
-    const elapsed = w.startedAt ? Math.max(0, clock - w.startedAt) : 0;
+    const started = toMs(w.startedAt);
+    const finished = inferFinishedAt(w) || lastKnownWorkAt(w) || started || Date.now();
+    closeOpenTimelineForFinal(w, finished);
+    const active = timelineActiveMs(w, finished);
+    const stopped = timelineStoppedMs(w, finished);
+    const elapsed = started ? Math.max(0, finished - started) : Math.max(0, active + stopped);
     return {
       frozenAt: new Date().toISOString(),
       startedAt: w.startedAt || null,
-      finishedAt: w.finishedAt || null,
+      finishedAt: w.finishedAt || (finished ? finished : null),
       activeMs: active,
       stoppedMs: stopped,
       elapsedMs: elapsed,
@@ -701,6 +764,10 @@
 
   function freezeFinalSnapshot(w){
     if(!w) return null;
+    const finished = inferFinishedAt(w) || lastKnownWorkAt(w) || Date.now();
+    w.finishedAt = toMs(w.finishedAt) || finished;
+    w.status = "finalizado";
+    closeOpenTimelineForFinal(w, w.finishedAt);
     w.finalSnapshot = buildFinalSnapshot(w);
     return w.finalSnapshot;
   }
@@ -709,16 +776,18 @@
     if(!w) return w;
     if(!Array.isArray(w.segments)) w.segments = [];
     if(!Array.isArray(w.stopLog)) w.stopLog = [];
-    if(w.startedAt && !w.segments.length && (w.activeMs || w.finishedAt)){
-      const endAt = w.finishedAt || null;
+    const startedMs = toMs(w.startedAt);
+    const finishedMs = toMs(w.finishedAt);
+    if(startedMs && !w.segments.length && (w.activeMs || finishedMs)){
+      const endAt = finishedMs || null;
       w.segments.push({
         id: "seg-legacy-1",
         index: 1,
-        startAt: w.startedAt,
-        startLabel: timeLabelFromMs(w.startedAt),
+        startAt: startedMs,
+        startLabel: timeLabelFromMs(startedMs),
         endAt,
         endLabel: endAt ? timeLabelFromMs(endAt) : null,
-        activeMs: w.activeMs || (endAt ? Math.max(0, endAt - w.startedAt) : 0),
+        activeMs: w.activeMs || (endAt ? Math.max(0, endAt - startedMs) : 0),
         closeReason: endAt ? "Fin" : ""
       });
     }
@@ -1140,6 +1209,7 @@
       addEvent("Fin de tratamiento", "Punto final", "Parcela finalizada", p, now);
       state.work.status = "finalizado";
       state.work.finishedAt = now;
+      recoverRouteForReport(state.work);
       freezeFinalSnapshot(state.work);
       $("stopWorkBtn").classList.add("hidden");
       $("continueWorkBtn").classList.add("hidden");
@@ -1147,10 +1217,10 @@
       setWorkStateUi("Finalizado");
       stopGpsWatch();
       updateLiveStats();
-      const finalReport = serializeWork(state.work);
-      const saved = saveFinishedWork();
+      const finalReport = normalizeWorkForReport(serializeWork(state.work), "work");
       state.reportWork = finalReport;
       state.reportOrigin = "work";
+      const saved = saveFinishedWork();
       resetReportTabs();
       show("screen-report");
       if(!saved) toast("El trabajo finalizó, pero no se pudo guardar completo en el historial. Se conserva como trabajo activo para recuperación.");
@@ -1226,9 +1296,10 @@
   function saveFinishedWork(){
     if(!state.work) return false;
     ensureTimeline(state.work);
+    recoverRouteForReport(state.work);
     if(workIsCompleted(state.work)) freezeFinalSnapshot(state.work);
     state.work.savedAt = new Date().toISOString();
-    const finished = serializeWork(state.work);
+    const finished = normalizeWorkForReport(serializeWork(state.work), "history");
     let ok = saveHistorySnapshot(finished);
     if(!ok) ok = saveHistorySnapshot(compactWorkForHistory(finished));
     if(ok) storage.remove(LS.active);
@@ -1242,7 +1313,8 @@
       parcelFeature: w.parcelFeature || state.selectedFeature || null
     };
     ensureTimeline(out);
-    if(workIsCompleted(out) && !out.finalSnapshot) out.finalSnapshot = buildFinalSnapshot(out);
+    recoverRouteForReport(out);
+    if(workIsCompleted(out)) freezeFinalSnapshot(out);
     return out;
   }
 
@@ -1399,8 +1471,62 @@
     $("newIncidentType").value = "";
   }
 
+  function clonePlain(obj){
+    if(!obj) return obj;
+    try{ return JSON.parse(JSON.stringify(obj)); }
+    catch(err){ return {...obj}; }
+  }
+
+  function isValidRoutePoint(p){
+    return isFinite(Number(p?.lat)) && isFinite(Number(p?.lng));
+  }
+
+  function cleanRoutePoints(points){
+    return (Array.isArray(points) ? points : [])
+      .filter(isValidRoutePoint)
+      .map(p => ({...p, lat:Number(p.lat), lng:Number(p.lng), time: toMs(p.time) || p.time || null}));
+  }
+
+  function recoverRouteForReport(w){
+    if(!w) return [];
+    w.pointsClean = cleanRoutePoints(w.pointsClean);
+    w.pointsOriginal = cleanRoutePoints(w.pointsOriginal);
+    if(w.pointsClean.length > 1) return w.pointsClean;
+    const usableOriginal = w.pointsOriginal.filter(p => p.quality !== "descartado");
+    if(usableOriginal.length > 1){
+      w.pointsClean = downsamplePoints(usableOriginal, 1600);
+      w.routeRebuiltFromOriginal = true;
+      return w.pointsClean;
+    }
+    const eventPts = (w.events || []).filter(isValidRoutePoint).map(ev => ({lat:Number(ev.lat), lng:Number(ev.lng), time:eventMs(ev) || null, quality:"evento"}));
+    if(eventPts.length > 1){
+      w.pointsClean = eventPts;
+      w.routeRebuiltFromEvents = true;
+      return w.pointsClean;
+    }
+    return w.pointsClean || [];
+  }
+
+  function normalizeWorkForReport(work, origin="work"){
+    if(!work) return null;
+    const w = clonePlain(work);
+    ensureTimeline(w);
+    recoverRouteForReport(w);
+    const completedByData = workIsCompleted(w) || !!inferFinishedAt(w) || !!w.finalSnapshot?.finishedAt;
+    if(completedByData){
+      w.finishedAt = toMs(w.finishedAt) || inferFinishedAt(w) || toMs(w.finalSnapshot?.finishedAt) || lastKnownWorkAt(w);
+      w.status = "finalizado";
+      freezeFinalSnapshot(w);
+    }
+    w.reportOrigin = origin;
+    return w;
+  }
+
   function getReportWork(){
-    return state.reportWork || state.work || storage.get(LS.history, [])[0] || null;
+    if(state.reportWork) return normalizeWorkForReport(state.reportWork, state.reportOrigin || "work");
+    if(state.work) return normalizeWorkForReport(state.work, "work");
+    const first = storage.get(LS.history, [])[0] || null;
+    return first ? normalizeWorkForReport(first, "history") : null;
   }
 
   function resetReportTabs(){
@@ -1410,7 +1536,7 @@
   }
 
   function openReportForWork(work, origin="work"){
-    state.reportWork = work || null;
+    state.reportWork = normalizeWorkForReport(work, origin);
     state.reportOrigin = origin;
     resetReportTabs();
     show("screen-report");
@@ -1422,12 +1548,13 @@
   }
 
   function reportTotalMs(w){
-    if(!w?.startedAt) return 0;
+    const started = toMs(w?.startedAt);
+    if(!started) return 0;
     if(workIsCompleted(w) && w.finalSnapshot && isFinite(Number(w.finalSnapshot.elapsedMs))){
       return Math.max(0, Number(w.finalSnapshot.elapsedMs));
     }
     const clock = reportClock(w);
-    return Math.max(0, clock - w.startedAt);
+    return Math.max(0, clock - started);
   }
 
   function reportEffectiveActiveMs(w){
@@ -1473,7 +1600,8 @@
       $("reportWind").textContent = ws.latest === null ? "—" : formatWind(ws.latest);
 
       renderReportSummary(w);
-      const hasMapData = (w.pointsClean || []).length > 1 || (w.events || []).some(e=>e.lat && e.lng) || (w.incidents || []).some(i=>i.lat && i.lng);
+      const recoveredRoute = recoverRouteForReport(w);
+      const hasMapData = recoveredRoute.length > 1 || (w.events || []).some(e=>isValidRoutePoint(e)) || (w.incidents || []).some(i=>isValidRoutePoint(i));
       if(hasMapData){
         $("reportMap").classList.remove("hidden");
         waitForMapContainer("reportMap", () => renderReportMap(w));
@@ -1485,49 +1613,85 @@
     }
   }
 
-  function renderReportMap(w){
+  function clearReportMapContainer(){
     const el = $("reportMap");
-    el.classList.remove("hidden");
     if(state.maps.report){
-      state.maps.report.remove();
+      try{ state.maps.report.off(); state.maps.report.remove(); }
+      catch(err){ console.warn("No se pudo destruir el mapa de informe", err); }
       state.maps.report = null;
     }
-    el.innerHTML = "";
+    ["reportImportedIncidents"].forEach(k => {
+      if(state.layers[k]){ try{ state.layers[k].remove(); }catch(err){} state.layers[k] = null; }
+    });
+    if(el){
+      el.innerHTML = "";
+      try{ delete el._leaflet_id; }catch(err){ el._leaflet_id = null; }
+    }
+    return el;
+  }
+
+  function renderReportMap(w){
+    const el = clearReportMapContainer();
+    if(!el) return;
+    el.classList.remove("hidden");
     if(!ensureLeaflet()){
       el.classList.add("hidden");
       return;
     }
-    const map = L.map(el, { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false });
-    state.maps.report = map;
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom:20 }).addTo(map);
-    const reportFeature = w.parcelFeature || findParcelFeatureByName(w.parcel) || (w.parcel === state.selectedParcelName ? state.selectedFeature : null);
-    let bounds = null;
-    if(reportFeature) {
-      const lyr = L.geoJSON(reportFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
-      bounds = lyr.getBounds();
+    const routePoints = recoverRouteForReport(w);
+    try{
+      const map = L.map(el, { zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false, doubleClickZoom:false, boxZoom:false, keyboard:false, tap:false, preferCanvas:true });
+      state.maps.report = map;
+      const tile = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom:20, keepBuffer:4 });
+      tile.addTo(map);
+      map._pbgpsTile = tile;
+
+      const reportFeature = w.parcelFeature || findParcelFeatureByName(w.parcel) || (w.parcel === state.selectedParcelName ? state.selectedFeature : null);
+      let bounds = null;
+      if(reportFeature) {
+        const lyr = L.geoJSON(reportFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
+        bounds = lyr.getBounds();
+      }
+      drawImportedIncidents(map, "reportImportedIncidents");
+
+      const pts = routePoints.map(p => [Number(p.lat), Number(p.lng)]).filter(a => isFinite(a[0]) && isFinite(a[1]));
+      if(pts.length > 1) {
+        const route = L.polyline(pts, {color:"#1f7ed0",weight:4,opacity:.95}).addTo(map);
+        const rb = route.getBounds();
+        bounds = bounds && bounds.isValid() ? bounds.extend(rb) : rb;
+      }
+      (w.events || []).forEach(ev => {
+        if(isValidRoutePoint(ev)) L.circleMarker([Number(ev.lat),Number(ev.lng)], {radius:6,color:"#fff",weight:2,fillColor:String(ev.type||"").includes("Fin")?"#a8483a":ev.type==="Comienzo"?"#2f7d44":"#c47b32",fillOpacity:1}).addTo(map);
+      });
+      (w.incidents || []).forEach(inc => {
+        if(isValidRoutePoint(inc)) L.circleMarker([Number(inc.lat),Number(inc.lng)], {radius:6,color:"#fff",weight:2,fillColor:getIncidentColor(inc.type),fillOpacity:1}).addTo(map);
+      });
+      if(bounds && bounds.isValid()) stabilizeMap(map, bounds, [18,18]);
+      else stabilizeMap(map, null, [18,18]);
+    }catch(err){
+      console.error("Error al pintar mapa de informe", err);
+      clearReportMapContainer();
+      el.classList.add("hidden");
+      const msg = document.createElement("div");
+      msg.className = "report-warning";
+      msg.innerHTML = "<strong>Mapa no disponible:</strong> no se pudo reconstruir la visualización del recorrido, pero el trabajo sigue guardado.";
+      $("reportContent").prepend(msg);
     }
-    drawImportedIncidents(map, "reportImportedIncidents");
-    const pts = (w.pointsClean || []).map(p=>[p.lat,p.lng]);
-    if(pts.length > 1) {
-      const route = L.polyline(pts, {color:"#1f7ed0",weight:4}).addTo(map);
-      bounds = bounds && bounds.isValid() ? bounds.extend(route.getBounds()) : route.getBounds();
-    }
-    (w.events || []).forEach(ev => {
-      if(ev.lat && ev.lng) L.circleMarker([ev.lat,ev.lng], {radius:6,color:"#fff",weight:2,fillColor:ev.type.includes("Fin")?"#a8483a":ev.type==="Comienzo"?"#2f7d44":"#c47b32",fillOpacity:1}).addTo(map);
-    });
-    (w.incidents || []).forEach(inc => {
-      if(inc.lat && inc.lng) L.circleMarker([inc.lat,inc.lng], {radius:6,color:"#fff",weight:2,fillColor:getIncidentColor(inc.type),fillOpacity:1}).addTo(map);
-    });
-    if(bounds && bounds.isValid()) stabilizeMap(map, bounds, [18,18]);
-    else stabilizeMap(map, null, [18,18]);
   }
 
   function reportWarning(w){
     const gps = w.gpsStats || {};
-    if(w.forcedStart || gps.discarded > 0 || (gps.worst && gps.worst > 15)){
-      return `<div class="report-warning"><strong>Advertencia GPS:</strong> el trazado debe interpretarse como aproximado en algunos tramos. Se conservaron los puntos originales y se generó una ruta depurada para visualización e informe.</div>`;
+    const routePoints = recoverRouteForReport(w);
+    let out = "";
+    if((w.distanceM || 0) > 20 && routePoints.length < 2){
+      out += `<div class="report-warning"><strong>Ruta no disponible:</strong> hay distancia registrada, pero no hay puntos GPS suficientes para dibujar el recorrido.</div>`;
+    } else if(w.routeRebuiltFromOriginal){
+      out += `<div class="report-warning"><strong>Ruta reconstruida:</strong> el recorrido se recuperó desde puntos GPS originales porque la ruta depurada no estaba disponible.</div>`;
     }
-    return "";
+    if(w.forcedStart || gps.discarded > 0 || (gps.worst && gps.worst > 15)){
+      out += `<div class="report-warning"><strong>Advertencia GPS:</strong> el trazado debe interpretarse como aproximado en algunos tramos. Se conservaron los puntos originales y se generó una ruta depurada para visualización e informe.</div>`;
+    }
+    return out;
   }
 
   function renderReportSummary(w){
@@ -1752,7 +1916,13 @@
   }
 
   function workIsCompleted(w){
-    return Boolean(w?.finishedAt || w?.status === "finalizado" || w?.status === "completado");
+    return Boolean(
+      w?.finishedAt ||
+      w?.status === "finalizado" ||
+      w?.status === "completado" ||
+      w?.finalSnapshot?.finishedAt ||
+      (Array.isArray(w?.events) && w.events.some(ev => String(ev.type || "").toLowerCase().includes("fin")))
+    );
   }
 
   function workHistoryStatus(w){
