@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.0";
+  const VERSION = "Beta v9.4";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -11,6 +11,11 @@
     incidents: "pbgps_incidents_v08",
     active: "pbgps_active_work_v08"
   };
+
+  const WIND_INTERVAL_MS = 30 * 60 * 1000;
+  const WIND_FETCH_TIMEOUT_MS = 8000;
+  const WIND_SOURCE_NAME = "Open-Meteo Forecast API";
+  const WIND_SOURCE_DETAIL = "Viento a 10 m · modelo meteorológico interpolado · consulta automática online";
 
   const state = {
     parcelsGeoJSON: null,
@@ -29,6 +34,7 @@
     trackingFollow: true,
     reportWork: null,
     reportOrigin: "work",
+    reportHistoryIndex: null,
     tickerStarted: false,
     historyFilter: "all",
     liveSpeedKmh: null
@@ -565,6 +571,12 @@
       incidents: [],
       gpsStats: { bad:0, doubtful:0, discarded:0, best:Infinity, worst:0, sum:0, count:0 },
       windReadings: [],
+      windMode: isPhytosanitaryWorkType(state.workType) ? "automatico_30_min" : "no_aplicable",
+      windSource: isPhytosanitaryWorkType(state.workType) ? WIND_SOURCE_NAME : null,
+      segments: [],
+      stopLog: [],
+      currentSegmentId: null,
+      currentStopId: null,
       nextWindPromptAt: null,
       lastGpsAt: null,
       lastEventAt: null,
@@ -580,13 +592,20 @@
 
   function setupWorkMap(){
     if(!state.work) return;
+    const feature = state.selectedFeature || state.work.parcelFeature || findParcelFeatureByName(state.work.parcel);
+    if(feature){
+      state.selectedFeature = feature;
+      state.work.parcelFeature = state.work.parcelFeature || feature;
+    }
     waitForMapContainer("mapWork", () => {
       const map = makeMap("mapWork", "work");
       if(!map) return;
-      state.layers.workParcel = L.geoJSON(state.selectedFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
+      if(feature){
+        state.layers.workParcel = L.geoJSON(feature, { style: parcelStyle(true) }).addTo(map).bringToFront();
+        const b = state.layers.workParcel.getBounds();
+        if(b.isValid()) stabilizeMap(map, b, [42,42]);
+      }
       drawImportedIncidents(map, "workImportedIncidents");
-      const b = state.layers.workParcel.getBounds();
-      if(b.isValid()) stabilizeMap(map, b, [42,42]);
       updateRouteLayers();
     });
   }
@@ -623,6 +642,120 @@
     $("liveAccuracy").textContent = "—";
     $("refillCount").textContent = "0";
     updateWindUi();
+  }
+
+
+  function prepareWorkScreenFromState(){
+    if(!state.work) return;
+    ensureTimeline(state.work);
+    recoverRouteForReport(state.work);
+
+    state.selectedParcelName = state.work.parcel || state.selectedParcelName || "Parcela sin nombre";
+    state.workType = state.work.type || state.workType || "Trabajo sin tipo";
+    state.selectedFeature = state.work.parcelFeature || findParcelFeatureByName(state.work.parcel) || state.selectedFeature || null;
+    if(state.selectedFeature) state.work.parcelFeature = state.work.parcelFeature || state.selectedFeature;
+    state.dayConfig = state.work.day || state.dayConfig || storage.get(LS.day, {});
+    state.gpsCalibration = state.work.gpsCalibration || state.gpsCalibration;
+
+    const headerText = `${state.selectedParcelName} · ${state.workType}`;
+    if($("workHeader")) $("workHeader").textContent = headerText;
+    if($("selectedParcelName")) $("selectedParcelName").textContent = state.selectedParcelName;
+    if($("workTypeParcel")) $("workTypeParcel").textContent = state.selectedParcelName;
+
+    $("distanceKm").textContent = ((state.work.distanceM || 0)/1000).toFixed(2).replace(".", ",");
+    $("refillCount").textContent = String(state.work.refills || 0);
+
+    if(workIsCompleted(state.work)){
+      $("beginWorkBtn").classList.add("hidden");
+      $("stopWorkBtn").classList.add("hidden");
+      $("continueWorkBtn").classList.add("hidden");
+      setWorkStateUi("Finalizado");
+      stopGpsWatch();
+    } else if(state.work.status === "parado"){
+      $("beginWorkBtn").classList.add("hidden");
+      $("stopWorkBtn").classList.add("hidden");
+      $("continueWorkBtn").classList.remove("hidden");
+      setWorkStateUi("Parado");
+    } else if(state.work.status === "trabajando" || state.work.startedAt){
+      state.work.status = "trabajando";
+      $("beginWorkBtn").classList.add("hidden");
+      $("stopWorkBtn").classList.remove("hidden");
+      $("continueWorkBtn").classList.add("hidden");
+      setWorkStateUi("Trabajando");
+      startGpsWatch();
+    } else {
+      $("beginWorkBtn").classList.remove("hidden");
+      $("stopWorkBtn").classList.add("hidden");
+      $("continueWorkBtn").classList.add("hidden");
+      setWorkStateUi("Preparado");
+    }
+
+    updateLiveStats();
+    updateRouteLayers();
+    updateWindControls();
+    if(!state.tickerStarted){
+      state.tickerStarted = true;
+      tick();
+    }
+  }
+
+  function setPendingActionBusy(busy){
+    const resume = $("resumePendingWorkBtn");
+    const finish = $("finishPendingWorkBtn");
+    if(resume) resume.disabled = !!busy;
+    if(finish) finish.disabled = !!busy;
+  }
+
+  function activatePendingWorkFromReport(){
+    const w = getReportWork();
+    if(!w || workIsCompleted(w)) return null;
+    state.work = clonePlain(w);
+    ensureTimeline(state.work);
+    recoverRouteForReport(state.work);
+    state.work.status = state.work.status === "parado" ? "parado" : (state.work.startedAt ? "trabajando" : "preparado");
+    state.reportWork = null;
+    state.reportOrigin = "work";
+    state.reportHistoryIndex = null;
+    prepareWorkScreenFromState();
+    persistActiveWork();
+    saveHistorySnapshot(state.work);
+    return state.work;
+  }
+
+  function resumePendingWorkFromReport(){
+    const w = activatePendingWorkFromReport();
+    if(!w) return;
+    show("screen-work");
+  }
+
+  async function finishPendingWorkFromReport(){
+    const w = getReportWork();
+    if(!w || workIsCompleted(w)) return;
+    if(!confirm("¿Terminar ahora este trabajo pendiente y generar informe definitivo?")) return;
+    setPendingActionBusy(true);
+    try{
+      activatePendingWorkFromReport();
+      if(!state.work) return;
+      const now = Date.now();
+      if(shouldTrackWindForWork(state.work)) await recordAutomaticWind("fin");
+      const p = await resolveEventPosition();
+      if(state.work.status === "trabajando") closeWorkSegment(now, "Fin de tratamiento");
+      addEvent("Fin de tratamiento", "Punto final", "Trabajo finalizado desde ficha pendiente", p, now);
+      state.work.status = "finalizado";
+      state.work.finishedAt = now;
+      recoverRouteForReport(state.work);
+      freezeFinalSnapshot(state.work);
+      stopGpsWatch();
+      updateLiveStats();
+      const finalReport = normalizeWorkForReport(serializeWork(state.work), "work");
+      state.reportWork = finalReport;
+      state.reportOrigin = "work";
+      saveFinishedWork();
+      resetReportTabs();
+      show("screen-report");
+    } finally {
+      setPendingActionBusy(false);
+    }
   }
 
   function timeLabelFromMs(ms){
@@ -678,30 +811,219 @@
     return now;
   }
 
-  function timelineActiveMs(w, clock){
+  function eventKind(ev){
+    const t = String(ev?.type || "").toLowerCase();
+    if(t.includes("comienzo")) return "start";
+    if(t.includes("continu")) return "resume";
+    if(t.includes("parada")) return "stop";
+    if(t.includes("fin")) return "finish";
+    return "";
+  }
+
+  function sortedTimelineEvents(w){
+    return (Array.isArray(w?.events) ? w.events : [])
+      .map(ev => ({...ev, _ms:eventMs(ev), _kind:eventKind(ev)}))
+      .filter(ev => ev._ms && ev._kind)
+      .sort((a,b) => a._ms - b._ms);
+  }
+
+  function stopReasonFromEvent(ev){
+    return String(ev?.label || ev?.notes || ev?.type || "Parada").trim() || "Parada";
+  }
+
+  function buildTimelineFromEvents(w, clock=Date.now(), options={}){
+    const events = sortedTimelineEvents(w);
+    const startEv = events.find(ev => ev._kind === "start");
+    const started = toMs(w?.startedAt) || startEv?._ms || null;
+    if(!started) return null;
+
+    const clockMs = toMs(clock) || Date.now();
+    let finished = toMs(w?.finishedAt) || toMs(w?.finalSnapshot?.finishedAt) || null;
+    const finishEv = events.slice().reverse().find(ev => ev._kind === "finish");
+    if(!finished && finishEv) finished = finishEv._ms;
+    const endLimit = finished || clockMs;
+    const includeOpen = options.includeOpen !== false;
+
+    let phase = "active";
+    let cursor = started;
+    let stopOpenedBy = null;
+    const segments = [];
+    const stops = [];
+    let activeMs = 0;
+    let stoppedMs = 0;
+
+    const addSegment = (start, end, reason="") => {
+      start = toMs(start); end = toMs(end);
+      if(!start || !end || end < start) return;
+      const ms = Math.max(0, end - start);
+      activeMs += ms;
+      segments.push({
+        id: "seg-evt-" + start + "-" + segments.length,
+        index: segments.length + 1,
+        startAt: start,
+        startLabel: timeLabelFromMs(start),
+        endAt: end,
+        endLabel: timeLabelFromMs(end),
+        activeMs: ms,
+        closeReason: reason || ""
+      });
+    };
+
+    const addStop = (start, end, ev=null) => {
+      start = toMs(start); end = toMs(end);
+      if(!start || !end || end < start) return;
+      const ms = Math.max(0, end - start);
+      stoppedMs += ms;
+      stops.push({
+        id: "stop-evt-" + start + "-" + stops.length,
+        eventId: ev?.id || null,
+        at: start,
+        timeLabel: timeLabelFromMs(start),
+        reason: stopReasonFromEvent(ev),
+        refillNumber: ev?.refillNumber || null,
+        resumedAt: end,
+        resumedLabel: timeLabelFromMs(end),
+        stoppedMs: ms
+      });
+    };
+
+    for(const ev of events){
+      const ms = ev._ms;
+      if(ms < started) continue;
+      if(finished && ms > finished) continue;
+      if(ev._kind === "start") continue;
+
+      if(ev._kind === "stop"){
+        if(phase === "active"){
+          addSegment(cursor, ms, stopReasonFromEvent(ev));
+          phase = "stopped";
+          cursor = ms;
+          stopOpenedBy = ev;
+        }
+        continue;
+      }
+
+      if(ev._kind === "resume"){
+        if(phase === "stopped"){
+          addStop(cursor, ms, stopOpenedBy);
+          phase = "active";
+          cursor = ms;
+          stopOpenedBy = null;
+        }
+        continue;
+      }
+
+      if(ev._kind === "finish"){
+        finished = ms;
+        if(phase === "active") addSegment(cursor, ms, ev.label || "Fin");
+        else if(phase === "stopped") addStop(cursor, ms, stopOpenedBy || ev);
+        phase = "finished";
+        cursor = ms;
+        stopOpenedBy = null;
+        break;
+      }
+    }
+
+    if(includeOpen && phase !== "finished"){
+      if(phase === "active" && (w?.status === "trabajando" || finished)){
+        addSegment(cursor, endLimit, finished ? "Fin" : "en curso");
+      } else if(phase === "stopped" && (w?.status === "parado" || finished)){
+        addStop(cursor, endLimit, stopOpenedBy);
+      }
+    }
+
+    const elapsedEnd = finished || (includeOpen ? endLimit : lastKnownWorkAt(w) || endLimit);
+    return {
+      source: "events",
+      startedAt: started,
+      finishedAt: finished,
+      activeMs: Math.max(0, activeMs),
+      stoppedMs: Math.max(0, stoppedMs),
+      elapsedMs: started ? Math.max(0, elapsedEnd - started) : Math.max(0, activeMs + stoppedMs),
+      segments,
+      stops,
+      currentActiveMs: phase === "active" && includeOpen ? Math.max(0, endLimit - cursor) : 0,
+      currentStoppedMs: phase === "stopped" && includeOpen ? Math.max(0, endLimit - cursor) : 0
+    };
+  }
+
+  function buildTimelineFromLogs(w, clock=Date.now(), options={}){
     ensureTimeline(w);
-    const endClock = toMs(clock) || Date.now();
-    const fromSegments = (w.segments || []).reduce((sum, seg) => {
+    const clockMs = toMs(clock) || Date.now();
+    const started = toMs(w?.startedAt) || toMs((w?.segments || [])[0]?.startAt) || null;
+    const finished = toMs(w?.finishedAt) || toMs(w?.finalSnapshot?.finishedAt) || null;
+    const includeOpen = options.includeOpen !== false;
+    const endLimit = finished || clockMs;
+
+    const segments = (w?.segments || []).map((seg, i) => {
       const start = toMs(seg.startAt);
-      const end = toMs(seg.endAt);
-      if(start && end) return sum + Math.max(0, end - start);
-      if(start && w.status === "trabajando") return sum + Math.max(0, endClock - start);
-      return sum + Math.max(0, Number(seg.activeMs) || 0);
-    }, 0);
-    return Math.max(fromSegments, Number(w.activeMs) || 0);
+      const rawEnd = toMs(seg.endAt);
+      const open = start && !rawEnd && includeOpen && (w?.status === "trabajando" || finished);
+      const end = rawEnd || (open ? endLimit : null);
+      const ms = start && end ? Math.max(0, end - start) : Math.max(0, Number(seg.activeMs) || 0);
+      return {
+        ...seg,
+        index: i + 1,
+        startAt: start || seg.startAt,
+        startLabel: seg.startLabel || (start ? timeLabelFromMs(start) : "—"),
+        endAt: end || null,
+        endLabel: end ? timeLabelFromMs(end) : seg.endLabel || null,
+        activeMs: ms
+      };
+    }).filter(seg => toMs(seg.startAt));
+
+    const stops = (w?.stopLog || []).map((stop, i) => {
+      const start = toMs(stop.at);
+      const rawEnd = toMs(stop.resumedAt);
+      const open = start && !rawEnd && includeOpen && (w?.status === "parado" || finished);
+      const end = rawEnd || (open ? endLimit : null);
+      const ms = start && end ? Math.max(0, end - start) : Math.max(0, Number(stop.stoppedMs) || 0);
+      return {
+        ...stop,
+        index: i + 1,
+        at: start || stop.at,
+        timeLabel: stop.timeLabel || (start ? timeLabelFromMs(start) : "—"),
+        resumedAt: end || null,
+        resumedLabel: end ? timeLabelFromMs(end) : stop.resumedLabel || null,
+        stoppedMs: ms
+      };
+    }).filter(stop => toMs(stop.at));
+
+    let activeMs = segments.reduce((sum, seg) => sum + Math.max(0, Number(seg.activeMs) || 0), 0);
+    let stoppedMs = stops.reduce((sum, stop) => sum + Math.max(0, Number(stop.stoppedMs) || 0), 0);
+    if(!segments.length) activeMs = Math.max(0, Number(w?.activeMs) || 0);
+    if(!stops.length) stoppedMs = Math.max(0, Number(w?.stoppedMs) || 0);
+    const elapsedEnd = finished || (includeOpen ? endLimit : lastKnownWorkAt(w) || endLimit);
+    return {
+      source: "logs",
+      startedAt: started,
+      finishedAt: finished,
+      activeMs,
+      stoppedMs,
+      elapsedMs: started ? Math.max(0, elapsedEnd - started) : Math.max(0, activeMs + stoppedMs),
+      segments,
+      stops,
+      currentActiveMs: w?.status === "trabajando" && segments.length ? Math.max(0, Number(segments.at(-1).activeMs) || 0) : 0,
+      currentStoppedMs: w?.status === "parado" && stops.length ? Math.max(0, Number(stops.at(-1).stoppedMs) || 0) : 0
+    };
+  }
+
+  function workTimeline(w, clock=Date.now(), options={}){
+    const fromEvents = buildTimelineFromEvents(w, clock, options);
+    if(fromEvents && ((w?.events || []).some(ev => eventKind(ev)))) return fromEvents;
+    return buildTimelineFromLogs(w, clock, options);
+  }
+
+  function timelineActiveMs(w, clock){
+    const tl = workTimeline(w, clock, {includeOpen:true});
+    if(tl && (tl.segments.length || tl.activeMs)) return Math.max(0, tl.activeMs);
+    return Math.max(0, Number(w?.finalSnapshot?.activeMs) || Number(w?.activeMs) || 0);
   }
 
   function timelineStoppedMs(w, clock){
-    ensureTimeline(w);
-    const endClock = toMs(clock) || Date.now();
-    const fromStops = (w.stopLog || []).reduce((sum, stop) => {
-      const start = toMs(stop.at);
-      const end = toMs(stop.resumedAt);
-      if(start && end) return sum + Math.max(0, end - start);
-      if(start && w.status === "parado") return sum + Math.max(0, endClock - start);
-      return sum + Math.max(0, Number(stop.stoppedMs) || 0);
-    }, 0);
-    return Math.max(fromStops, Number(w.stoppedMs) || 0);
+    const tl = workTimeline(w, clock, {includeOpen:true});
+    if(tl && (tl.stops.length || tl.stoppedMs)) return Math.max(0, tl.stoppedMs);
+    return Math.max(0, Number(w?.finalSnapshot?.stoppedMs) || Number(w?.stoppedMs) || 0);
   }
 
   function inferFinishedAt(w){
@@ -742,23 +1064,22 @@
   function buildFinalSnapshot(w){
     if(!w) return null;
     ensureTimeline(w);
-    const started = toMs(w.startedAt);
+    const started = toMs(w.startedAt) || eventMs(eventByName(w, "comienzo"));
     const finished = inferFinishedAt(w) || lastKnownWorkAt(w) || started || Date.now();
     closeOpenTimelineForFinal(w, finished);
-    const active = timelineActiveMs(w, finished);
-    const stopped = timelineStoppedMs(w, finished);
-    const elapsed = started ? Math.max(0, finished - started) : Math.max(0, active + stopped);
+    const tl = workTimeline(w, finished, {includeOpen:true});
     return {
       frozenAt: new Date().toISOString(),
-      startedAt: w.startedAt || null,
+      startedAt: started || w.startedAt || null,
       finishedAt: w.finishedAt || (finished ? finished : null),
-      activeMs: active,
-      stoppedMs: stopped,
-      elapsedMs: elapsed,
+      activeMs: Math.max(0, tl?.activeMs || 0),
+      stoppedMs: Math.max(0, tl?.stoppedMs || 0),
+      elapsedMs: Math.max(0, tl?.elapsedMs || ((started && finished) ? finished - started : 0)),
       distanceM: w.distanceM || 0,
       refills: w.refills || 0,
-      stops: (w.stopLog || []).length || w.stops || 0,
-      incidents: (w.incidents || []).length || 0
+      stops: (tl?.stops || w.stopLog || []).length || w.stops || 0,
+      incidents: (w.incidents || []).length || 0,
+      timeSource: tl?.source || "logs"
     };
   }
 
@@ -834,41 +1155,31 @@
   }
 
   function currentSegmentMs(w, now=Date.now(), options={}){
-    ensureTimeline(w);
     const clock = options.live ? liveClock(w, now) : reportClock(w, now);
-    const open = (w.segments || []).find(s => !s.endAt);
-    if(open && w.status === "trabajando") return Math.max(0, clock - (open.startAt || clock));
-    const last = (w.segments || []).at(-1);
-    return Math.max(0, last?.activeMs || 0);
+    const tl = workTimeline(w, clock, {includeOpen:true});
+    if(w?.status === "parado") return Math.max(0, tl.currentStoppedMs || (tl.stops.at(-1)?.stoppedMs || 0));
+    if(w?.status === "trabajando") return Math.max(0, tl.currentActiveMs || (tl.segments.at(-1)?.activeMs || 0));
+    return Math.max(0, tl.segments.at(-1)?.activeMs || 0);
   }
 
   function activeElapsedMs(w, now=Date.now(), options={}){
-    ensureTimeline(w);
-    if(workIsCompleted(w) && w.finalSnapshot && isFinite(Number(w.finalSnapshot.activeMs))){
+    const clock = options.live ? liveClock(w, now) : reportClock(w, now);
+    const tl = workTimeline(w, clock, {includeOpen:true});
+    if(tl && (tl.segments.length || tl.activeMs)) return Math.max(0, tl.activeMs);
+    if(workIsCompleted(w) && w?.finalSnapshot && isFinite(Number(w.finalSnapshot.activeMs))){
       return Math.max(0, Number(w.finalSnapshot.activeMs));
     }
-    const clock = options.live ? liveClock(w, now) : reportClock(w, now);
-    if((w.segments || []).length){
-      return (w.segments || []).reduce((sum, seg) => {
-        if(!seg.endAt && w.status === "trabajando") return sum + Math.max(0, clock - (seg.startAt || clock));
-        return sum + Math.max(0, seg.activeMs || 0);
-      }, 0);
-    }
-    let ms = w?.activeMs || 0;
-    if(w?.status === "trabajando" && w.lastSegmentAt) ms += Math.max(0, clock - w.lastSegmentAt);
-    return Math.max(0, ms);
+    return Math.max(0, Number(w?.activeMs) || 0);
   }
 
   function stoppedElapsedMs(w, now=Date.now(), options={}){
-    ensureTimeline(w);
-    if(workIsCompleted(w) && w.finalSnapshot && isFinite(Number(w.finalSnapshot.stoppedMs))){
+    const clock = options.live ? liveClock(w, now) : reportClock(w, now);
+    const tl = workTimeline(w, clock, {includeOpen:true});
+    if(tl && (tl.stops.length || tl.stoppedMs)) return Math.max(0, tl.stoppedMs);
+    if(workIsCompleted(w) && w?.finalSnapshot && isFinite(Number(w.finalSnapshot.stoppedMs))){
       return Math.max(0, Number(w.finalSnapshot.stoppedMs));
     }
-    const clock = options.live ? liveClock(w, now) : reportClock(w, now);
-    const logged = (w.stopLog || []).reduce((sum, stop) => sum + Math.max(0, stop.stoppedMs || 0), 0);
-    let ms = Math.max(w?.stoppedMs || 0, logged);
-    if(w?.status === "parado" && w.pausedAt) ms += Math.max(0, clock - w.pausedAt);
-    return ms;
+    return Math.max(0, Number(w?.stoppedMs) || 0);
   }
 
   function markCurrentStopResumed(now=Date.now()){
@@ -914,7 +1225,7 @@
       state.work.status = "trabajando";
       state.work.startedAt = now;
       state.work.lastSegmentAt = now;
-      state.work.nextWindPromptAt = now + 30*60*1000;
+      state.work.nextWindPromptAt = shouldTrackWindForWork(state.work) ? now : null;
       ensureTimeline(state.work);
       openWorkSegment(now);
       addEvent("Comienzo", "Punto inicial", "Inicio del trabajo", p, now);
@@ -932,7 +1243,8 @@
       updateLiveStats();
       persistActiveWork();
       centerWorkMapOnTractor(false);
-      setTimeout(() => promptWindReading(false, "Registrar viento inicial"), 600);
+      updateWindControls();
+      if(shouldTrackWindForWork(state.work)) setTimeout(() => recordAutomaticWind("inicio"), 600);
       if(!state.tickerStarted){
         state.tickerStarted = true;
         tick();
@@ -982,63 +1294,228 @@
     return `${n.toFixed(n >= 10 ? 0 : 1).replace(".", ",")} km/h`;
   }
 
+  function normalizePlainText(value){
+    return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function isPhytosanitaryWorkType(type){
+    const t = normalizePlainText(type);
+    return t.includes("fitosanit");
+  }
+
+  function shouldTrackWindForWork(w){
+    return isPhytosanitaryWorkType(w?.type || state.workType);
+  }
+
+  function windDirectionText(deg){
+    const n = Number(deg);
+    if(!isFinite(n)) return "—";
+    const normalized = ((n % 360) + 360) % 360;
+    const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"];
+    const idx = Math.round(normalized / 22.5) % 16;
+    return `${dirs[idx]} (${Math.round(normalized)}°)`;
+  }
+
+  function formatWindReading(reading){
+    if(!reading) return "—";
+    if(reading.status === "error"){
+      return "Sin dato automático";
+    }
+    const parts = [formatWind(reading.kmh)];
+    if(isFinite(Number(reading.directionDeg))) parts.push(windDirectionText(reading.directionDeg));
+    if(isFinite(Number(reading.gustKmh))) parts.push(`racha ${formatWind(reading.gustKmh)}`);
+    return parts.filter(Boolean).join(" · ");
+  }
+
   function windStats(readings){
-    const arr = (readings || []).map(r => Number(r.kmh)).filter(v => isFinite(v));
-    if(!arr.length) return { latest:null, avg:null, max:null, count:0 };
+    const validReadings = (readings || []).filter(r => isFinite(Number(r.kmh)));
+    const arr = validReadings.map(r => Number(r.kmh));
+    if(!arr.length) return { latest:null, avg:null, max:null, count:0, failed:(readings || []).filter(r => r.status === "error").length, latestReading:null };
     return {
       latest: arr[arr.length-1],
       avg: arr.reduce((a,b)=>a+b,0)/arr.length,
       max: Math.max(...arr),
-      count: arr.length
+      count: arr.length,
+      failed: (readings || []).filter(r => r.status === "error").length,
+      latestReading: validReadings[validReadings.length - 1] || null
     };
+  }
+
+  function updateWindControls(){
+    const btn = $("windReadingBtn");
+    if(!btn) return;
+    const active = shouldTrackWindForWork(state.work);
+    btn.classList.toggle("hidden", !active);
+    const small = btn.querySelector("small");
+    if(small) small.textContent = active ? "Viento auto" : "Viento";
+    btn.title = active ? "Actualizar ahora el viento automáticamente" : "Viento no aplicable a este tipo de trabajo";
+    btn.disabled = !active;
   }
 
   function updateWindUi(){
     const el = $("windSpeedValue");
     if(!el) return;
-    const stats = windStats(state.work?.windReadings || []);
-    el.textContent = formatWind(stats.latest);
+    updateWindControls();
+    if(!shouldTrackWindForWork(state.work)){
+      el.textContent = "No aplica";
+      return;
+    }
+    const readings = state.work?.windReadings || [];
+    const stats = windStats(readings);
+    const last = readings[readings.length - 1] || null;
+    if(last?.status === "error" && !stats.latestReading){
+      el.textContent = "Sin dato";
+      return;
+    }
+    if(stats.latestReading){
+      const dir = isFinite(Number(stats.latestReading.directionDeg)) ? ` · ${windDirectionText(stats.latestReading.directionDeg).split(" ")[0]}` : "";
+      el.textContent = `${formatWind(stats.latestReading.kmh)}${dir}`;
+    } else {
+      el.textContent = "Pendiente";
+    }
   }
 
-  function promptWindReading(auto=false, title="Registrar viento"){
+  function windCoordinatesForWork(w){
+    const candidates = [];
+    const push = (lat, lng, source) => {
+      const la = Number(lat), lo = Number(lng);
+      if(isFinite(la) && isFinite(lo)) candidates.push({lat:la, lng:lo, coordinateSource:source});
+    };
+    push(state.currentPos?.lat, state.currentPos?.lng, "GPS actual del dispositivo");
+    const lastClean = (w?.pointsClean || []).slice().reverse().find(isValidRoutePoint);
+    push(lastClean?.lat, lastClean?.lng, "último punto GPS depurado");
+    const lastOriginal = (w?.pointsOriginal || []).slice().reverse().find(isValidRoutePoint);
+    push(lastOriginal?.lat, lastOriginal?.lng, "último punto GPS original");
+    const startEvent = eventByName(w, "comienzo");
+    push(startEvent?.lat, startEvent?.lng, "punto de comienzo");
+    const pairs = featureCoordinatePairs(w?.parcelFeature || findParcelFeatureByName(w?.parcel));
+    if(pairs.length){
+      const lat = pairs.reduce((s,p)=>s+Number(p.lat),0) / pairs.length;
+      const lng = pairs.reduce((s,p)=>s+Number(p.lng),0) / pairs.length;
+      push(lat, lng, "centro aproximado de la parcela");
+    }
+    return candidates[0] || null;
+  }
+
+  function buildWindApiUrl(coords){
+    const params = new URLSearchParams({
+      latitude: coords.lat.toFixed(6),
+      longitude: coords.lng.toFixed(6),
+      current: "wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+      wind_speed_unit: "kmh",
+      timezone: "auto"
+    });
+    return `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+  }
+
+  function pushWindReading(reading){
     if(!state.work) return;
-    if(state.windPromptOpen) return;
-    state.windPromptOpen = true;
+    state.work.windReadings = state.work.windReadings || [];
+    state.work.windReadings.push(reading);
+    state.work.nextWindPromptAt = Date.now() + WIND_INTERVAL_MS;
+    updateWindUi();
+    storage.set(LS.active, state.work);
+  }
+
+  async function recordAutomaticWind(reason="periodico", options={}){
+    if(!state.work || !shouldTrackWindForWork(state.work)) return null;
+    if(state.windFetchInProgress) return null;
+    state.windFetchInProgress = true;
+    const now = Date.now();
+    state.work.nextWindPromptAt = now + WIND_INTERVAL_MS;
     try{
-      const stats = windStats(state.work.windReadings || []);
-      const base = stats.latest !== null ? String(stats.latest).replace(".", ",") : "";
-      const raw = prompt(`${title}. Velocidad del viento en km/h:`, base);
-      state.work.nextWindPromptAt = Date.now() + 30*60*1000;
-      if(raw === null || String(raw).trim() === ""){
-        storage.set(LS.active, state.work);
-        return;
+      const coords = windCoordinatesForWork(state.work);
+      if(!coords){
+        const reading = {
+          at: new Date(now).toISOString(),
+          timeLabel: timeLabelFromMs(now),
+          kmh: null,
+          directionDeg: null,
+          directionText: "—",
+          gustKmh: null,
+          automatic: true,
+          autoPrompt: true,
+          source: WIND_SOURCE_NAME,
+          sourceDetail: WIND_SOURCE_DETAIL,
+          status: "error",
+          error: "Sin coordenadas GPS o de parcela suficientes para consultar viento.",
+          reason
+        };
+        pushWindReading(reading);
+        return reading;
       }
-      const value = Number(String(raw).replace(",", "."));
-      if(!isFinite(value) || value < 0 || value > 150){
-        toast("Valor de viento no válido. Introduce km/h entre 0 y 150.");
-        storage.set(LS.active, state.work);
-        return;
-      }
+
+      const controller = window.AbortController ? new AbortController() : null;
+      const timeout = controller ? setTimeout(() => controller.abort(), WIND_FETCH_TIMEOUT_MS) : null;
+      const url = buildWindApiUrl(coords);
+      const response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller ? controller.signal : undefined
+      });
+      if(timeout) clearTimeout(timeout);
+      if(!response.ok) throw new Error(`Respuesta meteorológica ${response.status}`);
+      const data = await response.json();
+      const current = data.current || data.current_weather || {};
+      const kmh = Number(current.wind_speed_10m ?? current.windspeed);
+      const directionDeg = Number(current.wind_direction_10m ?? current.winddirection);
+      const gustKmh = Number(current.wind_gusts_10m);
+      if(!isFinite(kmh)) throw new Error("La respuesta no incluye velocidad de viento válida.");
+
       const reading = {
-        at: new Date().toISOString(),
-        timeLabel: new Date().toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}),
-        kmh: value,
-        autoPrompt: !!auto
+        at: new Date(now).toISOString(),
+        timeLabel: timeLabelFromMs(now),
+        weatherTime: current.time || null,
+        kmh,
+        directionDeg: isFinite(directionDeg) ? directionDeg : null,
+        directionText: windDirectionText(directionDeg),
+        gustKmh: isFinite(gustKmh) ? gustKmh : null,
+        automatic: true,
+        autoPrompt: true,
+        source: WIND_SOURCE_NAME,
+        sourceDetail: WIND_SOURCE_DETAIL,
+        provider: "Open-Meteo",
+        status: "ok",
+        reason,
+        lat: coords.lat,
+        lng: coords.lng,
+        coordinateSource: coords.coordinateSource,
+        modelled: true
       };
-      state.work.windReadings = state.work.windReadings || [];
-      state.work.windReadings.push(reading);
-      updateWindUi();
-      storage.set(LS.active, state.work);
+      pushWindReading(reading);
+      if(options.notify) toast(`Viento actualizado: ${formatWindReading(reading)}`);
+      return reading;
+    }catch(err){
+      const reading = {
+        at: new Date(now).toISOString(),
+        timeLabel: timeLabelFromMs(now),
+        kmh: null,
+        directionDeg: null,
+        directionText: "—",
+        gustKmh: null,
+        automatic: true,
+        autoPrompt: true,
+        source: WIND_SOURCE_NAME,
+        sourceDetail: WIND_SOURCE_DETAIL,
+        provider: "Open-Meteo",
+        status: "error",
+        error: err?.name === "AbortError" ? "Tiempo de espera agotado al consultar la fuente meteorológica." : (err?.message || "No se pudo consultar la fuente meteorológica."),
+        reason
+      };
+      pushWindReading(reading);
+      if(options.notify) toast(`No se pudo actualizar el viento: ${reading.error}`);
+      return reading;
     }finally{
-      state.windPromptOpen = false;
+      state.windFetchInProgress = false;
     }
   }
 
   function checkWindPrompt(){
-    if(!state.work || state.work.status !== "trabajando") return;
-    if(!state.work.nextWindPromptAt) state.work.nextWindPromptAt = Date.now() + 30*60*1000;
-    if(Date.now() >= state.work.nextWindPromptAt) promptWindReading(true, "Registro periódico de viento");
+    if(!state.work || state.work.status !== "trabajando" || !shouldTrackWindForWork(state.work)) return;
+    if(!state.work.nextWindPromptAt) state.work.nextWindPromptAt = Date.now();
+    if(Date.now() >= state.work.nextWindPromptAt) recordAutomaticWind("periodico");
   }
+
   function onGpsError(err){
     $("liveAccuracy").textContent = "Error";
   }
@@ -1205,6 +1682,7 @@
     const p = await resolveEventPosition();
 
     if(reason === "Fin de tratamiento de la parcela"){
+      if(shouldTrackWindForWork(state.work)) await recordAutomaticWind("fin");
       closeWorkSegment(now, "Fin de tratamiento");
       addEvent("Fin de tratamiento", "Punto final", "Parcela finalizada", p, now);
       state.work.status = "finalizado";
@@ -1260,6 +1738,7 @@
 
   async function continueWork(){
     if(!state.work || state.work.status !== "parado") return;
+    startGpsWatch();
     const now = Date.now();
     const p = await resolveEventPosition();
     if(state.work.pausedAt) state.work.stoppedMs = (state.work.stoppedMs || 0) + Math.max(0, now - state.work.pausedAt);
@@ -1286,7 +1765,8 @@
   function tick(){
     if(state.work){
       const now = Date.now();
-      $("totalTime").textContent = fmtTime(activeElapsedMs(state.work, now, {live:true}));
+      const liveTimeline = workTimeline(state.work, liveClock(state.work, now), {includeOpen:true});
+      $("totalTime").textContent = fmtTime(liveTimeline.elapsedMs);
       $("partialTime").textContent = fmtTime(currentSegmentMs(state.work, now, {live:true}));
       checkWindPrompt();
     }
@@ -1594,14 +2074,14 @@
   }
 
   function resetReportTabs(){
-    qsa(".tab").forEach(t => t.classList.remove("active"));
-    const first = document.querySelector('[data-report-tab="summary"]');
-    if(first) first.classList.add("active");
+    // Beta v9.4: la pantalla de informe ya no usa pestañas.
+    // Se conserva la función para no romper llamadas existentes.
   }
 
-  function openReportForWork(work, origin="work"){
+  function openReportForWork(work, origin="work", historyIndex=null){
     state.reportWork = normalizeWorkForReport(work, origin);
     state.reportOrigin = origin;
+    state.reportHistoryIndex = historyIndex;
     resetReportTabs();
     show("screen-report");
   }
@@ -1612,13 +2092,15 @@
   }
 
   function reportTotalMs(w){
-    const started = toMs(w?.startedAt);
-    if(!started) return 0;
+    if(!w) return 0;
+    const clock = reportClock(w);
+    const tl = workTimeline(w, clock, {includeOpen:true});
+    if(tl && (tl.startedAt || tl.elapsedMs)) return Math.max(0, tl.elapsedMs);
     if(workIsCompleted(w) && w.finalSnapshot && isFinite(Number(w.finalSnapshot.elapsedMs))){
       return Math.max(0, Number(w.finalSnapshot.elapsedMs));
     }
-    const clock = reportClock(w);
-    return Math.max(0, clock - started);
+    const started = toMs(w?.startedAt);
+    return started ? Math.max(0, clock - started) : 0;
   }
 
   function reportEffectiveActiveMs(w){
@@ -1643,25 +2125,43 @@
     return `<div class="report-kpi"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong>${note ? `<small>${escapeHtml(note)}</small>` : ""}</div>`;
   }
 
+  function bindReportFinalActions(w){
+    const shareBtn = $("shareFinalReportBtn");
+    const printBtn = $("printFinalReportBtn");
+    if(shareBtn) shareBtn.onclick = () => shareFinalReport(w);
+    if(printBtn) printBtn.onclick = () => printReportPdf(w);
+  }
+
   function renderReport(){
     try{
       const w = getReportWork();
       if(!w){
+        if($("reportTitle")) $("reportTitle").textContent = "Informe de trabajo";
+        const pendingActions = $("pendingWorkActions");
+        if(pendingActions) pendingActions.classList.add("hidden");
+        const finalActions = $("reportFinalActions");
+        if(finalActions) finalActions.classList.add("hidden");
         $("reportContent").innerHTML = reportEmpty("No hay trabajo para informar.");
         $("reportMap").classList.add("hidden");
         return;
       }
       ensureTimeline(w);
-      $("reportSubtitle").textContent = `${w.parcel} · ${w.type}`;
       const completed = workIsCompleted(w);
-      $("reportStatusChip").textContent = completed ? "Informe definitivo" : "Resumen provisional · tramos no cerrados";
+      if($("reportTitle")) $("reportTitle").textContent = completed ? "Informe de trabajo" : "Trabajo pendiente";
+      $("reportSubtitle").textContent = completed ? `${w.parcel} · ${w.type}` : `${w.parcel} · ${w.type} · pendiente de terminar`;
+      $("reportStatusChip").textContent = completed ? "Informe definitivo" : "Trabajo pendiente · sin finalizar";
       $("reportStatusChip").style.background = completed ? "#eaf6e9" : "#fff4e6";
       $("reportStatusChip").style.color = completed ? "#2f7d44" : "#8b520e";
-      $("reportTotal").textContent = fmtTime(reportEffectiveActiveMs(w));
+      const pendingActions = $("pendingWorkActions");
+      if(pendingActions) pendingActions.classList.toggle("hidden", completed);
+      const finalActions = $("reportFinalActions");
+      if(finalActions) finalActions.classList.remove("hidden");
+      bindReportFinalActions(w);
+      $("reportTotal").textContent = fmtTime(reportTotalMs(w));
       $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
       $("reportRefills").textContent = String(w.refills || 0);
       const ws = windStats(w.windReadings || []);
-      $("reportWind").textContent = ws.latest === null ? "—" : formatWind(ws.latest);
+      $("reportWind").textContent = shouldTrackWindForWork(w) ? (ws.latestReading ? formatWindReading(ws.latestReading) : "Pendiente") : "No aplica";
 
       renderReportSummary(w);
       const recoveredRoute = recoverRouteForReport(w);
@@ -1759,39 +2259,126 @@
   }
 
   function renderReportSummary(w){
+    ensureTimeline(w);
     const day = w.day || {};
     const ws = windStats(w.windReadings || []);
     const completed = workIsCompleted(w);
-    const status = completed ? "Finalizado" : "Provisional";
+    const status = completed ? "Finalizado" : "Pendiente de terminar";
+    const avg = reportAverageSpeed(w);
+    const started = dateTimeLabelFromMs(w.startedAt);
+    const finished = w.finishedAt ? dateTimeLabelFromMs(w.finishedAt) : "—";
+    const clock = reportClock(w);
+    const tl = workTimeline(w, clock, {includeOpen:true});
+    const segments = tl.segments.length ? tl.segments : (w.segments || []);
+    const stops = tl.stops.length ? tl.stops : (w.stopLog || []);
+    const gps = w.gpsStats || {};
+    const cal = w.gpsCalibration || {};
+    const avgAcc = gps.count ? (gps.sum / gps.count) : null;
+    const observations = (day.notes || w.notes || "").trim ? String(day.notes || w.notes || "").trim() : "";
+
+    const segmentRows = segments.map((seg, i) => {
+      const end = seg.endAt ? (seg.endLabel || timeLabelFromMs(seg.endAt)) : (w.status === "trabajando" ? "en curso" : "—");
+      const ms = Math.max(0, Number(seg.activeMs) || 0);
+      const reason = seg.closeReason ? ` · cierre: ${escapeHtml(seg.closeReason)}` : "";
+      return `<div><span>Tramo ${i+1}: ${escapeHtml(seg.startLabel || (seg.startAt ? timeLabelFromMs(seg.startAt) : "—"))} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
+    }).join("");
+
+    const stopRows = stops.map((stop, i) => {
+      const duration = stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" ? fmtTime(Math.max(0, clock - (toMs(stop.at) || clock))) : "—");
+      const resume = stop.resumedLabel ? ` · continúa ${escapeHtml(stop.resumedLabel)}` : "";
+      return `<div><span>Parada ${i+1}: ${escapeHtml(stop.timeLabel || (stop.at ? timeLabelFromMs(stop.at) : "—"))} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
+    }).join("");
+
+    const eventRows = (w.events || []).map(ev => `<div class="report-event"><strong>${escapeHtml(ev.type || "Evento")}</strong><span>${escapeHtml(ev.timeLabel || timeLabelHMS(eventMs(ev)))} · ${escapeHtml(ev.label || "—")}</span><small>GPS ${formatMeters(ev.accuracy)}${ev.notes ? " · " + escapeHtml(ev.notes) : ""}</small></div>`).join("");
+
+    const incidentRows = (w.incidents || []).map(i => `<div class="report-event"><strong>${escapeHtml(i.type || "Incidencia")}</strong><span>${escapeHtml(i.timeLabel || "—")} · ${escapeHtml(i.status || "—")}</span><small>GPS ${formatMeters(i.accuracy)}${i.gpsMissing ? " · Sin coordenada" : ""}${i.notes ? " · " + escapeHtml(i.notes) : ""}</small>${i.photo ? `<img class="incident-thumb" src="${i.photo}" alt="Foto incidencia" />` : ""}</div>`).join("");
+
+    const windRows = (w.windReadings || []).map(r => {
+      if(r.status === "error"){
+        return `<div class="report-event"><strong>Sin dato automático</strong><span>${escapeHtml(r.timeLabel || "—")}</span><small>${escapeHtml(r.error || "No se pudo consultar la fuente meteorológica.")} · Fuente: ${escapeHtml(r.source || WIND_SOURCE_NAME)}</small></div>`;
+      }
+      return `<div class="report-event"><strong>${escapeHtml(formatWindReading(r))}</strong><span>${escapeHtml(r.timeLabel || "—")}${r.weatherTime ? " · dato " + escapeHtml(r.weatherTime) : ""}</span><small>Automático cada 30 min · Fuente: ${escapeHtml(r.source || WIND_SOURCE_NAME)} · Ubicación: ${escapeHtml(r.coordinateSource || "—")}</small></div>`;
+    }).join("");
+
+    const windBlock = shouldTrackWindForWork(w)
+      ? `<div class="report-section-title">Viento durante la aplicación</div>
+         ${ws.max !== null && ws.max >= 20 ? `<div class="report-warning"><strong>Aviso viento:</strong> se registró un valor máximo de ${formatWind(ws.max)}. Revisar idoneidad de aplicación según criterio técnico y normativa aplicable.</div>` : ""}
+         ${ws.failed ? `<div class="report-warning"><strong>Intervalos sin dato:</strong> ${ws.failed} consulta(s) automática(s) no pudieron obtener viento por falta de conexión, coordenadas o respuesta válida.</div>` : ""}
+         <div class="report-grid">
+           ${reportKpi("Último", ws.latestReading ? formatWindReading(ws.latestReading) : "—")}
+           ${reportKpi("Media", ws.avg === null ? "—" : formatWind(ws.avg))}
+           ${reportKpi("Máximo", ws.max === null ? "—" : formatWind(ws.max))}
+           ${reportKpi("Registros válidos", String(ws.count))}
+           ${reportKpi("Fuente", WIND_SOURCE_NAME)}
+           ${reportKpi("Modo", "Automático cada 30 min")}
+         </div>
+         <div class="report-section-title">Registros automáticos de viento</div>
+         <div class="report-list">${windRows || reportEmpty("Sin registros automáticos todavía. La app consultará el viento al iniciar y después cada 30 minutos mientras el tratamiento fitosanitario esté activo.")}</div>`
+      : `<div class="report-section-title">Viento</div>${reportEmpty("No aplicable: el viento solo se registra en trabajos de aplicación de fitosanitarios.")}`;
+
     $("reportContent").innerHTML = `
-      <div class="scroll-box report-visual">
-        ${!workIsCompleted(w) ? `<div class="report-warning"><strong>Resumen provisional:</strong> hay un tramo sin cerrar. Los tiempos se calculan solo con registros guardados de GPS/eventos para no sumar horas en segundo plano.</div>` : ""}
+      <div class="scroll-box report-visual report-visual-complete">
+        ${!completed ? `<div class="report-warning"><strong>Trabajo pendiente:</strong> esta ficha no es un informe definitivo. Usa Retomar / continuar o Terminar trabajo para cerrarla correctamente.</div>` : ""}
         ${reportWarning(w)}
+
         <div class="report-section-title">Datos del trabajo</div>
         <div class="report-grid">
           ${reportKpi("Parcela", w.parcel || "—")}
           ${reportKpi("Labor", w.type || "—")}
           ${reportKpi("Estado", status)}
-          ${reportKpi("Inicio", w.startedAt ? new Date(w.startedAt).toLocaleTimeString("es-ES", {hour:"2-digit", minute:"2-digit"}) : "—")}
+          ${reportKpi("Fecha", dateLabelDMY(reportDateSource(w)))}
+          ${reportKpi("Inicio", started)}
+          ${reportKpi("Fin", finished)}
         </div>
+
         <div class="report-section-title">Jornada</div>
         <div class="report-list">
           <div><span>Operario</span><strong>${escapeHtml(day.operator || "—")}</strong></div>
           <div><span>Tractor</span><strong>${escapeHtml(day.tractor || "—")}</strong></div>
           <div><span>Atomizador / cisterna</span><strong>${escapeHtml(day.sprayer || "—")}</strong></div>
-          <div><span>Observaciones</span><strong>${escapeHtml(day.notes || "—")}</strong></div>
+          <div><span>Observaciones de jornada</span><strong>${escapeHtml(observations || "Sin observaciones registradas.")}</strong></div>
         </div>
-        <div class="report-section-title">Resumen visual</div>
+
+        <div class="report-section-title">Tiempos y recorrido</div>
         <div class="report-grid">
-          ${reportKpi("Tiempo acumulado", fmtTime(reportEffectiveActiveMs(w)))}
-          ${reportKpi("Transcurrido", fmtTime(reportTotalMs(w)))}
+          ${reportKpi("Tiempo activo", fmtTime(reportEffectiveActiveMs(w)))}
+          ${reportKpi("Tiempo parado", fmtTime(reportStoppedMs(w)))}
+          ${reportKpi("Tiempo total/transcurrido", fmtTime(reportTotalMs(w)))}
           ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
           ${reportKpi("Recargas", String(w.refills || 0))}
-          ${reportKpi("Viento último", ws.latest === null ? "—" : formatWind(ws.latest), ws.count ? `${ws.count} registros` : "sin registros")}
+          ${reportKpi("Paradas", String(stops.length || w.stops || 0))}
+          ${reportKpi("Incidencias", String((w.incidents || []).length))}
+          ${reportKpi("Velocidad GPS media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
         </div>
-        ${(!w.startedAt && !(w.events||[]).length) ? reportEmpty("Todavía no hay datos suficientes. El informe se completará al iniciar y registrar el trabajo.") : ""}
-      </div>
-    `;
+
+        <div class="report-section-title">Tramos de trabajo</div>
+        <div class="report-list">${segmentRows || reportEmpty("Sin tramos registrados todavía.")}</div>
+
+        <div class="report-section-title">Paradas registradas</div>
+        <div class="report-list">${stopRows || reportEmpty("Sin paradas intermedias registradas.")}</div>
+
+        <div class="report-section-title">GPS y ruta</div>
+        <div class="report-grid">
+          ${reportKpi("Ruta GPS disponible", routeAvailable(w) ? "Sí" : "No")}
+          ${reportKpi("Precisión media GPS", averageGpsAccuracyText(w))}
+          ${reportKpi("Calibración", cal.quality || "—")}
+          ${reportKpi("Mejor previa", formatMeters(cal.best))}
+          ${reportKpi("Media previa", formatMeters(cal.avg))}
+          ${reportKpi("Peor trabajo", formatMeters(gps.worst))}
+          ${reportKpi("Puntos originales", String((w.pointsOriginal || []).length))}
+          ${reportKpi("Ruta depurada", String((w.pointsClean || []).length))}
+          ${reportKpi("Dudosos", String(gps.doubtful || 0))}
+          ${reportKpi("Descartados", String(gps.discarded || 0))}
+        </div>
+
+        ${windBlock}
+
+        <div class="report-section-title">Eventos relevantes</div>
+        <div class="report-list">${eventRows || reportEmpty("Sin eventos registrados todavía.")}</div>
+
+        <div class="report-section-title">Incidencias</div>
+        <div class="report-list">${incidentRows || reportEmpty("Sin incidencias registradas.")}</div>
+      </div>`;
   }
 
   function renderReportWork(w){
@@ -1799,26 +2386,27 @@
     const avg = reportAverageSpeed(w);
     const started = dateTimeLabelFromMs(w.startedAt);
     const finished = w.finishedAt ? dateTimeLabelFromMs(w.finishedAt) : "—";
-    const segments = w.segments || [];
-    const stops = w.stopLog || [];
     const clock = reportClock(w);
+    const tl = workTimeline(w, clock, {includeOpen:true});
+    const segments = tl.segments.length ? tl.segments : (w.segments || []);
+    const stops = tl.stops.length ? tl.stops : (w.stopLog || []);
     const segmentRows = segments.map((seg, i) => {
-      const end = seg.endAt ? seg.endLabel : (w.status === "trabajando" ? "en curso" : "—");
-      const ms = !seg.endAt && w.status === "trabajando" ? Math.max(0, clock - (seg.startAt || clock)) : (seg.activeMs || 0);
+      const end = seg.endAt ? (seg.endLabel || timeLabelFromMs(seg.endAt)) : (w.status === "trabajando" ? "en curso" : "—");
+      const ms = Math.max(0, Number(seg.activeMs) || 0);
       const reason = seg.closeReason ? ` · cierre: ${escapeHtml(seg.closeReason)}` : "";
-      return `<div><span>Tramo ${i+1}: ${escapeHtml(seg.startLabel || "—")} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
+      return `<div><span>Tramo ${i+1}: ${escapeHtml(seg.startLabel || (seg.startAt ? timeLabelFromMs(seg.startAt) : "—"))} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
     }).join("");
     const stopRows = stops.map((stop, i) => {
-      const duration = stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" && stop.id === w.currentStopId ? fmtTime(Math.max(0, clock - stop.at)) : "—");
+      const duration = stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" ? fmtTime(Math.max(0, clock - (toMs(stop.at) || clock))) : "—");
       const resume = stop.resumedLabel ? ` · continúa ${escapeHtml(stop.resumedLabel)}` : "";
-      return `<div><span>Parada ${i+1}: ${escapeHtml(stop.timeLabel || "—")} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
+      return `<div><span>Parada ${i+1}: ${escapeHtml(stop.timeLabel || (stop.at ? timeLabelFromMs(stop.at) : "—"))} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
     }).join("");
     $("reportContent").innerHTML = `
       <div class="scroll-box report-visual">
         ${!workIsCompleted(w) ? `<div class="report-warning"><strong>Trabajo no finalizado:</strong> para un informe definitivo pulsa Parada → Fin de tratamiento. Este resumen no suma tiempo posterior al último registro guardado.</div>` : ""}
         <div class="report-section-title">Tiempos y recorrido</div>
         <div class="report-grid">
-          ${reportKpi("Tiempo acumulado", fmtTime(reportEffectiveActiveMs(w)))}
+          ${reportKpi("Tiempo activo", fmtTime(reportEffectiveActiveMs(w)))}
           ${reportKpi("Tiempo transcurrido", fmtTime(reportTotalMs(w)))}
           ${reportKpi("Tiempo parado", fmtTime(reportStoppedMs(w)))}
           ${reportKpi("Velocidad GPS media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
@@ -1875,22 +2463,39 @@
   }
 
   function renderReportWind(w){
+    if(!shouldTrackWindForWork(w)){
+      $("reportContent").innerHTML = `
+        <div class="scroll-box report-visual">
+          <div class="report-section-title">Viento</div>
+          ${reportEmpty("No aplicable: el viento solo se registra en trabajos de aplicación de fitosanitarios.")}
+        </div>`;
+      return;
+    }
     const readings = w.windReadings || [];
     const ws = windStats(readings);
-    const rows = readings.map(r => `<div class="report-event"><strong>${formatWind(r.kmh)}</strong><span>${escapeHtml(r.timeLabel || "—")}</span><small>${r.autoPrompt ? "Registro periódico" : "Registro manual/inicial"}</small></div>`).join("");
+    const validRows = readings.map(r => {
+      if(r.status === "error"){
+        return `<div class="report-event"><strong>Sin dato automático</strong><span>${escapeHtml(r.timeLabel || "—")}</span><small>${escapeHtml(r.error || "No se pudo consultar la fuente meteorológica.")} · Fuente: ${escapeHtml(r.source || WIND_SOURCE_NAME)}</small></div>`;
+      }
+      return `<div class="report-event"><strong>${escapeHtml(formatWindReading(r))}</strong><span>${escapeHtml(r.timeLabel || "—")}${r.weatherTime ? " · dato " + escapeHtml(r.weatherTime) : ""}</span><small>Automático cada 30 min · Fuente: ${escapeHtml(r.source || WIND_SOURCE_NAME)} · Ubicación: ${escapeHtml(r.coordinateSource || "—")}</small></div>`;
+    }).join("");
     const warning = ws.max !== null && ws.max >= 20 ? `<div class="report-warning"><strong>Aviso viento:</strong> se registró un valor máximo de ${formatWind(ws.max)}. Revisar idoneidad de aplicación según criterio técnico y normativa aplicable.</div>` : "";
+    const failed = ws.failed ? `<div class="report-warning"><strong>Intervalos sin dato:</strong> ${ws.failed} consulta(s) automática(s) no pudieron obtener viento por falta de conexión, coordenadas o respuesta válida.</div>` : "";
     $("reportContent").innerHTML = `
       <div class="scroll-box report-visual">
         ${warning}
+        ${failed}
         <div class="report-section-title">Viento durante la aplicación</div>
         <div class="report-grid">
-          ${reportKpi("Último", ws.latest === null ? "—" : formatWind(ws.latest))}
+          ${reportKpi("Último", ws.latestReading ? formatWindReading(ws.latestReading) : "—")}
           ${reportKpi("Media", ws.avg === null ? "—" : formatWind(ws.avg))}
           ${reportKpi("Máximo", ws.max === null ? "—" : formatWind(ws.max))}
-          ${reportKpi("Registros", String(ws.count))}
+          ${reportKpi("Registros válidos", String(ws.count))}
+          ${reportKpi("Fuente", WIND_SOURCE_NAME)}
+          ${reportKpi("Modo", "Automático cada 30 min")}
         </div>
-        <div class="report-section-title">Registros cada 30 minutos</div>
-        ${rows || reportEmpty("Sin registros de viento. Durante el trabajo la app pedirá el dato cada 30 minutos y también puede registrarse tocando la tarjeta Viento.")}
+        <div class="report-section-title">Registros automáticos</div>
+        ${validRows || reportEmpty("Sin registros automáticos todavía. La app consultará el viento al iniciar y después cada 30 minutos mientras el tratamiento fitosanitario esté activo.")}
       </div>`;
   }
 
@@ -1937,8 +2542,19 @@
   }
 
   function exportWindCsv(w){
-    const header = "hora,kmh,tipo_registro\n";
-    const rows = (w.windReadings || []).map(r => [r.timeLabel, r.kmh, r.autoPrompt ? "periodico" : "manual"].map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
+    const header = "hora,fecha_iso,velocidad_kmh,direccion_grados,direccion_texto,racha_kmh,fuente,estado,ubicacion,error\n";
+    const rows = (w.windReadings || []).map(r => [
+      r.timeLabel,
+      r.at,
+      r.kmh,
+      r.directionDeg,
+      r.directionText || windDirectionText(r.directionDeg),
+      r.gustKmh,
+      r.source || WIND_SOURCE_NAME,
+      r.status || "ok",
+      r.coordinateSource || "",
+      r.error || ""
+    ].map(v => `"${String(v ?? "").replaceAll('"','""')}"`).join(",")).join("\n");
     downloadBlob(safeFilename(w, "viento", "csv"), header + rows, "text/csv");
   }
 
@@ -2022,11 +2638,21 @@
   }
 
   function shareWindText(w){
+    if(!shouldTrackWindForWork(w)) return "- No aplicable: trabajo no fitosanitario";
     const readings = w?.windReadings || [];
-    if(!readings.length) return "- Sin medición directa registrada / o datos disponibles";
+    if(!readings.length) return "- Sin datos automáticos disponibles";
     const ws = windStats(readings);
-    const last = readings[readings.length - 1];
-    return `- Registros disponibles: ${ws.count}\n- Último registro: ${ws.latest === null ? "—" : formatWind(ws.latest)}${last?.timeLabel ? ` (${last.timeLabel})` : ""}`;
+    if(!ws.latestReading){
+      const failed = ws.failed ? ` (${ws.failed} consulta(s) automática(s) sin dato)` : "";
+      return `- Sin datos automáticos válidos${failed}`;
+    }
+    const lines = [
+      `- Registros automáticos válidos: ${ws.count}`,
+      `- Último registro: ${formatWindReading(ws.latestReading)}${ws.latestReading?.timeLabel ? ` (${ws.latestReading.timeLabel})` : ""}`,
+      `- Fuente: ${ws.latestReading.source || WIND_SOURCE_NAME}`
+    ];
+    if(ws.failed) lines.push(`- Consultas sin dato: ${ws.failed}`);
+    return lines.join("\n");
   }
 
   function buildShareSummaryText(w){
@@ -2142,7 +2768,13 @@
     const routeSvg = routeSvgForPrint(work);
     const events = (work.events || []).map(ev => `<tr><td>${escapeHtml(ev.timeLabel || timeLabelHMS(eventMs(ev)))}</td><td>${escapeHtml(ev.type || "—")}</td><td>${escapeHtml(ev.label || "—")}</td><td>${escapeHtml(formatMeters(ev.accuracy))}</td><td>${escapeHtml(ev.notes || "")}</td></tr>`).join("");
     const incidents = (work.incidents || []).map(inc => `<tr><td>${escapeHtml(inc.timeLabel || "—")}</td><td>${escapeHtml(inc.type || "—")}</td><td>${escapeHtml(inc.status || "—")}</td><td>${escapeHtml(formatMeters(inc.accuracy))}</td><td>${escapeHtml(inc.notes || "")}</td></tr>`).join("");
-    const windRows = (work.windReadings || []).map(r => `<tr><td>${escapeHtml(r.timeLabel || "—")}</td><td>${escapeHtml(formatWind(r.kmh))}</td><td>${escapeHtml(r.autoPrompt ? "Periódico" : "Manual/inicial")}</td></tr>`).join("");
+    const windRows = (work.windReadings || []).map(r => {
+      if(r.status === "error") return `<tr><td>${escapeHtml(r.timeLabel || "—")}</td><td>Sin dato</td><td>—</td><td>—</td><td>${escapeHtml(r.source || WIND_SOURCE_NAME)}</td><td>${escapeHtml(r.error || "Error de consulta automática")}</td></tr>`;
+      return `<tr><td>${escapeHtml(r.timeLabel || "—")}</td><td>${escapeHtml(formatWind(r.kmh))}</td><td>${escapeHtml(windDirectionText(r.directionDeg))}</td><td>${escapeHtml(isFinite(Number(r.gustKmh)) ? formatWind(r.gustKmh) : "—")}</td><td>${escapeHtml(r.source || WIND_SOURCE_NAME)}</td><td>${escapeHtml(r.coordinateSource || "—")}</td></tr>`;
+    }).join("");
+    const windSection = shouldTrackWindForWork(work)
+      ? `<h2>Viento</h2><div class="grid">${reportRowsHtml([["Último", ws.latestReading ? formatWindReading(ws.latestReading) : "—"],["Media", ws.avg === null ? "—" : formatWind(ws.avg)],["Máximo", ws.max === null ? "—" : formatWind(ws.max)],["Registros válidos", String(ws.count)],["Fuente", WIND_SOURCE_NAME],["Modo", "Automático cada 30 min"]])}</div>${windRows ? `<table><thead><tr><th>Hora</th><th>Velocidad</th><th>Dirección</th><th>Racha</th><th>Fuente</th><th>Ubicación/error</th></tr></thead><tbody>${windRows}</tbody></table>` : `<div class="warn">Sin datos automáticos disponibles.</div>`}`
+      : `<h2>Viento</h2><div class="warn">No aplicable: el viento solo se registra en tratamientos fitosanitarios.</div>`;
     const observations = (work.day && work.day.notes) ? String(work.day.notes).trim() : "Sin observaciones registradas.";
     const routeWarning = (work.distanceM || 0) > 20 && recoverRouteForReport(work).length < 2 ? "Ruta no disponible: distancia registrada sin puntos GPS suficientes." : "";
     const avgSpeed = reportAverageSpeed(work);
@@ -2150,18 +2782,48 @@
       <style>
         @page{size:A4;margin:12mm}*{box-sizing:border-box}body{margin:0;background:#f8f3e8;color:#173f2b;font-family:Georgia,'Times New Roman',serif;font-size:12.5px;line-height:1.35}.page{max-width:820px;margin:0 auto;background:#fffdf7;border:1px solid #d9c998;border-radius:18px;padding:22px}.top{border-bottom:2px solid #d9c998;padding-bottom:12px;margin-bottom:16px}h1{margin:0;color:#103f2a;font-size:28px;letter-spacing:.02em}h2{margin:18px 0 8px;color:#103f2a;font-size:18px;border-bottom:1px solid #e3d7b8;padding-bottom:5px}.sub{font-family:Arial,sans-serif;color:#6d6a5d;font-size:13px;margin-top:4px}.chip{display:inline-block;margin-top:10px;border:1px solid #a8cdb1;background:#edf7ed;color:#2f7d44;border-radius:999px;padding:5px 12px;font-weight:700}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}.row{border:1px solid #e1d4ad;border-radius:10px;padding:8px 10px;background:#fffef9;display:flex;justify-content:space-between;gap:12px}.row span{font-family:Arial,sans-serif;color:#6d6a5d}.row strong{text-align:right;color:#103f2a}.warn{border:1px solid #e1c27a;background:#fff6dd;color:#7a520b;border-radius:12px;padding:10px 12px;margin:10px 0;font-family:Arial,sans-serif}.print-map-box{border:1px solid #d9c998;border-radius:14px;padding:10px;background:#fffaf0}.print-map-title{font-weight:bold;margin-bottom:7px}.print-map-legend{display:flex;gap:14px;flex-wrap:wrap;font-family:Arial,sans-serif;font-size:10px;color:#6d6a5d;margin-top:6px}table{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;background:#fffef9}th,td{border:1px solid #e1d4ad;padding:6px;text-align:left;vertical-align:top}th{background:#f5efd9;color:#103f2a}.footer{margin-top:20px;border-top:1px solid #e3d7b8;padding-top:10px;font-family:Arial,sans-serif;color:#6d6a5d;font-size:11px}@media print{body{background:white}.page{border:0;padding:0}.no-print{display:none!important}}
       </style></head><body><main class="page">
-        <section class="top"><h1>PAZO BAION GPS - INFORME DE TRABAJO</h1><div class="sub">Generado localmente desde este dispositivo · ${escapeHtml(new Date().toLocaleString('es-ES'))}</div><div class="chip">${workIsCompleted(work) ? "Informe definitivo" : "Resumen provisional"}</div></section>
+        <section class="top"><h1>${workIsCompleted(work) ? "PAZO BAION GPS - INFORME DE TRABAJO" : "PAZO BAION GPS - TRABAJO PENDIENTE"}</h1><div class="sub">Generado localmente desde este dispositivo · ${escapeHtml(new Date().toLocaleString('es-ES'))}</div><div class="chip">${workIsCompleted(work) ? "Informe definitivo" : "Trabajo pendiente · sin finalizar"}</div></section>
         ${gpsWarnings.length ? `<div class="warn"><strong>Advertencias GPS:</strong> ${escapeHtml(gpsWarnings.join("; "))}</div>` : ""}
         ${routeWarning ? `<div class="warn"><strong>${escapeHtml(routeWarning)}</strong></div>` : ""}
-        <h2>Cabecera</h2><div class="grid">${reportRowsHtml([["Parcela", work.parcel || "—"],["Trabajo", work.type || "—"],["Fecha", dateLabelDMY(reportDateSource(work))],["Estado", workIsCompleted(work) ? "Finalizado" : "Provisional"],["Inicio", timeLabelHMS(startMs)],["Fin", timeLabelHMS(endMs)]])}</div>
+        <h2>Cabecera</h2><div class="grid">${reportRowsHtml([["Parcela", work.parcel || "—"],["Trabajo", work.type || "—"],["Fecha", dateLabelDMY(reportDateSource(work))],["Estado", workIsCompleted(work) ? "Finalizado" : "Pendiente de terminar"],["Inicio", timeLabelHMS(startMs)],["Fin", timeLabelHMS(endMs)]])}</div>
         <h2>Tiempos y recorrido</h2><div class="grid">${reportRowsHtml([["Tiempo activo", fmtTime(reportEffectiveActiveMs(work))],["Tiempo parado", fmtTime(reportStoppedMs(work))],["Tiempo total/transcurrido", fmtTime(reportTotalMs(work))],["Distancia", ((work.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km"],["Recargas", String(work.refills || 0)],["Paradas", String(stopCount)],["Incidencias", String((work.incidents || []).length)],["Velocidad GPS media", avgSpeed === null ? "—" : avgSpeed.toFixed(1).replace(".", ",") + " km/h"]])}</div>
         <h2>GPS y ruta</h2><div class="grid">${reportRowsHtml([["Ruta GPS disponible", routeAvailable(work) ? "Sí" : "No"],["Precisión media GPS", averageGpsAccuracyText(work)],["Puntos originales", String((work.pointsOriginal || []).length)],["Ruta depurada", String((work.pointsClean || []).length)]])}</div>${routeSvg || ""}
-        <h2>Viento</h2><div class="grid">${reportRowsHtml([["Último", ws.latest === null ? "—" : formatWind(ws.latest)],["Media", ws.avg === null ? "—" : formatWind(ws.avg)],["Máximo", ws.max === null ? "—" : formatWind(ws.max)],["Registros", String(ws.count)]])}</div>${windRows ? `<table><thead><tr><th>Hora</th><th>Viento</th><th>Tipo</th></tr></thead><tbody>${windRows}</tbody></table>` : `<div class="warn">Sin medición directa registrada.</div>`}
+        ${windSection}
         <h2>Eventos</h2>${events ? `<table><thead><tr><th>Hora</th><th>Tipo</th><th>Punto</th><th>GPS</th><th>Observación</th></tr></thead><tbody>${events}</tbody></table>` : `<div class="warn">Sin eventos registrados.</div>`}
         <h2>Incidencias</h2>${incidents ? `<table><thead><tr><th>Hora</th><th>Tipo</th><th>Estado</th><th>GPS</th><th>Observación</th></tr></thead><tbody>${incidents}</tbody></table>` : `<div class="warn">Sin incidencias registradas.</div>`}
         <h2>Observaciones</h2><div class="row"><span>Observaciones</span><strong>${escapeHtml(observations)}</strong></div>
         <div class="footer">Pazo Baión GPS · ${escapeHtml(VERSION)}</div>
       </main></body></html>`;
+  }
+
+  async function shareFinalReport(w){
+    try{
+      const work = normalizeWorkForReport(w, state.reportOrigin || "work") || w || {};
+      const html = printableReportHtml(work);
+      const filename = safeFilename(work, "informe_pazo_baion", "html");
+      const title = workIsCompleted(work) ? "Informe Pazo Baion GPS" : "Trabajo pendiente Pazo Baion GPS";
+      const text = buildShareSummaryText(work);
+      if(window.File && navigator.canShare){
+        const file = new File([html], filename, {type:"text/html"});
+        if(navigator.canShare({files:[file]})){
+          try{
+            await navigator.share({title, text:"Informe estructurado generado localmente desde Pazo Baión GPS.", files:[file]});
+            return;
+          }catch(err){
+            if(err && err.name === "AbortError") return;
+          }
+        }
+      }
+      if(navigator.share){
+        try{ await navigator.share({title, text}); return; }
+        catch(err){ if(err && err.name === "AbortError") return; }
+      }
+      downloadBlob(filename, html, "text/html");
+      toast("Informe generado como archivo HTML para guardar o enviar.");
+    }catch(err){
+      console.error("No se pudo compartir el informe final", err);
+      toast("No se pudo generar el informe para compartir o guardar.");
+    }
   }
 
   function printReportPdf(w){
@@ -2264,7 +2926,7 @@
       card.addEventListener("click", () => {
         const latest = storage.get(LS.history, []);
         const w = latest[Number(card.dataset.historyIndex)];
-        if(w) openReportForWork(w, "history");
+        if(w) openReportForWork(w, "history", Number(card.dataset.historyIndex));
       });
     });
     qsa("[data-history-delete]").forEach(btn => {
@@ -2305,6 +2967,35 @@
     recoverActiveWorkToHistory();
   }
 
+  function goAfterMapReady(){
+    if(!isValidParcelsGeoJSON(state.parcelsGeoJSON)){
+      toast("No hay capa de parcelas válida cargada en este dispositivo.");
+      return;
+    }
+    const day = storage.get(LS.day, null);
+    if(day && day.date === todayIso()){
+      state.dayConfig = day;
+      show("screen-parcel-select");
+      return;
+    }
+    if(day && day.date && day.date !== todayIso()){
+      const reuse = confirm("Jornada anterior detectada (" + day.date + ").\n\n¿Usar la misma configuración para hoy y continuar al mapa de parcelas?");
+      if(reuse){
+        const cfg = {...day, date: todayIso()};
+        state.dayConfig = cfg;
+        storage.set(LS.day, cfg);
+        loadSavedDayConfig();
+        show("screen-parcel-select");
+      } else {
+        loadSavedDayConfig();
+        show("screen-day-config");
+      }
+      return;
+    }
+    loadSavedDayConfig();
+    show("screen-day-config");
+  }
+
   function bind(){
     qsa("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
     qsa("[data-add-list]").forEach(b => b.addEventListener("click", () => addToList(b.dataset.addList)));
@@ -2342,14 +3033,14 @@
       }
     });
 
-    $("continueAfterMap").onclick = () => show("screen-day-config");
+    $("continueAfterMap").onclick = goAfterMapReady;
     $("useSavedMap").onclick = () => {
       const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v07", null) || storage.get("pbgps_parcel_geojson_v06", null);
       const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v07", null) || storage.get("pbgps_incident_layer_geojson_v06", null);
       if(isValidParcelsGeoJSON(gj)){
         state.parcelsGeoJSON = gj; storage.set(LS.map, gj); renderParcelPreview(gj);
         if(isValidIncidentsGeoJSON(inc)){ state.incidentsGeoJSON = inc; storage.set(LS.incidentLayer, inc); renderIncidentLayerStatus(inc); }
-        show("screen-day-config");
+        goAfterMapReady();
       }
       else toast("No hay capa de parcelas guardada en este dispositivo.");
     };
@@ -2365,6 +3056,8 @@
       if(state.reportOrigin === "history") show("screen-history");
       else show("screen-work");
     };
+    if($("resumePendingWorkBtn")) $("resumePendingWorkBtn").onclick = resumePendingWorkFromReport;
+    if($("finishPendingWorkBtn")) $("finishPendingWorkBtn").onclick = finishPendingWorkFromReport;
     $("fitAllParcels").onclick = () => {
       const b = getBoundsFromGeoJSON(state.parcelsGeoJSON);
       if(b && state.maps.all) stabilizeMap(state.maps.all, b, [25,25]);
@@ -2382,7 +3075,7 @@
     $("stopWorkBtn").onclick = openStopModal;
     $("continueWorkBtn").onclick = continueWork;
     $("incidentWorkBtn").onclick = () => openIncident("work");
-    $("viewDraftReportBtn").onclick = () => { state.reportWork = null; state.reportOrigin = "work"; resetReportTabs(); show("screen-report"); };
+    $("viewDraftReportBtn").onclick = () => { state.reportWork = null; state.reportOrigin = "work"; state.reportHistoryIndex = null; resetReportTabs(); show("screen-report"); };
     $("backFromWork").onclick = () => {
       if(state.work && state.work.status !== "finalizado"){
         if(!confirm("Hay un trabajo en curso. ¿Volver sin finalizar?")) return;
@@ -2395,7 +3088,7 @@
       if(state.currentPos && state.maps.work) state.maps.work.setView([state.currentPos.lat, state.currentPos.lng], 19);
       else centerWorkMapOnTractor(true);
     };
-    $("windReadingBtn").onclick = () => promptWindReading(false, "Registrar viento");
+    $("windReadingBtn").onclick = () => recordAutomaticWind("actualizacion_usuario", {notify:true});
 
     $("cancelStopModal").onclick = closeStopModal;
     qsa("[data-stop-reason]").forEach(b => b.addEventListener("click", () => handleStop(b.dataset.stopReason)));

@@ -1122,3 +1122,46 @@ input:focus,select:focus,textarea:focus{
 .history-delete-button:active{transform:translateY(1px) scale(.98)!important}
 
 .splash-screen .version-pill{display:none!important}
+
+/* Beta v9.3: ficha diferenciada de trabajos pendientes con acciones de retomar/terminar */
+.pending-work-actions{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:8px!important;
+  flex:0 0 auto!important;
+}
+.pending-work-actions.hidden{display:none!important}
+.pending-action-btn{
+  min-height:42px!important;
+  border-radius:17px!important;
+  padding:8px 10px!important;
+  font-size:12px!important;
+  line-height:1.1!important;
+  font-weight:900!important;
+}
+@media (max-height:820px){
+  .pending-action-btn{min-height:38px!important;padding:7px 8px!important;font-size:11px!important}
+}
+
+/* Beta v9.4: informe simplificado en pantalla + salida final para compartir/guardar/imprimir */
+.report-final-actions{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:8px!important;
+  flex:0 0 auto!important;
+}
+.report-final-actions.hidden{display:none!important}
+.report-action-btn{
+  min-height:42px!important;
+  border-radius:17px!important;
+  padding:8px 10px!important;
+  font-size:12px!important;
+  line-height:1.12!important;
+  font-weight:900!important;
+}
+.report-visual-complete{gap:12px!important}
+.report-visual-complete .report-section-title{margin-top:4px!important}
+@media (max-height:820px){
+  .report-action-btn{min-height:38px!important;padding:7px 8px!important;font-size:11px!important}
+  .report-map{height:18vh!important;min-height:112px!important;max-height:155px!important}
+}

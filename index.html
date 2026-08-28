@@ -233,11 +233,11 @@
           </div>
           <div class="metric-card">
             <span class="metric-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 13V9"/><path d="M12 13l3 2"/><path d="M9 3h6"/></svg></span>
-            <div><small>Tramo</small><strong id="partialTime">00:00</strong></div>
+            <div><small>Tramo/parada</small><strong id="partialTime">00:00</strong></div>
           </div>
           <div class="metric-card">
             <span class="metric-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg></span>
-            <div><small>Acumulado</small><strong id="totalTime">00:00</strong></div>
+            <div><small>Total</small><strong id="totalTime">00:00</strong></div>
           </div>
           <div class="metric-card">
             <span class="metric-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="17" r="2"/><circle cx="17" cy="7" r="2"/><path d="M9 17h3a4 4 0 0 0 4-4V9"/></svg></span>
@@ -288,7 +288,7 @@
       <header class="topbar">
         <button id="reportBackBtn" class="back-btn"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
-          <div class="brand-title">Informe de trabajo</div>
+          <div id="reportTitle" class="brand-title">Informe de trabajo</div>
           <div id="reportSubtitle" class="brand-subtitle">—</div>
         </div>
       </header>
@@ -302,15 +302,15 @@
           <div><span>Viento</span><strong id="reportWind">—</strong></div>
         </div>
 
-        <nav class="tabs report-tabs">
-          <button class="tab active" data-report-tab="summary">Resumen</button>
-          <button class="tab" data-report-tab="work">Trabajo</button>
-          <button class="tab" data-report-tab="events">Eventos</button>
-          <button class="tab" data-report-tab="gps">GPS</button>
-          <button class="tab" data-report-tab="wind">Viento</button>
-          <button class="tab" data-report-tab="incidents">Incidencias</button>
-          <button class="tab" data-report-tab="export">Exportar</button>
-        </nav>
+        <div id="reportFinalActions" class="report-final-actions" aria-label="Acciones del informe final">
+          <button id="shareFinalReportBtn" class="btn primary report-action-btn">Compartir / guardar informe</button>
+          <button id="printFinalReportBtn" class="btn ghost report-action-btn">Imprimir / guardar PDF</button>
+        </div>
+
+        <div id="pendingWorkActions" class="pending-work-actions hidden">
+          <button id="resumePendingWorkBtn" class="btn primary pending-action-btn">Retomar / continuar</button>
+          <button id="finishPendingWorkBtn" class="btn warning pending-action-btn">Terminar trabajo</button>
+        </div>
 
         <div id="reportMap" class="report-map hidden"></div>
         <div id="reportContent" class="report-content"></div>

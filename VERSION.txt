@@ -1,7 +1,13 @@
-Pazo Baion GPS — Beta v9.0
+PAZO BAION GPS - Beta v9.4
 
-Base: Beta v8.0.
+Base: Beta v9.3.
+Cambios v9.4:
+- Pantalla de informe simplificada: desaparecen las pestañas y queda un único informe visual en pantalla.
+- El informe visual integra todos los bloques relevantes del trabajo en una lectura continua y estructurada.
+- Se conservan los botones de Retomar / continuar y Terminar trabajo cuando la ficha está pendiente.
+- Se añaden solo dos acciones finales: Compartir / guardar informe e Imprimir / guardar PDF.
+- El informe final se genera localmente, maquetado para envío, guardado o impresión.
 
-Cambios aplicados:
-- Imprimir / Guardar PDF genera una vista imprimible propia del trabajo abierto.
-- Compartir resumen usa el formato literal aprobado.
+Entrega:
+- ZIP en raíz, sin subcarpetas.
+- Sin PARCELAS.geojson ni INCIDENCIAS_.geojson reales.
