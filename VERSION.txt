@@ -1,13 +1,24 @@
-PAZO BAION GPS - Beta v9.4
+PAZO BAION GPS
+Beta v9.5 · Premium vitícola ornamental
+Fecha: 03/11/2026
+Base: Beta v9.4
 
-Base: Beta v9.3.
-Cambios v9.4:
-- Pantalla de informe simplificada: desaparecen las pestañas y queda un único informe visual en pantalla.
-- El informe visual integra todos los bloques relevantes del trabajo en una lectura continua y estructurada.
-- Se conservan los botones de Retomar / continuar y Terminar trabajo cuando la ficha está pendiente.
-- Se añaden solo dos acciones finales: Compartir / guardar informe e Imprimir / guardar PDF.
-- El informe final se genera localmente, maquetado para envío, guardado o impresión.
+CORRECCIONES PRINCIPALES
+- Inicio limpio, nombre y subtítulo bien separados de la versión.
+- Privacidad consultable; selección de GeoJSON como botones claros.
+- Conjuntos de capas independientes con nombre y selección explícita (IndexedDB).
+- No se mezclan incidencias y parcelas al importar nuevas capas.
+- GPS: validaciones de puntos y escalas de precisión.
+- Viento: estadísticas sin falsos ceros, niveles y flechas direccionales.
+- Trabajos: medidas contra sobrescritura y pérdidas silenciosas.
+- Interrupción de Safari: no imputar intervalos sin seguimiento como trabajo.
+- Informe: fechas por tramos, desglose diario, mapa ampliable.
+- PDF documental real en A4; compartir resumen en texto.
 
-Entrega:
-- ZIP en raíz, sin subcarpetas.
-- Sin PARCELAS.geojson ni INCIDENCIAS_.geojson reales.
+LÍMITES CONOCIDOS
+- No garantiza GPS en segundo plano con iPhone bloqueado.
+- No hay cartografía ni viento plenamente offline.
+- Fotos de incidencias no incrustadas en PDF (conservar registro o JSON).
+- Se requiere validar en iPhone real con GPS y datos de explotación.
+
+ZIP EN RAÍZ · SIN GEOJSON REALES · CON COMPATIBILIDAD DE ALMACENAMIENTO V08

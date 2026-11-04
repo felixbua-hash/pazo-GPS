@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.4";
+  const VERSION = "Beta v9.5";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -9,7 +9,8 @@
     day: "pbgps_day_config_v08",
     history: "pbgps_history_v08",
     incidents: "pbgps_incidents_v08",
-    active: "pbgps_active_work_v08"
+    active: "pbgps_active_work_v08",
+    layerSetId: "pbgps_selected_layer_set_v95"
   };
 
   const WIND_INTERVAL_MS = 30 * 60 * 1000;
@@ -37,7 +38,11 @@
     reportHistoryIndex: null,
     tickerStarted: false,
     historyFilter: "all",
-    liveSpeedKmh: null
+    liveSpeedKmh: null,
+    activeLayerSetId: null,
+    layersDirty: false,
+    lastStorageWarningAt: 0,
+    lastHeartbeatAt: Date.now()
   };
 
   const $ = (id) => document.getElementById(id);
@@ -66,6 +71,7 @@
   function show(screenId){
     setAppHeight();
     qsa(".screen").forEach(s => s.classList.remove("active"));
+    if(screenId !== "screen-report" && $("reportMapShell")) $("reportMapShell").classList.remove("is-expanded");
     const screen = $(screenId);
     screen.classList.add("active");
     afterLayoutStable(() => {
@@ -84,10 +90,10 @@
     return "±" + Math.round(m) + " m";
   }
   function gpsClass(acc){
-    if(!isFinite(acc)) return {label:"Sin datos", cls:"muted"};
+    if(acc === null || acc === undefined || !isFinite(acc)) return {label:"Sin datos", cls:"muted"};
     if(acc <= 5) return {label:"Buena", cls:"good"};
     if(acc <= 10) return {label:"Aceptable", cls:"accept"};
-    if(acc <= 15) return {label:"Insuficiente", cls:"warn"};
+    if(acc <= 20) return {label:"Límite", cls:"warn"};
     return {label:"Mala", cls:"bad"};
   }
   function fmtTime(ms){
@@ -142,11 +148,223 @@
     return coords.length ? L.latLngBounds(coords) : null;
   }
 
-  function saveParcelsLayer(gj){
-    state.parcelsGeoJSON = gj;
-    storage.set(LS.map, gj);
-    renderParcelPreview(gj);
+
+  // Beta v9.5: conjuntos de capas independientes en IndexedDB.
+  // Mantiene las claves v08 para leer instalaciones anteriores, sin emparejar
+  // accidentalmente incidencias de una finca con parcelas de otra.
+  const EMPTY_INCIDENT_LAYER = () => ({type:"FeatureCollection", features:[]});
+  const layerDb = {
+    async open(){
+      if(!window.indexedDB) throw new Error("Este navegador no permite guardar varios conjuntos de capas.");
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open("pazo_baion_local_v95", 1);
+        request.onupgradeneeded = () => {
+          const db = request.result;
+          if(!db.objectStoreNames.contains("layerSets")) db.createObjectStore("layerSets", {keyPath:"id"});
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error("No se pudo abrir el almacén local."));
+        request.onblocked = () => reject(new Error("Almacenamiento ocupado por otra pestaña."));
+      });
+    },
+    async transact(mode, method, value){
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("layerSets", mode);
+        const store = tx.objectStore("layerSets");
+        const req = method === "getAll" ? store.getAll() : method === "get" ? store.get(value) : method === "put" ? store.put(value) : store.delete(value);
+        let result;
+        req.onsuccess = () => { result = req.result; };
+        req.onerror = () => { /* transaction rejection below */ };
+        tx.oncomplete = () => { db.close(); resolve(result); };
+        tx.onerror = () => { db.close(); reject(tx.error || req.error || new Error("No se pudo guardar el conjunto.")); };
+        tx.onabort = () => { db.close(); reject(tx.error || new Error("Se canceló el guardado.")); };
+      });
+    },
+    getAll(){return this.transact("readonly", "getAll");},
+    get(id){return this.transact("readonly", "get", id);},
+    put(value){return this.transact("readwrite", "put", value);},
+    delete(id){return this.transact("readwrite", "delete", id);}
+  };
+
+  function setLayerStatusEmpty(){
+    $("incidentLayerStatus").className = "status-card muted";
+    $("incidentLayerStatus").textContent = "Incidencias: pendientes de seleccionar. Si no existen, se guardará una capa vacía.";
+  }
+
+  function setLayerSetInfo(){
+    const label = $("layerSetName").value.trim();
+    $("activeLayerSetInfo").textContent = state.layersDirty
+      ? "Cambios sin guardar como conjunto" + (label ? ` · ${label}` : ". Escribe un nombre para conservarlos.")
+      : state.activeLayerSetId ? `Conjunto guardado activo: ${label || "seleccionado"}` : "Capas actuales sin un conjunto guardado con nombre.";
+  }
+
+  function updateLayerButtons(){
     updateContinueAvailability();
+    $("saveLayerSet").disabled = !isValidParcelsGeoJSON(state.parcelsGeoJSON);
+    setLayerSetInfo();
+  }
+
+  async function refreshLayerSets(){
+    const sel = $("savedLayerSetSelect");
+    try{
+      const sets = (await layerDb.getAll()).sort((a,b) => String(a.name).localeCompare(String(b.name), "es"));
+      const current = sel.value || state.activeLayerSetId;
+      sel.innerHTML = "";
+      if(!sets.length){
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "Todavía no hay conjuntos guardados";
+        sel.appendChild(option);
+      }
+      for(const set of sets){
+        const option = document.createElement("option");
+        option.value = set.id;
+        option.textContent = `${set.name} · ${(set.parcelsGeoJSON?.features || []).length} parcelas`;
+        sel.appendChild(option);
+      }
+      if(sets.some(item => item.id === current)) sel.value = current;
+      $("savedSetCount").textContent = `(${sets.length})`;
+      $("loadLayerSet").disabled = !sets.length;
+      $("deleteLayerSet").disabled = !sets.length;
+      return sets;
+    }catch(err){
+      sel.innerHTML = '<option value="">Almacenamiento de conjuntos no disponible</option>';
+      $("savedSetCount").textContent = "";
+      $("loadLayerSet").disabled = true;
+      $("deleteLayerSet").disabled = true;
+      console.warn("No se pudieron leer los conjuntos guardados", err);
+      return [];
+    }
+  }
+
+  function setActiveLayers(gj, incidents, set=null){
+    if(!isValidParcelsGeoJSON(gj)) throw new Error("El conjunto no contiene parcelas válidas.");
+    state.parcelsGeoJSON = gj;
+    state.incidentsGeoJSON = isValidIncidentsGeoJSON(incidents) ? incidents : EMPTY_INCIDENT_LAYER();
+    state.selectedFeature = null;
+    state.selectedParcelName = "";
+    state.activeLayerSetId = set?.id || null;
+    state.layersDirty = false;
+    $("layerSetName").value = set?.name || "";
+    renderParcelPreview(state.parcelsGeoJSON);
+    renderIncidentLayerStatus(state.incidentsGeoJSON);
+    storage.set(LS.map, state.parcelsGeoJSON);
+    storage.set(LS.incidentLayer, state.incidentsGeoJSON);
+    if(set) storage.set(LS.layerSetId, set.id);
+    else storage.remove(LS.layerSetId);
+    updateLayerButtons();
+  }
+
+  async function initSavedLayerSets(){
+    try{
+      // Se importa una única vez el último par de capas de v9.4, sin borrar el original.
+      const legacy = storage.get(LS.map, null);
+      if(isValidParcelsGeoJSON(legacy)){
+        const old = await layerDb.get("legacy-v94");
+        if(!old){
+          const inc = storage.get(LS.incidentLayer, null);
+          await layerDb.put({id:"legacy-v94", name:"Capas anteriores (v9.4)",
+            parcelsGeoJSON:legacy, incidentsGeoJSON:isValidIncidentsGeoJSON(inc) ? inc : EMPTY_INCIDENT_LAYER(),
+            savedAt:new Date().toISOString(), migrated:true});
+        }
+      }
+      const id = storage.get(LS.layerSetId, null);
+      if(id){
+        const latest = await layerDb.get(id);
+        if(latest) setActiveLayers(latest.parcelsGeoJSON, latest.incidentsGeoJSON, latest);
+      }
+      await refreshLayerSets();
+      updateLayerButtons();
+    }catch(err){
+      console.warn("No se pudo completar la migración de conjuntos", err);
+      updateLayerButtons();
+    }
+  }
+
+  async function saveNamedLayerSet(){
+    if(!isValidParcelsGeoJSON(state.parcelsGeoJSON)) return toast("Selecciona primero el archivo de parcelas.");
+    const name = $("layerSetName").value.trim().replace(/\s+/g, " ");
+    if(!name){ $("layerSetName").focus(); return toast("Escribe un nombre para distinguir este conjunto de parcelas."); }
+    const all = await refreshLayerSets();
+    const existing = all.find(x => x.name.toLocaleLowerCase("es") === name.toLocaleLowerCase("es"));
+    if(existing && existing.id !== state.activeLayerSetId && !confirm(`Ya existe el conjunto «${existing.name}». ¿Sustituir sus capas por las seleccionadas?`)) return;
+    const id = existing?.id || (state.activeLayerSetId && !state.layersDirty ? state.activeLayerSetId : `set-${Date.now()}-${Math.random().toString(36).slice(2,9)}`);
+    const obj = {id, name, parcelsGeoJSON:state.parcelsGeoJSON,
+      incidentsGeoJSON:isValidIncidentsGeoJSON(state.incidentsGeoJSON) ? state.incidentsGeoJSON : EMPTY_INCIDENT_LAYER(),
+      savedAt:new Date().toISOString()};
+    try{
+      await layerDb.put(obj);
+      state.activeLayerSetId = id;
+      state.layersDirty = false;
+      storage.set(LS.layerSetId, id);
+      await refreshLayerSets();
+      $("savedLayerSetSelect").value = id;
+      setLayerSetInfo();
+      toast(`Conjunto «${name}» guardado con sus capas de parcelas e incidencias.`);
+    }catch(err){
+      toast("No se pudo guardar el conjunto: " + err.message + ". Conserva los GeoJSON originales.");
+    }
+  }
+
+  function ensureNoUnsecuredWork(reason="cambiar de conjunto"){
+    const active = storage.get(LS.active, null);
+    const w = state.work && !workIsCompleted(state.work) ? state.work : active;
+    if(!w || workIsCompleted(w)) return true;
+    if(!confirm(`Hay un trabajo sin finalizar (${w.parcel || "parcela"}). Para ${reason} se guardará como pendiente. ¿Continuar?`)) return false;
+    if(w.status === "trabajando") closeInterruptedWork(w, Date.now(), "Cambio de parcela/conjunto");
+    if(!saveHistorySnapshotProtected({...w, status:"pendiente"}, "trabajo pendiente antes de cambiar de conjunto")) return false;
+    if(!storage.set(LS.active, w)){
+      toast("No se pudo asegurar el trabajo activo. Cambio cancelado.");
+      return false;
+    }
+    stopGpsWatch();
+    state.work = null;
+    return true;
+  }
+
+  async function loadNamedLayerSet(){
+    const id = $("savedLayerSetSelect").value;
+    if(!id) return toast("Elige un conjunto guardado.");
+    if(state.layersDirty && !confirm("Hay capas nuevas sin guardar como conjunto. ¿Descartarlas y cargar el conjunto seleccionado?")) return;
+    if(!ensureNoUnsecuredWork("cargar otras parcelas")) return;
+    try{
+      const set = await layerDb.get(id);
+      if(!set) throw new Error("Ya no existe el conjunto elegido.");
+      setActiveLayers(set.parcelsGeoJSON, set.incidentsGeoJSON, set);
+      toast(`Conjunto «${set.name}» cargado. Pulsa «Continuar al mapa» para utilizarlo.`);
+    }catch(err){ toast("No se pudo cargar el conjunto: " + err.message); }
+  }
+
+  async function deleteNamedLayerSet(){
+    const id = $("savedLayerSetSelect").value;
+    if(!id) return;
+    const set = await layerDb.get(id);
+    if(!set || !confirm(`¿Eliminar del dispositivo el conjunto «${set.name}»? Esta acción no elimina los GeoJSON originales ni el historial.`)) return;
+    try{
+      await layerDb.delete(id);
+      if(state.activeLayerSetId === id){ state.activeLayerSetId = null; state.layersDirty = true; storage.remove(LS.layerSetId); }
+      await refreshLayerSets();
+      setLayerSetInfo();
+    }catch(err){ toast("No se pudo eliminar el conjunto: " + err.message); }
+  }
+
+  function saveParcelsLayer(gj){
+    // Elegir nuevas parcelas inicia otro conjunto: nunca conservar las incidencias de la finca anterior.
+    state.parcelsGeoJSON = gj;
+    state.incidentsGeoJSON = null;
+    state.selectedFeature = null;
+    state.selectedParcelName = "";
+    state.activeLayerSetId = null;
+    state.layersDirty = true;
+    storage.remove(LS.layerSetId);
+    storage.remove(LS.incidentLayer);
+    setLayerStatusEmpty();
+    if(!storage.set(LS.map, gj)){
+      toast("No se guardaron las parcelas en la memoria clásica. Para conservar varios conjuntos utiliza «Guardar conjunto».");
+    }
+    renderParcelPreview(gj);
+    updateLayerButtons();
   }
 
   // Compatibilidad con nombre anterior.
@@ -154,8 +372,12 @@
 
   function saveIncidentsLayer(gj){
     state.incidentsGeoJSON = gj;
-    storage.set(LS.incidentLayer, gj);
+    state.activeLayerSetId = null;
+    state.layersDirty = true;
+    storage.remove(LS.layerSetId);
+    if(!storage.set(LS.incidentLayer, gj)) toast("No se guardó la capa de incidencias en el almacenamiento clásico. Utiliza «Guardar conjunto».");
     renderIncidentLayerStatus(gj);
+    updateLayerButtons();
   }
 
   function updateContinueAvailability(){
@@ -251,7 +473,8 @@
   }
 
   function todayIso(){
-    return new Date().toISOString().slice(0,10);
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
 
   function loadSavedDayConfig(){
@@ -283,8 +506,11 @@
       sprayer: $("sprayerSelect").value,
       notes: $("dayNotes").value.trim()
     };
+    if(!storage.set(LS.day, cfg)){
+      toast("No fue posible guardar la jornada en este dispositivo. No se ha continuado para evitar una pérdida silenciosa.");
+      return;
+    }
     state.dayConfig = cfg;
-    storage.set(LS.day, cfg);
     show("screen-parcel-select");
   }
 
@@ -464,7 +690,7 @@
   function drawParcelIncidentMarkers(map){
     if(state.layers.parcelIncidents) state.layers.parcelIncidents.remove();
     state.layers.parcelIncidents = L.layerGroup().addTo(map);
-    const incidents = storage.get(LS.incidents, []).filter(i => i.parcel === state.selectedParcelName && i.lat && i.lng);
+    const incidents = storage.get(LS.incidents, []).filter(i => i.parcel === state.selectedParcelName && isValidRoutePoint(i));
     incidents.forEach(inc => {
       L.circleMarker([inc.lat, inc.lng], {
         radius: 8, color: "#fff", weight: 2, fillColor: getIncidentColor(inc.type), fillOpacity: 1
@@ -545,12 +771,14 @@
   }
 
   function startWorkShell(forced=false){
+    if(!ensureNoUnsecuredWork("iniciar un nuevo trabajo")) return;
     if(!state.gpsCalibration) state.gpsCalibration = {samples:0, best:Infinity, avg:Infinity, quality:"No comprobado", forced, at:new Date().toISOString()};
     state.gpsCalibration.forced = forced;
 
     state.work = {
       id: "trabajo-" + Date.now(),
       parcel: state.selectedParcelName,
+      parcelId: parcelIdentity(state.selectedFeature),
       parcelFeature: state.selectedFeature,
       type: state.workType,
       day: state.dayConfig || storage.get(LS.day, {}),
@@ -583,7 +811,11 @@
       finalSnapshot: null,
       forcedStart: forced
     };
-    storage.set(LS.active, state.work);
+    if(!storage.set(LS.active, state.work)){
+      toast("No se puede iniciar el trabajo: el navegador no permite guardar su ficha activa.");
+      state.work = null;
+      return;
+    }
     state.reportWork = null;
     state.reportOrigin = "work";
     resetLiveUi();
@@ -592,7 +824,7 @@
 
   function setupWorkMap(){
     if(!state.work) return;
-    const feature = state.selectedFeature || state.work.parcelFeature || findParcelFeatureByName(state.work.parcel);
+    const feature = state.work.parcelFeature || findParcelFeatureByName(state.work.parcel, state.work.parcelId) || state.selectedFeature;
     if(feature){
       state.selectedFeature = feature;
       state.work.parcelFeature = state.work.parcelFeature || feature;
@@ -709,16 +941,26 @@
   function activatePendingWorkFromReport(){
     const w = getReportWork();
     if(!w || workIsCompleted(w)) return null;
+    const current = state.work && !workIsCompleted(state.work) ? state.work : storage.get(LS.active, null);
+    if(current && current.id !== w.id && !ensureNoUnsecuredWork("retomar otro trabajo")) return null;
     state.work = clonePlain(w);
+    const lastPhase = sortedTimelineEvents(state.work).slice(-1)[0]?._kind;
+    if(state.work.startedAt && ["trabajando","pendiente"].includes(state.work.status) && (state.work.status === "trabajando" || lastPhase === "start" || lastPhase === "resume" || !lastPhase)){
+      state.work.status = "trabajando";
+      closeInterruptedWork(state.work, lastKnownWorkAt(state.work) || Date.now(), "Recuperación de trabajo pendiente");
+    }
     ensureTimeline(state.work);
     recoverRouteForReport(state.work);
-    state.work.status = state.work.status === "parado" ? "parado" : (state.work.startedAt ? "trabajando" : "preparado");
+    // Una ficha pendiente nunca vuelve a iniciar GPS sola.
+    state.work.status = state.work.startedAt ? "parado" : "preparado";
     state.reportWork = null;
     state.reportOrigin = "work";
     state.reportHistoryIndex = null;
     prepareWorkScreenFromState();
-    persistActiveWork();
-    saveHistorySnapshot(state.work);
+    if(!persistActiveWork()) return null;
+    if(!saveHistorySnapshot(state.work)){
+      toast("El trabajo pendiente sigue en memoria activa, pero no se ha podido actualizar el historial.");
+    }
     return state.work;
   }
 
@@ -872,7 +1114,8 @@
     const addStop = (start, end, ev=null) => {
       start = toMs(start); end = toMs(end);
       if(!start || !end || end < start) return;
-      const ms = Math.max(0, end - start);
+      const interruption = /interrupci[oó]n|reapertura|cambio de parcela\/conjunto/i.test(stopReasonFromEvent(ev));
+      const ms = interruption ? 0 : Math.max(0, end - start);
       stoppedMs += ms;
       stops.push({
         id: "stop-evt-" + start + "-" + stops.length,
@@ -883,7 +1126,8 @@
         refillNumber: ev?.refillNumber || null,
         resumedAt: end,
         resumedLabel: timeLabelFromMs(end),
-        stoppedMs: ms
+        stoppedMs: ms,
+        excludedFromStoppedTime: interruption
       });
     };
 
@@ -933,13 +1177,14 @@
     }
 
     const elapsedEnd = finished || (includeOpen ? endLimit : lastKnownWorkAt(w) || endLimit);
+    const excludedGapMs = stops.filter(x=>x.excludedFromStoppedTime).reduce((sum,x)=>sum+Math.max(0,(toMs(x.resumedAt)||elapsedEnd) - (toMs(x.at)||elapsedEnd)),0);
     return {
       source: "events",
       startedAt: started,
       finishedAt: finished,
       activeMs: Math.max(0, activeMs),
       stoppedMs: Math.max(0, stoppedMs),
-      elapsedMs: started ? Math.max(0, elapsedEnd - started) : Math.max(0, activeMs + stoppedMs),
+      elapsedMs: started ? Math.max(0, elapsedEnd - started - excludedGapMs) : Math.max(0, activeMs + stoppedMs),
       segments,
       stops,
       currentActiveMs: phase === "active" && includeOpen ? Math.max(0, endLimit - cursor) : 0,
@@ -977,7 +1222,8 @@
       const rawEnd = toMs(stop.resumedAt);
       const open = start && !rawEnd && includeOpen && (w?.status === "parado" || finished);
       const end = rawEnd || (open ? endLimit : null);
-      const ms = start && end ? Math.max(0, end - start) : Math.max(0, Number(stop.stoppedMs) || 0);
+      const interruption = stop.excludedFromStoppedTime || /interrupci[oó]n|reapertura|cambio de parcela\/conjunto/i.test(stop.reason || "");
+      const ms = interruption ? 0 : (start && end ? Math.max(0, end - start) : Math.max(0, Number(stop.stoppedMs) || 0));
       return {
         ...stop,
         index: i + 1,
@@ -994,13 +1240,14 @@
     if(!segments.length) activeMs = Math.max(0, Number(w?.activeMs) || 0);
     if(!stops.length) stoppedMs = Math.max(0, Number(w?.stoppedMs) || 0);
     const elapsedEnd = finished || (includeOpen ? endLimit : lastKnownWorkAt(w) || endLimit);
+    const excludedGapMs = stops.filter(x=>x.excludedFromStoppedTime).reduce((sum,x)=>sum+Math.max(0,(toMs(x.resumedAt)||elapsedEnd)-(toMs(x.at)||elapsedEnd)),0);
     return {
       source: "logs",
       startedAt: started,
       finishedAt: finished,
       activeMs,
       stoppedMs,
-      elapsedMs: started ? Math.max(0, elapsedEnd - started) : Math.max(0, activeMs + stoppedMs),
+      elapsedMs: started ? Math.max(0, elapsedEnd - started - excludedGapMs) : Math.max(0, activeMs + stoppedMs),
       segments,
       stops,
       currentActiveMs: w?.status === "trabajando" && segments.length ? Math.max(0, Number(segments.at(-1).activeMs) || 0) : 0,
@@ -1053,7 +1300,7 @@
       if(start && !toMs(stop.resumedAt)){
         stop.resumedAt = finishMs;
         stop.resumedLabel = timeLabelFromMs(finishMs);
-        stop.stoppedMs = Math.max(0, finishMs - start);
+        stop.stoppedMs = stop.excludedFromStoppedTime ? 0 : Math.max(0, finishMs - start);
       }
     });
     w.currentSegmentId = null;
@@ -1077,7 +1324,7 @@
       elapsedMs: Math.max(0, tl?.elapsedMs || ((started && finished) ? finished - started : 0)),
       distanceM: w.distanceM || 0,
       refills: w.refills || 0,
-      stops: (tl?.stops || w.stopLog || []).length || w.stops || 0,
+      stops: (tl?.stops || w.stopLog || []).filter(st=>!st.excludedFromStoppedTime).length || w.stops || 0,
       incidents: (w.incidents || []).length || 0,
       timeSource: tl?.source || "logs"
     };
@@ -1189,7 +1436,7 @@
     if(stop){
       stop.resumedAt = now;
       stop.resumedLabel = timeLabelFromMs(now);
-      stop.stoppedMs = Math.max(0, now - (stop.at || now));
+      stop.stoppedMs = stop.excludedFromStoppedTime ? 0 : Math.max(0, now - (stop.at || now));
     }
     state.work.currentStopId = null;
   }
@@ -1208,8 +1455,64 @@
     return p;
   }
 
+  // Interrupciones: no computar como trabajo efectivo horas sin ejecución GPS.
+  function closeInterruptedWork(w, at, reason="Interrupción del navegador"){
+    if(!w || w.status !== "trabajando") return false;
+    const last = Math.max(toMs(w.startedAt) || 0, toMs(at) || Date.now());
+    ensureTimeline(w);
+    const openSegment = (w.segments || []).find(seg => !seg.endAt);
+    if(openSegment){
+      const start = toMs(openSegment.startAt) || last;
+      openSegment.endAt = Math.max(start, last);
+      openSegment.endLabel = timeLabelFromMs(openSegment.endAt);
+      openSegment.activeMs = Math.max(0, openSegment.endAt - start);
+      openSegment.closeReason = reason;
+      w.activeMs = (Number(w.activeMs) || 0) + openSegment.activeMs;
+    }
+    w.currentSegmentId = null;
+    w.status = "parado";
+    w.pausedAt = last;
+    w.suspensionDetected = true;
+    w.events = w.events || [];
+    const evId = `ev-interrupcion-${last}`;
+    if(!w.events.some(ev => ev.id === evId)) w.events.push({
+      id:evId, type:"Parada", label:reason,
+      notes:"Intervalo sin seguimiento GPS: no se cuenta como tiempo efectivo ni como parada de trabajo.",
+      at:new Date(last).toISOString(), timeLabel:timeLabelFromMs(last),
+      lat:null, lng:null, accuracy:null
+    });
+    w.stopLog = w.stopLog || [];
+    const stopId = `stop-interrupcion-${last}`;
+    if(!w.stopLog.some(stop => stop.id === stopId)) w.stopLog.push({id:stopId, eventId:evId,
+      at:last, timeLabel:timeLabelFromMs(last), reason, resumedAt:null,
+      resumedLabel:null, stoppedMs:0, excludedFromStoppedTime:true});
+    w.currentStopId = stopId;
+    return true;
+  }
+
+  function suspendCurrentWork(reason, at=Date.now()){
+    if(!state.work || state.work.status !== "trabajando") return;
+    closeInterruptedWork(state.work, at, reason);
+    stopGpsWatch();
+    persistActiveWork();
+    if(document.querySelector("#screen-work.active")) prepareWorkScreenFromState();
+  }
+
+  function checkExecutionGap(now){
+    if(state.work?.status === "trabajando" && state.lastHeartbeatAt && now - state.lastHeartbeatAt > 45000){
+      suspendCurrentWork("Interrupción de seguimiento GPS", state.lastHeartbeatAt);
+    }
+    state.lastHeartbeatAt = now;
+  }
+
   function persistActiveWork(){
-    if(state.work && !workIsCompleted(state.work)) storage.set(LS.active, state.work);
+    if(!state.work || workIsCompleted(state.work)) return true;
+    const ok = storage.set(LS.active, state.work);
+    if(!ok && Date.now() - state.lastStorageWarningAt > 60000){
+      state.lastStorageWarningAt = Date.now();
+      toast("ATENCIÓN: no se ha podido guardar el trabajo activo. Libera espacio del navegador y exporta una copia de seguridad desde el historial. No cierres la aplicación sin asegurar el trabajo.");
+    }
+    return ok;
   }
 
   async function beginWork(){
@@ -1308,8 +1611,9 @@
   }
 
   function windDirectionText(deg){
+    if(deg === null || deg === undefined || deg === "") return "—";
     const n = Number(deg);
-    if(!isFinite(n)) return "—";
+    if(!Number.isFinite(n)) return "—";
     const normalized = ((n % 360) + 360) % 360;
     const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"];
     const idx = Math.round(normalized / 22.5) % 16;
@@ -1322,13 +1626,13 @@
       return "Sin dato automático";
     }
     const parts = [formatWind(reading.kmh)];
-    if(isFinite(Number(reading.directionDeg))) parts.push(windDirectionText(reading.directionDeg));
-    if(isFinite(Number(reading.gustKmh))) parts.push(`racha ${formatWind(reading.gustKmh)}`);
+    if(reading.directionDeg !== null && reading.directionDeg !== undefined && Number.isFinite(Number(reading.directionDeg))) parts.push(windDirectionText(reading.directionDeg));
+    if(reading.gustKmh !== null && reading.gustKmh !== undefined && Number.isFinite(Number(reading.gustKmh))) parts.push(`racha ${formatWind(reading.gustKmh)}`);
     return parts.filter(Boolean).join(" · ");
   }
 
   function windStats(readings){
-    const validReadings = (readings || []).filter(r => isFinite(Number(r.kmh)));
+    const validReadings = (readings || []).filter(r => r && r.status === "ok" && r.kmh !== null && r.kmh !== undefined && r.kmh !== "" && Number.isFinite(Number(r.kmh)) && Number(r.kmh) >= 0);
     const arr = validReadings.map(r => Number(r.kmh));
     if(!arr.length) return { latest:null, avg:null, max:null, count:0, failed:(readings || []).filter(r => r.status === "error").length, latestReading:null };
     return {
@@ -1357,18 +1661,22 @@
     if(!el) return;
     updateWindControls();
     if(!shouldTrackWindForWork(state.work)){
+      el.classList.remove("wind-green", "wind-amber", "wind-red");
       el.textContent = "No aplica";
       return;
     }
     const readings = state.work?.windReadings || [];
     const stats = windStats(readings);
     const last = readings[readings.length - 1] || null;
+    const windLevel = stats.latestReading ? (stats.latest > 9 ? "wind-red" : stats.latest > 4.5 ? "wind-amber" : "wind-green") : "";
+    el.classList.remove("wind-green", "wind-amber", "wind-red");
+    if(windLevel) el.classList.add(windLevel);
     if(last?.status === "error" && !stats.latestReading){
       el.textContent = "Sin dato";
       return;
     }
     if(stats.latestReading){
-      const dir = isFinite(Number(stats.latestReading.directionDeg)) ? ` · ${windDirectionText(stats.latestReading.directionDeg).split(" ")[0]}` : "";
+      const dir = stats.latestReading.directionDeg !== null && stats.latestReading.directionDeg !== undefined && Number.isFinite(Number(stats.latestReading.directionDeg)) ? ` · ${windDirectionText(stats.latestReading.directionDeg).split(" ")[0]}` : "";
       el.textContent = `${formatWind(stats.latestReading.kmh)}${dir}`;
     } else {
       el.textContent = "Pendiente";
@@ -1379,9 +1687,9 @@
     const candidates = [];
     const push = (lat, lng, source) => {
       const la = Number(lat), lo = Number(lng);
-      if(isFinite(la) && isFinite(lo)) candidates.push({lat:la, lng:lo, coordinateSource:source});
+      if(isValidRoutePoint({lat, lng})) candidates.push({lat:la, lng:lo, coordinateSource:source});
     };
-    push(state.currentPos?.lat, state.currentPos?.lng, "GPS actual del dispositivo");
+    if(freshPosition(state.currentPos)) push(state.currentPos?.lat, state.currentPos?.lng, "GPS actual reciente del dispositivo");
     const lastClean = (w?.pointsClean || []).slice().reverse().find(isValidRoutePoint);
     push(lastClean?.lat, lastClean?.lng, "último punto GPS depurado");
     const lastOriginal = (w?.pointsOriginal || []).slice().reverse().find(isValidRoutePoint);
@@ -1414,7 +1722,8 @@
     state.work.windReadings.push(reading);
     state.work.nextWindPromptAt = Date.now() + WIND_INTERVAL_MS;
     updateWindUi();
-    storage.set(LS.active, state.work);
+    if(state.maps.work) drawWindArrows(state.maps.work, state.work.windReadings, "workWindArrows");
+    persistActiveWork();
   }
 
   async function recordAutomaticWind(reason="periodico", options={}){
@@ -1457,10 +1766,13 @@
       if(!response.ok) throw new Error(`Respuesta meteorológica ${response.status}`);
       const data = await response.json();
       const current = data.current || data.current_weather || {};
-      const kmh = Number(current.wind_speed_10m ?? current.windspeed);
-      const directionDeg = Number(current.wind_direction_10m ?? current.winddirection);
-      const gustKmh = Number(current.wind_gusts_10m);
-      if(!isFinite(kmh)) throw new Error("La respuesta no incluye velocidad de viento válida.");
+      const rawKmh = current.wind_speed_10m ?? current.windspeed;
+      const rawDirection = current.wind_direction_10m ?? current.winddirection;
+      const rawGust = current.wind_gusts_10m;
+      const kmh = rawKmh === null || rawKmh === undefined ? NaN : Number(rawKmh);
+      const directionDeg = rawDirection === null || rawDirection === undefined ? NaN : Number(rawDirection);
+      const gustKmh = rawGust === null || rawGust === undefined ? NaN : Number(rawGust);
+      if(!Number.isFinite(kmh) || kmh < 0) throw new Error("La respuesta no incluye velocidad de viento válida.");
 
       const reading = {
         at: new Date(now).toISOString(),
@@ -1620,6 +1932,27 @@
     }).addTo(state.maps.work);
   }
 
+  function windAlertLevel(kmh){
+    const v = Number(kmh);
+    if(!Number.isFinite(v) || kmh === null || kmh === undefined) return "nodata";
+    return v > 9 ? "red" : v > 4.5 ? "amber" : "green";
+  }
+
+  function drawWindArrows(map, readings, key="windArrows"){
+    if(state.layers[key]){try{state.layers[key].remove();}catch(err){} state.layers[key]=null;}
+    if(!map || !window.L) return;
+    const group=L.layerGroup().addTo(map);
+    (readings || []).filter(r => r?.status === "ok" && isValidRoutePoint(r) && r.directionDeg !== null && r.directionDeg !== undefined && Number.isFinite(Number(r.directionDeg))).forEach(r=>{
+      const direction = ((Number(r.directionDeg)+180)%360+360)%360;
+      const color={green:"#2e8b4c", amber:"#ba8a19", red:"#b83e35"}[windAlertLevel(r.kmh)]||"#777";
+      const html=`<span class="pbgps-wind-arrow" style="color:${color};transform:rotate(${direction}deg)">↑</span>`;
+      L.marker([Number(r.lat),Number(r.lng)],{icon:L.divIcon({html,className:"pbgps-wind-pin",iconSize:[30,30],iconAnchor:[15,15]})})
+        .bindTooltip(`Viento modelizado ${formatWind(r.kmh)} · dirección desde ${windDirectionText(r.directionDeg)} · ${r.timeLabel || ""}`,{permanent:false})
+        .addTo(group);
+    });
+    state.layers[key]=group;
+  }
+
   function updateRouteLayers(){
     const map = state.maps.work;
     if(!map || !state.work) return;
@@ -1633,20 +1966,21 @@
       map.setView([state.currentPos.lat, state.currentPos.lng], Math.max(map.getZoom() || 0, 19));
     }
     drawEventMarkers(map);
+    drawWindArrows(map, state.work?.windReadings || [], "workWindArrows");
   }
 
   function drawEventMarkers(map){
     if(state.layers.workEvents) state.layers.workEvents.remove();
     state.layers.workEvents = L.layerGroup().addTo(map);
     (state.work?.events || []).forEach(ev => {
-      if(!ev.lat || !ev.lng) return;
+      if(!isValidRoutePoint(ev)) return;
       const color = ev.type === "Comienzo" ? "#2f7d44" : ev.type.includes("Fin") ? "#a8483a" : "#c47b32";
       L.circleMarker([ev.lat, ev.lng], { radius:9, color:"#fff", weight:3, fillColor:color, fillOpacity:1 })
         .bindTooltip(ev.label, { permanent:false })
         .addTo(state.layers.workEvents);
     });
     (state.work?.incidents || []).forEach(inc => {
-      if(!inc.lat || !inc.lng) return;
+      if(!isValidRoutePoint(inc)) return;
       const color = getIncidentColor(inc.type);
       L.circleMarker([inc.lat, inc.lng], { radius:8, color:"#fff", weight:2, fillColor:color, fillOpacity:1 })
         .bindTooltip(inc.type, { permanent:false })
@@ -1662,9 +1996,9 @@
       at: new Date(atMs).toISOString(),
       timeLabel: timeLabelFromMs(atMs),
       type, label, notes,
-      lat: isFinite(Number(p?.lat)) ? p.lat : null,
-      lng: isFinite(Number(p?.lng)) ? p.lng : null,
-      accuracy: isFinite(Number(p?.accuracy)) ? p.accuracy : null
+      lat: isValidRoutePoint(p) ? Number(p.lat) : null,
+      lng: isValidRoutePoint(p) ? Number(p.lng) : null,
+      accuracy: p?.accuracy != null && Number.isFinite(Number(p.accuracy)) ? Number(p.accuracy) : null
     };
     state.work.events.push(ev);
     state.work.lastEventAt = atMs;
@@ -1763,8 +2097,9 @@
   }
 
   function tick(){
+    const now = Date.now();
+    checkExecutionGap(now);
     if(state.work){
-      const now = Date.now();
       const liveTimeline = workTimeline(state.work, liveClock(state.work, now), {includeOpen:true});
       $("totalTime").textContent = fmtTime(liveTimeline.elapsedMs);
       $("partialTime").textContent = fmtTime(currentSegmentMs(state.work, now, {live:true}));
@@ -1782,7 +2117,10 @@
     const finished = normalizeWorkForReport(serializeWork(state.work), "history");
     const ok = saveHistorySnapshotProtected(finished, "trabajo finalizado");
     if(ok) storage.remove(LS.active);
-    else storage.set(LS.active, state.work);
+    else if(!storage.set(LS.active, state.work)){
+      exportWorkBackup(state.work, "emergencia_trabajo_finalizado_sin_almacenamiento");
+      toast("ATENCIÓN: falló el historial y tampoco pudo conservarse el trabajo activo. Se ha solicitado descargar una copia JSON de emergencia. Comprueba que se ha guardado antes de cerrar la app.");
+    }
     return ok;
   }
 
@@ -1821,7 +2159,7 @@
     const idx = hist.findIndex(w => w.id === snap.id);
     if(idx >= 0) hist[idx] = snap;
     else hist.unshift(snap);
-    return storage.set(LS.history, hist.slice(0, 200));
+    return storage.set(LS.history, hist);
   }
 
   function safeFileNamePart(value){
@@ -1979,22 +2317,33 @@
         type: $("incidentType").value,
         status: $("incidentStatus").value,
         notes: $("incidentNotes").value.trim(),
-        lat: p?.lat || null,
-        lng: p?.lng || null,
-        accuracy: p?.accuracy || null,
+        lat: isValidRoutePoint(p) ? p.lat : null,
+        lng: isValidRoutePoint(p) ? p.lng : null,
+        accuracy: p?.accuracy ?? null,
         gpsMissing: !p,
         photo
       };
 
       const all = storage.get(LS.incidents, []);
-      all.unshift(inc);
-      storage.set(LS.incidents, all);
-
-      if(state.work){
+      const belongsToWork = $("incidentModal").dataset.context === "work" && state.work && !workIsCompleted(state.work) && state.work.parcel === inc.parcel;
+      if(belongsToWork){
+        state.work.incidents = state.work.incidents || [];
         state.work.incidents.push(inc);
-        storage.set(LS.active, state.work);
-        updateRouteLayers();
+        if(!storage.set(LS.active, state.work)){
+          state.work.incidents.pop();
+          toast("No se pudo guardar la incidencia dentro del trabajo activo. No se ha confirmado su guardado.");
+          return;
+        }
       }
+      if(!storage.set(LS.incidents, [inc, ...all])){
+        if(belongsToWork){
+          state.work.incidents.pop();
+          storage.set(LS.active, state.work);
+        }
+        toast("No hay espacio o permiso suficiente para guardar la incidencia. No se ha confirmado el registro.");
+        return;
+      }
+      if(belongsToWork) updateRouteLayers();
       closeIncident();
       if(state.maps.parcel) drawParcelIncidentMarkers(state.maps.parcel);
       toast("Incidencia guardada localmente.");
@@ -2022,7 +2371,9 @@
   }
 
   function isValidRoutePoint(p){
-    return isFinite(Number(p?.lat)) && isFinite(Number(p?.lng));
+    if(!p || p.lat === null || p.lat === undefined || p.lat === "" || p.lng === null || p.lng === undefined || p.lng === "") return false;
+    const lat = Number(p.lat), lng = Number(p.lng);
+    return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
   }
 
   function cleanRoutePoints(points){
@@ -2086,8 +2437,18 @@
     show("screen-report");
   }
 
-  function findParcelFeatureByName(name){
+  function parcelIdentity(feature){
+    if(!feature) return "";
+    const explicit = feature.id ?? feature.properties?.id ?? feature.properties?.ID;
+    return explicit !== undefined && explicit !== null ? String(explicit) : JSON.stringify(feature.geometry?.coordinates || []).slice(0,180);
+  }
+
+  function findParcelFeatureByName(name, id=null){
     if(!state.parcelsGeoJSON || !name) return null;
+    if(id){
+      const precise = state.parcelsGeoJSON.features.find(f => parcelIdentity(f) === String(id));
+      if(precise) return precise;
+    }
     return state.parcelsGeoJSON.features.find(f => featureName(f) === name) || null;
   }
 
@@ -2111,6 +2472,35 @@
     return w ? stoppedElapsedMs(w, reportClock(w), {live:false}) : 0;
   }
 
+  function dailyWorkBreakdown(w){
+    const daily = new Map();
+    const add = (ms, kind, duration=0) => {
+      const d=new Date(ms), date=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      const item = daily.get(date) || {date, activeMs:0, stoppedMs:0, segments:0};
+      if(kind === "active") {item.activeMs += duration; item.segments += 1;}
+      else item.stoppedMs += duration;
+      daily.set(date, item);
+    };
+    const split=(start,end,kind,excluded=false)=>{
+      if(excluded) return;
+      let at=toMs(start), finish=toMs(end);
+      if(!at || !finish || finish<at) return;
+      while(at < finish){
+        const d = new Date(at);
+        const midnight=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1).getTime();
+        const close=Math.min(midnight,finish);
+        add(at,kind,excluded?0:close-at);
+        at=close;
+      }
+    };
+    const tl=workTimeline(w,reportClock(w),{includeOpen:true});
+    (tl.segments||[]).forEach(seg=>split(seg.startAt,seg.endAt,"active"));
+    (tl.stops||[]).forEach(st=>split(st.at,st.resumedAt,"stopped",!!st.excludedFromStoppedTime));
+    return [...daily.values()].sort((a,b)=>a.date.localeCompare(b.date));
+  }
+
+  function dateTimeLabelIfAvailable(x){ return x ? dateTimeLabelFromMs(x) : "—"; }
+
   function reportAverageSpeed(w){
     const activeHours = reportEffectiveActiveMs(w) / 3600000;
     if(!activeHours || !isFinite(activeHours)) return null;
@@ -2128,8 +2518,8 @@
   function bindReportFinalActions(w){
     const shareBtn = $("shareFinalReportBtn");
     const printBtn = $("printFinalReportBtn");
-    if(shareBtn) shareBtn.onclick = () => shareFinalReport(w);
-    if(printBtn) printBtn.onclick = () => printReportPdf(w);
+    if(shareBtn) shareBtn.onclick = () => shareReportSummary(w);
+    if(printBtn) printBtn.onclick = () => exportDocumentPdf(w);
   }
 
   function renderReport(){
@@ -2143,19 +2533,22 @@
         if(finalActions) finalActions.classList.add("hidden");
         $("reportContent").innerHTML = reportEmpty("No hay trabajo para informar.");
         $("reportMap").classList.add("hidden");
+        $("reportMapShell").classList.add("hidden");
         return;
       }
       ensureTimeline(w);
       const completed = workIsCompleted(w);
       if($("reportTitle")) $("reportTitle").textContent = completed ? "Informe de trabajo" : "Trabajo pendiente";
       $("reportSubtitle").textContent = completed ? `${w.parcel} · ${w.type}` : `${w.parcel} · ${w.type} · pendiente de terminar`;
-      $("reportStatusChip").textContent = completed ? "Informe definitivo" : "Trabajo pendiente · sin finalizar";
+      $("reportStatusChip").textContent = completed ? "Informe definitivo" : "";
+      $("reportStatusChip").classList.toggle("hidden", !completed);
       $("reportStatusChip").style.background = completed ? "#eaf6e9" : "#fff4e6";
       $("reportStatusChip").style.color = completed ? "#2f7d44" : "#8b520e";
       const pendingActions = $("pendingWorkActions");
       if(pendingActions) pendingActions.classList.toggle("hidden", completed);
       const finalActions = $("reportFinalActions");
       if(finalActions) finalActions.classList.remove("hidden");
+      $("printFinalReportBtn").textContent = completed ? "Generar / guardar PDF" : "PDF provisional";
       bindReportFinalActions(w);
       $("reportTotal").textContent = fmtTime(reportTotalMs(w));
       $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
@@ -2165,7 +2558,11 @@
 
       renderReportSummary(w);
       const recoveredRoute = recoverRouteForReport(w);
-      const hasMapData = recoveredRoute.length > 1 || (w.events || []).some(e=>isValidRoutePoint(e)) || (w.incidents || []).some(i=>isValidRoutePoint(i));
+      const hasMapData = recoveredRoute.length > 1 || (w.events || []).some(e=>isValidRoutePoint(e)) || (w.incidents || []).some(i=>isValidRoutePoint(i)) || (w.windReadings || []).some(r=>r.status === "ok" && isValidRoutePoint(r));
+      $("reportMapShell").classList.toggle("hidden", !hasMapData);
+      $("reportMapShell").classList.remove("is-expanded");
+      $("collapseReportMap").classList.add("hidden");
+      $("expandReportMap").classList.remove("hidden");
       if(hasMapData){
         $("reportMap").classList.remove("hidden");
         waitForMapContainer("reportMap", () => renderReportMap(w));
@@ -2210,7 +2607,7 @@
       tile.addTo(map);
       map._pbgpsTile = tile;
 
-      const reportFeature = w.parcelFeature || findParcelFeatureByName(w.parcel) || (w.parcel === state.selectedParcelName ? state.selectedFeature : null);
+      const reportFeature = w.parcelFeature || findParcelFeatureByName(w.parcel,w.parcelId) || (w.parcel === state.selectedParcelName ? state.selectedFeature : null);
       let bounds = null;
       if(reportFeature) {
         const lyr = L.geoJSON(reportFeature, { style: parcelStyle(true) }).addTo(map).bringToFront();
@@ -2230,6 +2627,7 @@
       (w.incidents || []).forEach(inc => {
         if(isValidRoutePoint(inc)) L.circleMarker([Number(inc.lat),Number(inc.lng)], {radius:6,color:"#fff",weight:2,fillColor:getIncidentColor(inc.type),fillOpacity:1}).addTo(map);
       });
+      if(shouldTrackWindForWork(w)) drawWindArrows(map,w.windReadings || [],"reportWindArrows");
       if(bounds && bounds.isValid()) stabilizeMap(map, bounds, [18,18]);
       else stabilizeMap(map, null, [18,18]);
     }catch(err){
@@ -2252,7 +2650,7 @@
     } else if(w.routeRebuiltFromOriginal){
       out += `<div class="report-warning"><strong>Ruta reconstruida:</strong> el recorrido se recuperó desde puntos GPS originales porque la ruta depurada no estaba disponible.</div>`;
     }
-    if(w.forcedStart || gps.discarded > 0 || (gps.worst && gps.worst > 15)){
+    if(workIsCompleted(w) && (w.forcedStart || gps.discarded > 0 || (gps.worst && gps.worst > 20))){
       out += `<div class="report-warning"><strong>Advertencia GPS:</strong> el trazado debe interpretarse como aproximado en algunos tramos. Se conservaron los puntos originales y se generó una ruta depurada para visualización e informe.</div>`;
     }
     return out;
@@ -2277,16 +2675,16 @@
     const observations = (day.notes || w.notes || "").trim ? String(day.notes || w.notes || "").trim() : "";
 
     const segmentRows = segments.map((seg, i) => {
-      const end = seg.endAt ? (seg.endLabel || timeLabelFromMs(seg.endAt)) : (w.status === "trabajando" ? "en curso" : "—");
+      const end = seg.endAt ? dateTimeLabelIfAvailable(seg.endAt) : (w.status === "trabajando" ? "en curso" : "—");
       const ms = Math.max(0, Number(seg.activeMs) || 0);
       const reason = seg.closeReason ? ` · cierre: ${escapeHtml(seg.closeReason)}` : "";
-      return `<div><span>Tramo ${i+1}: ${escapeHtml(seg.startLabel || (seg.startAt ? timeLabelFromMs(seg.startAt) : "—"))} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
+      return `<div><span>Tramo ${i+1}: ${escapeHtml(dateTimeLabelIfAvailable(seg.startAt))} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
     }).join("");
 
     const stopRows = stops.map((stop, i) => {
-      const duration = stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" ? fmtTime(Math.max(0, clock - (toMs(stop.at) || clock))) : "—");
-      const resume = stop.resumedLabel ? ` · continúa ${escapeHtml(stop.resumedLabel)}` : "";
-      return `<div><span>Parada ${i+1}: ${escapeHtml(stop.timeLabel || (stop.at ? timeLabelFromMs(stop.at) : "—"))} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
+      const duration = stop.excludedFromStoppedTime ? "No computa" : (stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" ? fmtTime(Math.max(0, clock - (toMs(stop.at) || clock))) : "—"));
+      const resume = stop.resumedAt ? ` · continúa ${escapeHtml(dateTimeLabelIfAvailable(stop.resumedAt))}` : "";
+      return `<div><span>Parada ${i+1}: ${escapeHtml(dateTimeLabelIfAvailable(stop.at))} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
     }).join("");
 
     const eventRows = (w.events || []).map(ev => `<div class="report-event"><strong>${escapeHtml(ev.type || "Evento")}</strong><span>${escapeHtml(ev.timeLabel || timeLabelHMS(eventMs(ev)))} · ${escapeHtml(ev.label || "—")}</span><small>GPS ${formatMeters(ev.accuracy)}${ev.notes ? " · " + escapeHtml(ev.notes) : ""}</small></div>`).join("");
@@ -2302,7 +2700,7 @@
 
     const windBlock = shouldTrackWindForWork(w)
       ? `<div class="report-section-title">Viento durante la aplicación</div>
-         ${ws.max !== null && ws.max >= 20 ? `<div class="report-warning"><strong>Aviso viento:</strong> se registró un valor máximo de ${formatWind(ws.max)}. Revisar idoneidad de aplicación según criterio técnico y normativa aplicable.</div>` : ""}
+         ${ws.max !== null && ws.max > 4.5 ? `<div class="report-warning"><strong>Alerta de viento (${windAlertLevel(ws.max) === "red" ? "roja" : "ámbar"}):</strong> máximo modelizado ${formatWind(ws.max)}. Comprobar condiciones locales y las instrucciones del producto.</div>` : ""}
          ${ws.failed ? `<div class="report-warning"><strong>Intervalos sin dato:</strong> ${ws.failed} consulta(s) automática(s) no pudieron obtener viento por falta de conexión, coordenadas o respuesta válida.</div>` : ""}
          <div class="report-grid">
            ${reportKpi("Último", ws.latestReading ? formatWindReading(ws.latestReading) : "—")}
@@ -2311,15 +2709,14 @@
            ${reportKpi("Registros válidos", String(ws.count))}
            ${reportKpi("Fuente", WIND_SOURCE_NAME)}
            ${reportKpi("Modo", "Automático cada 30 min")}
-         </div>
+         </div><p class="report-sub">Código orientativo: verde hasta 4,5 km/h, ámbar más de 4,5 hasta 9 km/h, rojo por encima de 9 km/h. Fuente meteorológica modelizada, no medición directa.</p>
          <div class="report-section-title">Registros automáticos de viento</div>
          <div class="report-list">${windRows || reportEmpty("Sin registros automáticos todavía. La app consultará el viento al iniciar y después cada 30 minutos mientras el tratamiento fitosanitario esté activo.")}</div>`
       : `<div class="report-section-title">Viento</div>${reportEmpty("No aplicable: el viento solo se registra en trabajos de aplicación de fitosanitarios.")}`;
 
     $("reportContent").innerHTML = `
       <div class="scroll-box report-visual report-visual-complete">
-        ${!completed ? `<div class="report-warning"><strong>Trabajo pendiente:</strong> esta ficha no es un informe definitivo. Usa Retomar / continuar o Terminar trabajo para cerrarla correctamente.</div>` : ""}
-        ${reportWarning(w)}
+        ${completed ? reportWarning(w) : ""}
 
         <div class="report-section-title">Datos del trabajo</div>
         <div class="report-grid">
@@ -2346,10 +2743,14 @@
           ${reportKpi("Tiempo total/transcurrido", fmtTime(reportTotalMs(w)))}
           ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
           ${reportKpi("Recargas", String(w.refills || 0))}
-          ${reportKpi("Paradas", String(stops.length || w.stops || 0))}
+          ${reportKpi("Paradas", String(stops.filter(st=>!st.excludedFromStoppedTime).length || w.stops || 0))}
           ${reportKpi("Incidencias", String((w.incidents || []).length))}
           ${reportKpi("Velocidad GPS media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
         </div>
+
+        <div class="report-section-title">Desglose por día</div>
+        <div class="report-list">${dailyWorkBreakdown(w).map(d=>`<div><span>${escapeHtml(dateLabelDMY(d.date))} · ${d.segments} tramos</span><strong>${fmtTime(d.activeMs)} activos · ${fmtTime(d.stoppedMs)} parados</strong></div>`).join("") || reportEmpty("Sin tramos de trabajo registrados.")}</div>
+        ${w.suspensionDetected ? `<p class="report-sub">Se detectaron interrupciones del navegador. Los intervalos sin GPS no se suman al tiempo efectivo.</p>` : ""}
 
         <div class="report-section-title">Tramos de trabajo</div>
         <div class="report-list">${segmentRows || reportEmpty("Sin tramos registrados todavía.")}</div>
@@ -2391,15 +2792,15 @@
     const segments = tl.segments.length ? tl.segments : (w.segments || []);
     const stops = tl.stops.length ? tl.stops : (w.stopLog || []);
     const segmentRows = segments.map((seg, i) => {
-      const end = seg.endAt ? (seg.endLabel || timeLabelFromMs(seg.endAt)) : (w.status === "trabajando" ? "en curso" : "—");
+      const end = seg.endAt ? dateTimeLabelIfAvailable(seg.endAt) : (w.status === "trabajando" ? "en curso" : "—");
       const ms = Math.max(0, Number(seg.activeMs) || 0);
       const reason = seg.closeReason ? ` · cierre: ${escapeHtml(seg.closeReason)}` : "";
-      return `<div><span>Tramo ${i+1}: ${escapeHtml(seg.startLabel || (seg.startAt ? timeLabelFromMs(seg.startAt) : "—"))} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
+      return `<div><span>Tramo ${i+1}: ${escapeHtml(dateTimeLabelIfAvailable(seg.startAt))} → ${escapeHtml(end)}${reason}</span><strong>${fmtTime(ms)}</strong></div>`;
     }).join("");
     const stopRows = stops.map((stop, i) => {
-      const duration = stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" ? fmtTime(Math.max(0, clock - (toMs(stop.at) || clock))) : "—");
-      const resume = stop.resumedLabel ? ` · continúa ${escapeHtml(stop.resumedLabel)}` : "";
-      return `<div><span>Parada ${i+1}: ${escapeHtml(stop.timeLabel || (stop.at ? timeLabelFromMs(stop.at) : "—"))} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
+      const duration = stop.excludedFromStoppedTime ? "No computa" : (stop.resumedAt ? fmtTime(stop.stoppedMs || 0) : (w.status === "parado" ? fmtTime(Math.max(0, clock - (toMs(stop.at) || clock))) : "—"));
+      const resume = stop.resumedAt ? ` · continúa ${escapeHtml(dateTimeLabelIfAvailable(stop.resumedAt))}` : "";
+      return `<div><span>Parada ${i+1}: ${escapeHtml(dateTimeLabelIfAvailable(stop.at))} · ${escapeHtml(stop.reason || "—")}${resume}</span><strong>${duration}</strong></div>`;
     }).join("");
     $("reportContent").innerHTML = `
       <div class="scroll-box report-visual">
@@ -2411,7 +2812,7 @@
           ${reportKpi("Tiempo parado", fmtTime(reportStoppedMs(w)))}
           ${reportKpi("Velocidad GPS media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
           ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
-          ${reportKpi("Paradas", String(stops.length || w.stops || 0))}
+          ${reportKpi("Paradas", String(stops.filter(st=>!st.excludedFromStoppedTime).length || w.stops || 0))}
           ${reportKpi("Recargas", String(w.refills || 0))}
           ${reportKpi("Incidencias", String((w.incidents || []).length))}
         </div>
@@ -2445,7 +2846,7 @@
     const avgAcc = gps.count ? (gps.sum / gps.count) : null;
     $("reportContent").innerHTML = `
       <div class="scroll-box report-visual">
-        ${reportWarning(w)}
+        ${workIsCompleted(w) ? reportWarning(w) : ""}
         <div class="report-section-title">Calidad GPS</div>
         <div class="report-grid">
           ${reportKpi("Calibración", cal.quality || "—")}
@@ -2826,6 +3227,36 @@
     }
   }
 
+  function exportDocumentPdf(w){
+    if(!window.PAZO_BAION_PDF){
+      toast("El generador de PDF no está disponible. Revisa que pdf-v95.js esté junto a la aplicación.");
+      return;
+    }
+    try{
+      const work = normalizeWorkForReport(w, "pdf");
+      const blob = window.PAZO_BAION_PDF.createDocument({
+        work,
+        completed:workIsCompleted(work),
+        activeMs:reportEffectiveActiveMs(work),
+        stoppedMs:reportStoppedMs(work),
+        elapsedMs:reportTotalMs(work),
+        daily:dailyWorkBreakdown(work),
+        gpsAverage:averageGpsAccuracyText(work),
+        windStats:windStats(work.windReadings||[]),
+        isPhytosanitary:shouldTrackWindForWork(work)
+      });
+      const name=safeFilename(work,"informe_documental","pdf");
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download=name;a.style.display="none";
+      document.body.appendChild(a);a.click();
+      setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},5000);
+    }catch(err){
+      console.error("Fallo creando PDF",err);
+      toast("No se pudo generar el PDF: "+(err.message || "error no especificado"));
+    }
+  }
+
   function printReportPdf(w){
     try{
       const html = printableReportHtml(w);
@@ -2888,10 +3319,23 @@
 
   function recoverActiveWorkToHistory(){
     const active = storage.get(LS.active, null);
-    if(active && active.id && !workIsCompleted(active)){
-      ensureTimeline(active);
-      const snap = serializeWork({...active, status: active.status || "pendiente"});
-      saveHistorySnapshotProtected(snap, "trabajo pendiente recuperado");
+    if(!active || !active.id) return;
+    ensureTimeline(active);
+    if(!workIsCompleted(active) && active.status === "trabajando"){
+      // Al arrancar después de cerrar Safari, nunca se inventan horas de GPS en segundo plano.
+      const interruptionAt = Math.max(toMs(active.startedAt) || 0, lastKnownWorkAt(active) || Date.now());
+      closeInterruptedWork(active, interruptionAt, "Reapertura tras interrupción del navegador");
+    }
+    const existing = storage.get(LS.history, []).find(w => w.id === active.id);
+    if(existing && workIsCompleted(existing)){
+      storage.remove(LS.active);
+      return;
+    }
+    const snap = serializeWork({...active, status:workIsCompleted(active) ? "finalizado" : "pendiente"});
+    if(saveHistorySnapshotProtected(snap, workIsCompleted(active) ? "trabajo finalizado recuperado" : "trabajo pendiente recuperado")){
+      storage.remove(LS.active);
+    } else {
+      toast("Existe un trabajo recuperable pendiente de asegurar en el historial. No se ha borrado del almacenamiento activo.");
     }
   }
 
@@ -2983,7 +3427,10 @@
       if(reuse){
         const cfg = {...day, date: todayIso()};
         state.dayConfig = cfg;
-        storage.set(LS.day, cfg);
+        if(!storage.set(LS.day, cfg)){
+          toast("No se pudo guardar la jornada actualizada.");
+          return;
+        }
         loadSavedDayConfig();
         show("screen-parcel-select");
       } else {
@@ -3012,6 +3459,7 @@
         if(!isFeatureCollection(gj)) throw new Error("No es un GeoJSON FeatureCollection válido.");
         if(!isValidParcelsGeoJSON(gj)) throw new Error("No se detectaron polígonos de parcela. Si es INCIDENCIAS_.geojson, usa el segundo selector.");
         saveParcelsLayer(gj);
+        e.target.value = "";
       }catch(err){
         $("mapLoadStatus").className = "status-card bad";
         $("mapLoadStatus").textContent = "PARCELAS.geojson no válido: " + err.message;
@@ -3027,6 +3475,7 @@
         const gj = JSON.parse(text);
         if(!isValidIncidentsGeoJSON(gj)) throw new Error("No es un GeoJSON FeatureCollection válido.");
         saveIncidentsLayer(gj);
+        e.target.value = "";
       }catch(err){
         $("incidentLayerStatus").className = "status-card bad";
         $("incidentLayerStatus").textContent = "INCIDENCIAS_.geojson no válido: " + err.message;
@@ -3034,24 +3483,28 @@
     });
 
     $("continueAfterMap").onclick = goAfterMapReady;
-    $("useSavedMap").onclick = () => {
-      const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v07", null) || storage.get("pbgps_parcel_geojson_v06", null);
-      const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v07", null) || storage.get("pbgps_incident_layer_geojson_v06", null);
-      if(isValidParcelsGeoJSON(gj)){
-        state.parcelsGeoJSON = gj; storage.set(LS.map, gj); renderParcelPreview(gj);
-        if(isValidIncidentsGeoJSON(inc)){ state.incidentsGeoJSON = inc; storage.set(LS.incidentLayer, inc); renderIncidentLayerStatus(inc); }
-        goAfterMapReady();
-      }
-      else toast("No hay capa de parcelas guardada en este dispositivo.");
-    };
-    $("clearSavedMap").onclick = () => {
-      if(confirm("¿Borrar las capas de parcelas e incidencias guardadas en este dispositivo?")){
-        storage.remove(LS.map); storage.remove(LS.incidentLayer); state.parcelsGeoJSON = null; state.incidentsGeoJSON = null; location.reload();
-      }
-    };
+    $("openPrivacy").onclick = () => $("privacyModal").classList.remove("hidden");
+    $("closePrivacy").onclick = () => $("privacyModal").classList.add("hidden");
+    $("saveLayerSet").onclick = saveNamedLayerSet;
+    $("loadLayerSet").onclick = loadNamedLayerSet;
+    $("deleteLayerSet").onclick = deleteNamedLayerSet;
+    $("layerSetName").addEventListener("input", setLayerSetInfo);
+    $("savedSetsDetails").addEventListener("toggle", () => { if($("savedSetsDetails").open) refreshLayerSets(); });
 
     $("saveDayConfig").onclick = saveDayConfig;
     $("openHistoryFromDay").onclick = () => { upsertPendingWorkInHistory(); show("screen-history"); };
+    $("expandReportMap").onclick = () => {
+      $("reportMapShell").classList.add("is-expanded");
+      $("expandReportMap").classList.add("hidden");
+      $("collapseReportMap").classList.remove("hidden");
+      afterLayoutStable(()=>state.maps.report?.invalidateSize());
+    };
+    $("collapseReportMap").onclick = () => {
+      $("reportMapShell").classList.remove("is-expanded");
+      $("collapseReportMap").classList.add("hidden");
+      $("expandReportMap").classList.remove("hidden");
+      afterLayoutStable(()=>state.maps.report?.invalidateSize());
+    };
     $("reportBackBtn").onclick = () => {
       if(state.reportOrigin === "history") show("screen-history");
       else show("screen-work");
@@ -3125,16 +3578,18 @@
     setAppHeight();
     window.addEventListener("resize", setAppHeight);
     window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 250));
+    document.addEventListener("visibilitychange", () => {
+      if(document.hidden) suspendCurrentWork("Interrupción del navegador");
+      else { state.lastHeartbeatAt = Date.now(); if(state.work) updateLiveStats(); }
+    });
+    window.addEventListener("pagehide", () => suspendCurrentWork("Interrupción del navegador"));
     initLists();
     loadSavedDayConfig();
     bind();
     restoreIfPossible();
 
-    setTimeout(() => {
-      const gj = storage.get(LS.map, null) || storage.get("pbgps_parcel_geojson_v07", null) || storage.get("pbgps_parcel_geojson_v06", null);
-      const inc = storage.get(LS.incidentLayer, null) || storage.get("pbgps_incident_layer_geojson_v07", null) || storage.get("pbgps_incident_layer_geojson_v06", null);
-      if(isValidParcelsGeoJSON(gj)) { state.parcelsGeoJSON = gj; storage.set(LS.map, gj); renderParcelPreview(gj); }
-      if(isValidIncidentsGeoJSON(inc)) { state.incidentsGeoJSON = inc; storage.set(LS.incidentLayer, inc); renderIncidentLayerStatus(inc); }
+    setTimeout(async () => {
+      await initSavedLayerSets();
       show("screen-map-load");
     }, 4000);
   }

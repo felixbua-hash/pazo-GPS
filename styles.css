@@ -1165,3 +1165,72 @@ input:focus,select:focus,textarea:focus{
   .report-action-btn{min-height:38px!important;padding:7px 8px!important;font-size:11px!important}
   .report-map{height:18vh!important;min-height:112px!important;max-height:155px!important}
 }
+
+/* ==============================================================
+   BETA v9.5 — ajustes selectivos (se conserva la estética original)
+   ============================================================== */
+
+/* Inicio: composición HTML limpia sobre fragmento de viñedo de la ilustración
+   original. Las barras de estado y el texto de versión incrustados en la imagen
+   antigua quedan fuera del área visible; la versión es texto dinámico. */
+#screen-splash.splash-screen{padding:0!important;display:none;flex-direction:column!important;align-items:stretch!important;justify-content:stretch!important;background:#f0e8d9!important;overflow:hidden!important}
+#screen-splash.splash-screen.active{display:flex!important}
+.splash-identity{position:relative;flex:1 1 61%;min-height:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:clamp(7px,1.3vh,15px);padding:10vh 14px 1vh;color:#183b29;text-align:center;background:radial-gradient(ellipse at 50% 45%,#fffdf4 0,#f5eee2 61%,#e9ddc9 100%);isolation:isolate}
+.splash-identity::before{content:"";position:absolute;inset:5% 3% auto;bottom:6%;z-index:-1;opacity:.18;border:1px solid #b09d64;border-radius:46% 46% 14% 14%;pointer-events:none}
+.splash-monogram{position:relative;line-height:.92;font:normal clamp(96px,15vh,145px) Georgia,"Times New Roman",serif;color:#143d28;letter-spacing:-.08em;padding-right:.08em}
+.splash-vine{position:absolute;left:-.07em;bottom:-.06em;font:normal clamp(48px,7vh,70px) Georgia,serif;color:#888d54;transform:rotate(-22deg)}
+.splash-name{font:normal clamp(36px,10vw,62px) Georgia,"Times New Roman",serif;letter-spacing:.035em;white-space:nowrap;max-width:100%;transform:scaleX(.96)}
+.splash-divider{display:flex;align-items:center;gap:11px;color:#928956;font-size:9px}
+.splash-divider span{height:1px;background:#aca176;width:clamp(45px,14vw,94px)}
+.splash-subtitle{font:normal clamp(18px,4.8vw,27px) Georgia,serif;line-height:1.2;color:#536147}
+.splash-version{font:700 clamp(17px,4.5vw,23px) Georgia,serif;color:#17452f;line-height:1.2;margin-top:3px}
+.splash-landscape{height:39%;flex:0 0 39%;width:100%;background-image:linear-gradient(to bottom,rgba(238,230,211,.75) 0,rgba(238,230,211,.01) 18%),url('./splash.png');background-repeat:no-repeat;background-size:100% 100%,100% auto;background-position:center,center bottom;}
+@media(max-height:670px){.splash-identity{padding-top:7vh;gap:6px}.splash-monogram{font-size:75px}.splash-name{font-size:35px}.splash-landscape{height:37%;flex-basis:37%}}
+
+/* Carga de GeoJSON: botones evidentes, privacidad consultable, conjuntos con nombre. */
+#screen-map-load .panel{overflow-y:auto!important;overscroll-behavior:contain!important;padding-bottom:23px!important;gap:11px!important}
+#screen-map-load .lead{font-size:13px!important;line-height:1.35!important}
+#screen-map-load .privacy-entry{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;padding:9px 11px;border:1px solid #ded2b5;border-radius:17px;background:rgba(241,235,220,.65);color:#254e37}
+#screen-map-load .privacy-entry span{display:flex;flex-direction:column;gap:1px;font-size:13px}
+#screen-map-load .privacy-entry small{font-size:11px;color:#79766b}
+#screen-map-load .privacy-action{min-height:35px!important;font-size:12px!important;padding:7px 13px!important;border-radius:13px!important;flex:0 0 auto}
+#screen-map-load .file-box{width:100%;min-height:65px!important;background:#fcfbf3!important;border:2px solid #b3a06d!important;border-radius:17px!important;box-shadow:0 3px 11px rgba(22,61,41,.1)!important;text-align:left!important;padding:8px 11px!important;display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:10px!important;cursor:pointer!important;touch-action:manipulation}
+#screen-map-load .file-box:active{background:#f1ecd9!important;transform:scale(.995)}
+#screen-map-load .file-action-icon{width:34px;height:34px;flex:0 0 34px;border-radius:11px;background:#1d5038;color:#fff;font-size:24px;line-height:32px;text-align:center;font-weight:400}
+#screen-map-load .secondary-file .file-action-icon{background:#927e44}
+#screen-map-load .file-box span:nth-child(3){flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:3px}
+#screen-map-load .file-box strong{font-size:13px;line-height:1.2;color:#17492f}
+#screen-map-load .file-box small{display:block;font-size:11px;line-height:1.25;color:#786e60;font-weight:500}
+#screen-map-load .file-action-chevron{color:#8d815b;font-size:28px;font-weight:400;margin-left:auto}
+#screen-map-load .layer-set-save{display:flex;flex-direction:column;gap:5px;border-top:1px solid #dfd7c4;padding-top:12px}
+#screen-map-load .layer-set-save label,#screen-map-load .saved-sets-panel label{font-size:12px;color:#345d45}
+#screen-map-load .layer-set-save-row{display:flex;align-items:stretch;gap:8px}
+#screen-map-load .layer-set-save-row input{min-width:0;flex:1;padding:9px 11px!important;font-size:13px!important;border-radius:12px}
+#screen-map-load #saveLayerSet{flex:0 0 auto;max-width:43%;padding:8px 10px!important;min-height:42px!important;font-size:12px!important;line-height:1.1!important;border-radius:12px!important}
+#screen-map-load .layer-set-hint{color:#6c7062;font-size:11px;line-height:1.3}
+#screen-map-load .saved-sets-panel{border:1px solid #d5c79f;border-radius:15px;padding:11px;background:rgba(251,250,240,.9);color:#204932;flex:0 0 auto}
+#screen-map-load .saved-sets-panel summary{font-size:13px;font-weight:800;cursor:pointer;line-height:1.3}
+#screen-map-load .saved-sets-panel[open]{display:flex;flex-direction:column;gap:9px}
+#screen-map-load .saved-sets-panel small{font-size:11px;line-height:1.3;color:#7a776c}
+#screen-map-load .saved-sets-panel select{padding:10px!important;font-size:13px!important;border-radius:12px}
+#screen-map-load .saved-sets-panel .btn{font-size:12px!important;min-height:40px!important;padding:8px 11px!important}
+#screen-map-load #continueAfterMap{width:100%;min-height:49px!important;flex:0 0 auto}
+.privacy-modal-card{max-height:85vh!important;overflow:auto!important;gap:12px!important}
+.privacy-modal-card p{font-size:14px;line-height:1.45;color:#3d5245;margin:0}
+
+/* Informe: mapa ampliable y métricas sin recortes. */
+.report-map-shell{position:relative;min-height:0;flex:0 0 auto;display:flex;flex-direction:column;gap:5px}
+.report-map-shell.hidden{display:none!important}
+.report-map-shell .report-map{height:26vh!important;min-height:170px!important;max-height:260px!important;width:100%!important;position:relative!important}
+.report-map-expand{font-size:11px!important;min-height:31px!important;padding:4px 11px!important;align-self:flex-end;border-radius:11px!important;flex:0 0 auto}
+.report-map-collapse{font-size:13px!important;min-height:43px!important;padding:8px 14px!important;align-self:flex-end;margin-right:8px;border-radius:13px!important;flex:0 0 auto}
+.report-map-shell.is-expanded{position:fixed!important;inset:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)!important;z-index:10000!important;padding:12px!important;background:#f1eddf!important;display:flex!important;flex-direction:column!important;gap:9px!important}
+.report-map-shell.is-expanded .report-map{flex:1 1 auto!important;height:calc(100% - 65px)!important;max-height:none!important;min-height:0!important;border:1px solid #d3c398!important;border-radius:20px!important;}
+.report-map-shell.is-expanded .leaflet-container{touch-action:pan-x pan-y}
+.report-visual .report-kpi strong,.report-cards strong{overflow-wrap:anywhere!important;word-break:normal!important;white-space:normal!important;line-height:1.2!important}
+.report-list strong{overflow-wrap:anywhere}
+#reportStatusChip.hidden{display:none!important}
+#reportWind{font-size:clamp(11px,2.9vw,15px)!important}
+.wind-green{color:#257541!important}.wind-amber{color:#a0781a!important}.wind-red{color:#b7392e!important}
+.pbgps-wind-pin{background:rgba(253,251,245,.9);border:2px solid #e8dfc6;border-radius:50%;text-align:center;box-shadow:0 2px 5px #0003}
+.pbgps-wind-arrow{display:block;font:900 27px/25px system-ui,sans-serif;transform-origin:center center}

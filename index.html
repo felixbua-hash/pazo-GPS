@@ -14,8 +14,15 @@
   <div id="app">
 
     <!-- Pantalla de carga -->
-    <section id="screen-splash" class="screen active splash-screen">
-      <img class="splash-img" src="./splash.png" alt="Pazo Baion GPS" />
+    <section id="screen-splash" class="screen active splash-screen" aria-label="Pazo Baion GPS, pantalla de inicio">
+      <div class="splash-identity">
+        <div class="splash-monogram" aria-hidden="true">B<span class="splash-vine">❧</span></div>
+        <div class="splash-name">PAZO BAION</div>
+        <div class="splash-divider" aria-hidden="true"><span></span>●<span></span></div>
+        <div class="splash-subtitle">Control GPS de viñedos</div>
+        <div class="splash-version">Beta v9.5</div>
+      </div>
+      <div class="splash-landscape" role="img" aria-label="Vista ornamental de un viñedo"></div>
     </section>
 
     <!-- Carga local de capas -->
@@ -30,35 +37,52 @@
 
       <main class="panel">
         <h1>Cargar capas del mapa</h1>
-        <p class="lead">Selecciona desde este terminal las dos capas exportadas desde SW Maps: <strong>PARCELAS.geojson</strong> e <strong>INCIDENCIAS_.geojson</strong>. No se subirán a GitHub ni a terceros.</p>
+        <p class="lead">Selecciona desde este terminal las dos capas exportadas desde SW Maps: <strong>PARCELAS.geojson</strong> e <strong>INCIDENCIAS_.geojson</strong>. Los archivos no se envían íntegros a GitHub ni a terceros.</p>
 
-        <div class="privacy-box">
-          <strong>Privacidad:</strong> las coordenadas quedan guardadas localmente en este dispositivo. El mapa satelital online puede consultar imágenes de la zona al proveedor del mapa durante esta beta.
-        </div>
+        <div class="privacy-entry"><span><strong>Privacidad de los datos</strong><small>Información disponible bajo consulta.</small></span><button id="openPrivacy" class="btn ghost privacy-action" type="button">Consultar</button></div>
 
         <div class="layer-load-grid">
           <label class="file-box">
             <input id="parcelGeojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
-            <span>1. Seleccionar PARCELAS.geojson</span>
+            <span class="file-action-icon" aria-hidden="true">＋</span><span><strong>1 · Elegir archivo de PARCELAS</strong><small>Pulsa aquí para seleccionar PARCELAS.geojson</small></span><span class="file-action-chevron" aria-hidden="true">›</span>
           </label>
           <div id="mapLoadStatus" class="status-card muted">Parcelas: no cargadas.</div>
 
           <label class="file-box secondary-file">
             <input id="incidentGeojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
-            <span>2. Seleccionar INCIDENCIAS_.geojson</span>
+            <span class="file-action-icon" aria-hidden="true">＋</span><span><strong>2 · Elegir archivo de INCIDENCIAS</strong><small>Pulsa aquí para seleccionar INCIDENCIAS_.geojson</small></span><span class="file-action-chevron" aria-hidden="true">›</span>
           </label>
           <div id="incidentLayerStatus" class="status-card muted">Incidencias: no cargadas. Puede estar vacía.</div>
         </div>
 
         <div id="parcelListPreview" class="parcel-preview hidden"></div>
 
-        <div class="button-row">
-          <button id="continueAfterMap" class="btn primary" disabled>Continuar</button>
-          <button id="useSavedMap" class="btn ghost">Usar capas guardadas</button>
+        <div class="layer-set-save">
+          <label for="layerSetName">Nombre para guardar este conjunto de capas</label>
+          <div class="layer-set-save-row"><input id="layerSetName" maxlength="70" autocomplete="off" placeholder="Ej.: Pazo Baion" /><button id="saveLayerSet" class="btn ghost" type="button">Guardar conjunto</button></div>
+          <small id="activeLayerSetInfo" class="layer-set-hint">Sin conjunto guardado seleccionado.</small>
         </div>
-        <button id="clearSavedMap" class="btn danger outline"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 12h6l1-12"/></svg></span><span>Borrar capas guardadas</span></button>
+        <details id="savedSetsDetails" class="saved-sets-panel">
+          <summary>Consultar / cambiar conjuntos guardados <span id="savedSetCount"></span></summary>
+          <label for="savedLayerSetSelect">Conjunto de parcelas que deseas cargar</label>
+          <select id="savedLayerSetSelect" aria-label="Elegir conjunto guardado"></select>
+          <div class="button-row"><button id="loadLayerSet" class="btn ghost" type="button">Cargar seleccionado</button><button id="deleteLayerSet" class="btn danger outline" type="button">Eliminar</button></div>
+          <small>Los conjuntos se guardan por separado en este dispositivo. Las parcelas y las incidencias de cada conjunto se cargan juntas.</small>
+        </details>
+        <button id="continueAfterMap" class="btn primary full" disabled>Continuar al mapa</button>
       </main>
     </section>
+
+    <!-- Información consultable, no ocupa el menú de carga -->
+    <div id="privacyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+      <div class="modal-card privacy-modal-card">
+        <h2 id="privacyTitle">Privacidad de los datos</h2>
+        <p>Las capas GeoJSON, los registros de trabajo, las rutas y las incidencias se guardan localmente en este dispositivo. La aplicación no los sube a GitHub.</p>
+        <p>Los mapas satelitales requieren conexión a internet y pueden enviar al proveedor de cartografía datos relacionados con la zona visualizada. Las consultas automáticas de viento (Open-Meteo) envían coordenadas de la consulta meteorológica. No equivalen a mediciones directas de viento en la parcela.</p>
+        <p>Los conjuntos guardados permanecen en el almacenamiento de este navegador: pueden perderse si se borran los datos del sitio. Conserva copias de tus archivos originales y de los informes importantes.</p>
+        <button id="closePrivacy" class="btn primary full" type="button">Volver a cargar capas</button>
+      </div>
+    </div>
 
     <!-- Configuración de jornada -->
     <section id="screen-day-config" class="screen">
@@ -303,8 +327,8 @@
         </div>
 
         <div id="reportFinalActions" class="report-final-actions" aria-label="Acciones del informe final">
-          <button id="shareFinalReportBtn" class="btn primary report-action-btn">Compartir / guardar informe</button>
-          <button id="printFinalReportBtn" class="btn ghost report-action-btn">Imprimir / guardar PDF</button>
+          <button id="shareFinalReportBtn" class="btn primary report-action-btn">Compartir resumen</button>
+          <button id="printFinalReportBtn" class="btn ghost report-action-btn">Generar / guardar PDF</button>
         </div>
 
         <div id="pendingWorkActions" class="pending-work-actions hidden">
@@ -312,7 +336,7 @@
           <button id="finishPendingWorkBtn" class="btn warning pending-action-btn">Terminar trabajo</button>
         </div>
 
-        <div id="reportMap" class="report-map hidden"></div>
+        <div class="report-map-shell" id="reportMapShell"><button id="expandReportMap" class="btn ghost report-map-expand" type="button" aria-label="Ampliar mapa de recorrido">Ampliar mapa ⛶</button><button id="collapseReportMap" class="btn ghost report-map-collapse hidden" type="button">Cerrar mapa ✕</button><div id="reportMap" class="report-map hidden"></div></div>
         <div id="reportContent" class="report-content"></div>
       </main>
     </section>
@@ -389,6 +413,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="./data.js"></script>
+  <script src="./pdf-v95.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
