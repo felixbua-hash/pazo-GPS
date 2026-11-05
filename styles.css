@@ -1234,3 +1234,62 @@ input:focus,select:focus,textarea:focus{
 .wind-green{color:#257541!important}.wind-amber{color:#a0781a!important}.wind-red{color:#b7392e!important}
 .pbgps-wind-pin{background:rgba(253,251,245,.9);border:2px solid #e8dfc6;border-radius:50%;text-align:center;box-shadow:0 2px 5px #0003}
 .pbgps-wind-arrow{display:block;font:900 27px/25px system-ui,sans-serif;transform-origin:center center}
+
+
+/* ==============================================================
+   BETA v9.6 — navegación, jornada y acceso directo al historial
+   ============================================================== */
+/* Menú de conjuntos: aspecto inequívoco de botón táctil. */
+#screen-map-load .saved-sets-panel{padding:0!important;background:transparent!important;border:0!important;overflow:visible!important}
+#screen-map-load .saved-sets-panel summary{
+  list-style:none!important;display:flex!important;align-items:center!important;gap:10px!important;
+  padding:12px 13px!important;min-height:62px!important;border:2px solid #a99a66!important;
+  border-radius:17px!important;background:#fffdf5!important;color:#194b33!important;
+  box-shadow:0 5px 13px rgba(37,62,39,.10)!important;font-weight:800!important;
+  cursor:pointer!important;touch-action:manipulation!important;
+}
+#screen-map-load .saved-sets-panel summary::-webkit-details-marker{display:none!important}
+#screen-map-load .saved-sets-panel summary::marker{content:""}
+#screen-map-load .saved-sets-panel summary:focus-visible{outline:3px solid #b49a4e;outline-offset:3px}
+#screen-map-load .saved-sets-button-icon{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;background:#1f543b;color:#fff;border-radius:12px;font-size:21px}
+#screen-map-load .saved-sets-button-label{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:14px;line-height:1.2}
+#screen-map-load .saved-sets-button-label small{font-size:11px;line-height:1.2;color:#6a7364;font-weight:600}
+#screen-map-load .saved-sets-button-chevron{font-size:26px;transform:rotate(0deg);transition:transform .15s ease;color:#7e733e}
+#screen-map-load .saved-sets-panel[open] .saved-sets-button-chevron{transform:rotate(180deg)}
+#screen-map-load .saved-sets-panel[open]{padding:0 0 12px!important;background:rgba(251,250,240,.9)!important;border:1px solid #d5c79f!important;gap:9px!important}
+#screen-map-load .saved-sets-panel[open] summary{margin:-1px -1px 2px;border-radius:16px!important}
+#screen-map-load .saved-sets-panel[open] > label,
+#screen-map-load .saved-sets-panel[open] > select,
+#screen-map-load .saved-sets-panel[open] > .button-row,
+#screen-map-load .saved-sets-panel[open] > small{margin-left:12px;margin-right:12px}
+#screen-map-load .v96-history-access{margin-top:0!important;display:flex!important;align-items:center!important;justify-content:center!important;font-weight:800!important;background:rgba(255,253,247,.98)!important;color:var(--green)!important;min-height:50px!important}
+
+/* Jornada: fecha compacta y grupos de campos jerarquizados. */
+#screen-day-config .day-config-panel{gap:12px!important;padding:17px 17px 24px!important;overflow:auto!important}
+#screen-day-config .day-date-card{display:flex;align-items:center;gap:12px;padding:12px 13px;border:1px solid #d5c598;border-radius:18px;background:rgba(242,235,218,.70);flex:0 0 auto}
+#screen-day-config .day-date-card .ui-icon{width:25px;height:25px;stroke:#937f42;flex:0 0 25px}
+#screen-day-config .day-date-card div{display:flex;flex-direction:column;gap:3px}
+#screen-day-config .day-date-card span{font-size:11px;letter-spacing:.055em;font-weight:800;color:#706950}
+#screen-day-config .day-date-card strong{font:700 17px/1.2 Georgia,'Times New Roman',serif;color:var(--green);text-transform:capitalize}
+#screen-day-config .day-config-group{display:flex;flex-direction:column;gap:5px;flex:0 0 auto}
+#screen-day-config .day-config-group label{font-size:17px!important;font-weight:850!important;line-height:1.2!important;color:#174832!important;letter-spacing:.015em;margin:0!important}
+#screen-day-config .day-config-group select{height:44px!important;min-height:44px!important;padding:8px 13px!important}
+#screen-day-config .manage-list-row{gap:6px!important}
+#screen-day-config .manage-list-row .mini-btn{min-height:39px!important;border-radius:14px!important;padding:7px 6px!important;font-size:13px!important}
+#screen-day-config .day-notes-group textarea{height:75px!important;min-height:75px!important;padding:12px!important}
+#screen-day-config #saveDayConfig{margin-top:3px!important;min-height:52px!important}
+@media (max-width:370px){
+  #screen-day-config .day-config-group label{font-size:16px!important}
+  #screen-day-config .day-date-card strong{font-size:15px!important}
+}
+
+/* Aviso de cambio de día integrado con ayuda reversible. */
+.previous-day-card{width:min(440px,100%)!important;padding:21px!important;gap:12px!important;max-height:min(85vh,720px)!important;overflow-y:auto!important}
+.previous-day-title-line{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.previous-day-title-line h2{font-size:24px!important;line-height:1.14!important;margin:0!important}
+.previous-day-card p{margin:0!important;color:#405e4a;font-size:14px;line-height:1.5}
+.previous-day-card .btn{min-height:48px!important;font-size:14px!important;line-height:1.2!important;text-align:center}
+.previous-day-card .previous-day-close{font-size:12px!important;min-height:39px!important;opacity:.8}
+.day-help-button{width:40px;height:40px;border-radius:50%;flex:0 0 40px;border:2px solid #b49d60;background:#fffdf5;color:#1c4f36;font-size:22px;font-weight:850;cursor:pointer;box-shadow:0 2px 7px #3447281a}
+.previous-day-help-card h2{font-size:22px!important}
+.previous-day-help-card p{font-size:14px!important}

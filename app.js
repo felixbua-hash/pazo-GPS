@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.5";
+  const VERSION = "Beta v9.6";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -38,6 +38,9 @@
     reportHistoryIndex: null,
     tickerStarted: false,
     historyFilter: "all",
+    parcelSelectReturnTo: "screen-map-load",
+    historyReturnTo: "screen-map-load",
+    pendingResumeAfterDay: null,
     liveSpeedKmh: null,
     activeLayerSetId: null,
     layersDirty: false,
@@ -477,25 +480,60 @@
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   }
 
+  function formatDayDate(date=new Date()){
+    return new Intl.DateTimeFormat("es-ES", {weekday:"long", day:"numeric", month:"long", year:"numeric"}).format(date);
+  }
+
   function loadSavedDayConfig(){
+    $("dayDateLabel").textContent = formatDayDate();
     const day = storage.get(LS.day, null);
     if(day){
       $("operatorSelect").value = day.operator || $("operatorSelect").value;
       $("tractorSelect").value = day.tractor || $("tractorSelect").value;
       $("sprayerSelect").value = day.sprayer || $("sprayerSelect").value;
-      $("dayNotes").value = day.notes || "";
+      // Las observaciones son específicas de cada jornada y no se arrastran de un día anterior.
+      $("dayNotes").value = day.date === todayIso() ? (day.notes || "") : "";
       state.dayConfig = day;
-      if(day.date && day.date !== todayIso()){
-        $("dayStatus").className = "status-card warn";
-        $("dayStatus").innerHTML = `<strong>Jornada anterior detectada.</strong><br>La configuración guardada es del ${escapeHtml(day.date)}. Revísala y pulsa Comenzar jornada para usarla hoy.`;
-      } else {
-        $("dayStatus").className = "status-card ok";
-        $("dayStatus").textContent = "Jornada activa para hoy.";
-      }
-    } else {
-      $("dayStatus").className = "status-card muted";
-      $("dayStatus").textContent = "Introduce o confirma la configuración de la jornada.";
     }
+  }
+
+  function closePreviousDayDialog(){
+    $("previousDayModal").classList.add("hidden");
+    $("previousDayHelpModal").classList.add("hidden");
+  }
+
+  function offerPreviousDayConfig(day){
+    const prior = new Date(`${day.date}T12:00:00`);
+    const dateLabel = Number.isFinite(prior.getTime())
+      ? new Intl.DateTimeFormat("es-ES", {day:"numeric", month:"long", year:"numeric"}).format(prior)
+      : String(day.date);
+    $("previousDayMessage").textContent = `Hay una configuración guardada del ${dateLabel}. ¿Deseas utilizar los mismos datos hoy o revisarlos antes de continuar al mapa?`;
+    $("previousDayModal").classList.remove("hidden");
+  }
+
+  function usePreviousDayConfig(){
+    const day = storage.get(LS.day, null);
+    if(!day || !day.date || day.date === todayIso()){
+      closePreviousDayDialog();
+      goAfterMapReady();
+      return;
+    }
+    const cfg = {...day, date:todayIso(), notes:""};
+    if(!storage.set(LS.day, cfg)){
+      toast("No se pudo guardar la nueva jornada. No se han modificado los datos anteriores.");
+      return;
+    }
+    state.dayConfig = cfg;
+    closePreviousDayDialog();
+    loadSavedDayConfig();
+    state.parcelSelectReturnTo = "screen-map-load";
+    show("screen-parcel-select");
+  }
+
+  function modifyPreviousDayConfig(){
+    closePreviousDayDialog();
+    loadSavedDayConfig();
+    show("screen-day-config");
   }
 
   function saveDayConfig(){
@@ -511,6 +549,14 @@
       return;
     }
     state.dayConfig = cfg;
+    // Si la jornada se preparó desde la ficha de un pendiente, continuar esa ficha.
+    const pendingId = state.pendingResumeAfterDay;
+    state.pendingResumeAfterDay = null;
+    if(pendingId && state.reportWork && state.reportWork.id === pendingId && !workIsCompleted(state.reportWork)){
+      resumePendingWorkFromReport();
+      return;
+    }
+    state.parcelSelectReturnTo = "screen-day-config";
     show("screen-parcel-select");
   }
 
@@ -965,6 +1011,23 @@
   }
 
   function resumePendingWorkFromReport(){
+    const pending = getReportWork();
+    if(!pending || workIsCompleted(pending)) return;
+    const day = storage.get(LS.day, null);
+    if(!day || day.date !== todayIso()){
+      state.pendingResumeAfterDay = pending.id;
+      toast("Para reanudar este trabajo pendiente, confirma primero la configuración de la jornada de hoy. La ficha permanece guardada en el historial.");
+      closePreviousDayDialog();
+      loadSavedDayConfig();
+      show("screen-day-config");
+      return;
+    }
+    // La ficha conserva su geometría; no se obliga a cargar de nuevo todas las capas para leerla.
+    if(!pending.parcelFeature && !findParcelFeatureByName(pending.parcel, pending.parcelId)){
+      toast("Este trabajo no incluye la geometría de su parcela. Carga primero las capas correspondientes antes de reanudarlo.");
+      show("screen-map-load");
+      return;
+    }
     const w = activatePendingWorkFromReport();
     if(!w) return;
     show("screen-work");
@@ -3419,24 +3482,12 @@
     const day = storage.get(LS.day, null);
     if(day && day.date === todayIso()){
       state.dayConfig = day;
+      state.parcelSelectReturnTo = "screen-map-load";
       show("screen-parcel-select");
       return;
     }
     if(day && day.date && day.date !== todayIso()){
-      const reuse = confirm("Jornada anterior detectada (" + day.date + ").\n\n¿Usar la misma configuración para hoy y continuar al mapa de parcelas?");
-      if(reuse){
-        const cfg = {...day, date: todayIso()};
-        state.dayConfig = cfg;
-        if(!storage.set(LS.day, cfg)){
-          toast("No se pudo guardar la jornada actualizada.");
-          return;
-        }
-        loadSavedDayConfig();
-        show("screen-parcel-select");
-      } else {
-        loadSavedDayConfig();
-        show("screen-day-config");
-      }
+      offerPreviousDayConfig(day);
       return;
     }
     loadSavedDayConfig();
@@ -3483,6 +3534,24 @@
     });
 
     $("continueAfterMap").onclick = goAfterMapReady;
+    $("openHistoryFromMap").onclick = () => {
+      state.historyReturnTo = "screen-map-load";
+      upsertPendingWorkInHistory();
+      show("screen-history");
+    };
+    $("backFromHistory").onclick = () => show(state.historyReturnTo || "screen-map-load");
+    $("backFromParcelSelect").onclick = () => show(state.parcelSelectReturnTo || "screen-map-load");
+    $("previousDayHelp").onclick = () => {
+      $("previousDayModal").classList.add("hidden");
+      $("previousDayHelpModal").classList.remove("hidden");
+    };
+    $("backFromPreviousDayHelp").onclick = () => {
+      $("previousDayHelpModal").classList.add("hidden");
+      $("previousDayModal").classList.remove("hidden");
+    };
+    $("reusePreviousDay").onclick = usePreviousDayConfig;
+    $("modifyPreviousDay").onclick = modifyPreviousDayConfig;
+    $("closePreviousDay").onclick = closePreviousDayDialog;
     $("openPrivacy").onclick = () => $("privacyModal").classList.remove("hidden");
     $("closePrivacy").onclick = () => $("privacyModal").classList.add("hidden");
     $("saveLayerSet").onclick = saveNamedLayerSet;
@@ -3492,7 +3561,11 @@
     $("savedSetsDetails").addEventListener("toggle", () => { if($("savedSetsDetails").open) refreshLayerSets(); });
 
     $("saveDayConfig").onclick = saveDayConfig;
-    $("openHistoryFromDay").onclick = () => { upsertPendingWorkInHistory(); show("screen-history"); };
+    $("backFromDayConfig").onclick = () => {
+      const cameFromPending = !!state.pendingResumeAfterDay;
+      state.pendingResumeAfterDay = null;
+      show(cameFromPending ? "screen-report" : "screen-map-load");
+    };
     $("expandReportMap").onclick = () => {
       $("reportMapShell").classList.add("is-expanded");
       $("expandReportMap").classList.add("hidden");

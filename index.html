@@ -20,7 +20,7 @@
         <div class="splash-name">PAZO BAION</div>
         <div class="splash-divider" aria-hidden="true"><span></span>●<span></span></div>
         <div class="splash-subtitle">Control GPS de viñedos</div>
-        <div class="splash-version">Beta v9.5</div>
+        <div class="splash-version">Beta v9.6</div>
       </div>
       <div class="splash-landscape" role="img" aria-label="Vista ornamental de un viñedo"></div>
     </section>
@@ -63,13 +63,18 @@
           <small id="activeLayerSetInfo" class="layer-set-hint">Sin conjunto guardado seleccionado.</small>
         </div>
         <details id="savedSetsDetails" class="saved-sets-panel">
-          <summary>Consultar / cambiar conjuntos guardados <span id="savedSetCount"></span></summary>
+          <summary aria-label="Abrir o cerrar los conjuntos guardados">
+            <span class="saved-sets-button-icon" aria-hidden="true">▤</span>
+            <span class="saved-sets-button-label">Consultar / cambiar conjuntos guardados <span id="savedSetCount"></span><small>Pulse para mostrar u ocultar la lista</small></span>
+            <span class="saved-sets-button-chevron" aria-hidden="true">⌄</span>
+          </summary>
           <label for="savedLayerSetSelect">Conjunto de parcelas que deseas cargar</label>
           <select id="savedLayerSetSelect" aria-label="Elegir conjunto guardado"></select>
           <div class="button-row"><button id="loadLayerSet" class="btn ghost" type="button">Cargar seleccionado</button><button id="deleteLayerSet" class="btn danger outline" type="button">Eliminar</button></div>
           <small>Los conjuntos se guardan por separado en este dispositivo. Las parcelas y las incidencias de cada conjunto se cargan juntas.</small>
         </details>
         <button id="continueAfterMap" class="btn primary full" disabled>Continuar al mapa</button>
+        <button id="openHistoryFromMap" class="btn ghost full v96-history-access" type="button"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/><path d="M12 8v5l3 2"/></svg></span><span>Ver historial de trabajos</span></button>
       </main>
     </section>
 
@@ -84,57 +89,81 @@
       </div>
     </div>
 
+    <!-- Ventana ornamental de cambio de jornada: sustituye el confirm del navegador -->
+    <div id="previousDayModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="previousDayTitle">
+      <div class="modal-card previous-day-card">
+        <div class="previous-day-title-line"><h2 id="previousDayTitle">Jornada anterior detectada</h2><button id="previousDayHelp" class="day-help-button" type="button" aria-label="¿Qué significa este aviso?" title="Ayuda sobre la jornada">?</button></div>
+        <p id="previousDayMessage">Puedes mantener los mismos datos de operario, tractor y atomizador o revisarlos antes de empezar.</p>
+        <button id="reusePreviousDay" class="btn primary full" type="button">Usar configuración anterior</button>
+        <button id="modifyPreviousDay" class="btn ghost full" type="button">Modificar configuración</button>
+        <button id="closePreviousDay" class="btn ghost full previous-day-close" type="button">Volver a cargar capas</button>
+      </div>
+    </div>
+    <div id="previousDayHelpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="previousDayHelpTitle">
+      <div class="modal-card previous-day-card previous-day-help-card">
+        <h2 id="previousDayHelpTitle">¿Por qué aparece este aviso?</h2>
+        <p>Cuando cambia la fecha, Pazo Baion GPS comprueba si hay una configuración guardada del día anterior.</p>
+        <p><strong>Usar configuración anterior:</strong> reutiliza operario, tractor y atomizador, establece la fecha de hoy y deja vacías las observaciones de la nueva jornada.</p>
+        <p><strong>Modificar configuración:</strong> abre la pantalla de jornada para revisar esos datos y comenzar el día.</p>
+        <p><strong>Los registros anteriores no se suman:</strong> tiempos, recorridos, paradas e incidencias conservan sus fechas y no pasan a la jornada nueva.</p>
+        <button id="backFromPreviousDayHelp" class="btn primary full" type="button">Volver al aviso</button>
+      </div>
+    </div>
+
     <!-- Configuración de jornada -->
     <section id="screen-day-config" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-map-load"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
+        <button id="backFromDayConfig" class="back-btn" type="button" aria-label="Volver a la pantalla anterior"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
           <div class="brand-title">Configuración de jornada</div>
           <div class="brand-subtitle">Datos activos del día</div>
         </div>
       </header>
 
-      <main class="panel">
-        <h1>Preparar jornada</h1>
-        <p class="lead">Estos datos se aplicarán por defecto a los trabajos de hoy, salvo cambio expreso.</p>
-        <div id="dayStatus" class="status-card muted">Jornada preparada para hoy.</div>
-
-        <label>Operario</label>
-        <div class="select-edit manage-list-row">
-          <select id="operatorSelect"></select>
-          <button class="mini-btn add-btn" data-add-list="operators">Añadir</button>
-          <button class="mini-btn tool-btn" data-edit-list="operators">Editar</button>
-          <button class="mini-btn tool-btn danger-tool" data-delete-list="operators">Eliminar</button>
+      <main class="panel day-config-panel">
+        <div class="day-date-card" aria-label="Fecha de la jornada">
+          <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>
+          <div><span>FECHA DE JORNADA</span><strong id="dayDateLabel">Fecha de hoy</strong></div>
         </div>
-
-        <label>Tractor</label>
-        <div class="select-edit manage-list-row">
-          <select id="tractorSelect"></select>
-          <button class="mini-btn add-btn" data-add-list="tractors">Añadir</button>
-          <button class="mini-btn tool-btn" data-edit-list="tractors">Editar</button>
-          <button class="mini-btn tool-btn danger-tool" data-delete-list="tractors">Eliminar</button>
+        <div class="day-config-group">
+          <label for="operatorSelect">OPERARIO</label>
+          <div class="select-edit manage-list-row">
+            <select id="operatorSelect"></select>
+            <button class="mini-btn add-btn" data-add-list="operators">Añadir</button>
+            <button class="mini-btn tool-btn" data-edit-list="operators">Editar</button>
+            <button class="mini-btn tool-btn danger-tool" data-delete-list="operators">Eliminar</button>
+          </div>
         </div>
-
-        <label>Atomizador / cisterna</label>
-        <div class="select-edit manage-list-row">
-          <select id="sprayerSelect"></select>
-          <button class="mini-btn add-btn" data-add-list="sprayers">Añadir</button>
-          <button class="mini-btn tool-btn" data-edit-list="sprayers">Editar</button>
-          <button class="mini-btn tool-btn danger-tool" data-delete-list="sprayers">Eliminar</button>
+        <div class="day-config-group">
+          <label for="tractorSelect">TRACTOR</label>
+          <div class="select-edit manage-list-row">
+            <select id="tractorSelect"></select>
+            <button class="mini-btn add-btn" data-add-list="tractors">Añadir</button>
+            <button class="mini-btn tool-btn" data-edit-list="tractors">Editar</button>
+            <button class="mini-btn tool-btn danger-tool" data-delete-list="tractors">Eliminar</button>
+          </div>
         </div>
-
-        <label>Observaciones de jornada</label>
-        <textarea id="dayNotes" rows="3" placeholder="Opcional"></textarea>
-
+        <div class="day-config-group">
+          <label for="sprayerSelect">ATOMIZADOR / CISTERNA</label>
+          <div class="select-edit manage-list-row">
+            <select id="sprayerSelect"></select>
+            <button class="mini-btn add-btn" data-add-list="sprayers">Añadir</button>
+            <button class="mini-btn tool-btn" data-edit-list="sprayers">Editar</button>
+            <button class="mini-btn tool-btn danger-tool" data-delete-list="sprayers">Eliminar</button>
+          </div>
+        </div>
+        <div class="day-config-group day-notes-group">
+          <label for="dayNotes">OBSERVACIONES DE JORNADA</label>
+          <textarea id="dayNotes" rows="3" placeholder="Opcional"></textarea>
+        </div>
         <button id="saveDayConfig" class="btn primary full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h12l2 2v12H5z"/><path d="M8 5v6h8V5"/><path d="M9 19h6"/></svg></span><span>Comenzar jornada</span></button>
-        <button id="openHistoryFromDay" class="btn ghost full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/><path d="M12 8v5l3 2"/></svg></span><span>Ver historial</span></button>
       </main>
     </section>
 
     <!-- Selección de parcela -->
     <section id="screen-parcel-select" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-day-config"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
+        <button id="backFromParcelSelect" class="back-btn" type="button" aria-label="Volver a la pantalla anterior"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
           <div class="brand-title">Seleccionar parcela</div>
           <div class="brand-subtitle">Toca una parcela para continuar</div>
@@ -344,7 +373,7 @@
     <!-- Historial -->
     <section id="screen-history" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-day-config"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
+        <button id="backFromHistory" class="back-btn" type="button" aria-label="Volver a la pantalla anterior"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
           <div class="brand-title">Historial</div>
           <div class="brand-subtitle">Trabajos guardados localmente</div>

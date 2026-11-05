@@ -1,24 +1,18 @@
 PAZO BAION GPS
-Beta v9.5 · Premium vitícola ornamental
-Fecha: 03/11/2026
-Base: Beta v9.4
+Beta v9.6 · Premium vitícola ornamental
+Fecha: 05/11/2026
+Base: Beta v9.5
 
-CORRECCIONES PRINCIPALES
-- Inicio limpio, nombre y subtítulo bien separados de la versión.
-- Privacidad consultable; selección de GeoJSON como botones claros.
-- Conjuntos de capas independientes con nombre y selección explícita (IndexedDB).
-- No se mezclan incidencias y parcelas al importar nuevas capas.
-- GPS: validaciones de puntos y escalas de precisión.
-- Viento: estadísticas sin falsos ceros, niveles y flechas direccionales.
-- Trabajos: medidas contra sobrescritura y pérdidas silenciosas.
-- Interrupción de Safari: no imputar intervalos sin seguimiento como trabajo.
-- Informe: fechas por tramos, desglose diario, mapa ampliable.
-- PDF documental real en A4; compartir resumen en texto.
+MEJORAS
+- Historial accesible desde la carga de capas sin configurar jornada ni importar GeoJSON.
+- Se retira el acceso a historial de la pantalla Configuración de jornada.
+- Botón de regreso de selección de parcela respeta si llegó desde capas o desde jornada.
+- Regreso del historial a la pantalla de carga de capas.
+- Ventana de jornada anterior con opciones Usar configuración anterior, Modificar configuración y Volver; ayuda (?) con regreso.
+- Configuración de jornada simplificada: fecha de hoy, grupos compactos, títulos más próximos, grandes y en negrita.
+- Desplegable de conjuntos guardados con apariencia de botón inequívoca.
+- Consulta de fichas de historial independiente de jornada; se exige preparación vigente antes de reanudar trabajos.
 
-LÍMITES CONOCIDOS
-- No garantiza GPS en segundo plano con iPhone bloqueado.
-- No hay cartografía ni viento plenamente offline.
-- Fotos de incidencias no incrustadas en PDF (conservar registro o JSON).
-- Se requiere validar en iPhone real con GPS y datos de explotación.
-
-ZIP EN RAÍZ · SIN GEOJSON REALES · CON COMPATIBILIDAD DE ALMACENAMIENTO V08
+COMPATIBILIDAD: conserva claves locales v08 e IndexedDB pazo_baion_local_v95.
+LIMITACIONES: GPS en segundo plano de Safari no garantizado; se requiere prueba en iPhone real.
+ZIP EN RAÍZ · SIN GEOJSON REALES
