@@ -1,17 +1,17 @@
 PAZO BAION GPS
-Beta v9.6 · Premium vitícola ornamental
-Fecha: 05/11/2026
-Base: Beta v9.5
+Beta v9.6.1 · Premium vitícola ornamental
+Fecha: 06/11/2026
+Base: Beta v9.6
 
-MEJORAS
+CORRECCIONES PUNTUALES (SIN MODIFICAR DISEÑO NI FUNCIONES ACORDADAS)
+- Identificación Beta v9.6.1 coherente en inicio, código, valores por defecto, manifiesto e informes PDF (cabecera y pie).
+- Finalización de trabajo pendiente desde historial: se exige que la activación devuelva el trabajo seleccionado. Si la activación se cancela o falla, no se finaliza otro trabajo.
+- Formato de fecha de jornada en español: inicial del día en mayúscula y preposiciones/mes en minúscula.
+
+CONSERVADO DE V9.6
 - Historial accesible desde la carga de capas sin configurar jornada ni importar GeoJSON.
-- Se retira el acceso a historial de la pantalla Configuración de jornada.
-- Botón de regreso de selección de parcela respeta si llegó desde capas o desde jornada.
-- Regreso del historial a la pantalla de carga de capas.
-- Ventana de jornada anterior con opciones Usar configuración anterior, Modificar configuración y Volver; ayuda (?) con regreso.
-- Configuración de jornada simplificada: fecha de hoy, grupos compactos, títulos más próximos, grandes y en negrita.
-- Desplegable de conjuntos guardados con apariencia de botón inequívoca.
-- Consulta de fichas de historial independiente de jornada; se exige preparación vigente antes de reanudar trabajos.
+- Navegación de regreso sensible al recorrido, jornada anterior con ayuda, fecha de jornada y campos compactos.
+- Conjuntos guardados, módulos GPS/viento, reportes y PDF, sin alteraciones funcionales adicionales.
 
 COMPATIBILIDAD: conserva claves locales v08 e IndexedDB pazo_baion_local_v95.
 LIMITACIONES: GPS en segundo plano de Safari no garantizado; se requiere prueba en iPhone real.

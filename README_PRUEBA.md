@@ -1,28 +1,21 @@
-# PAZO BAION GPS — Beta v9.6
+# PAZO BAION GPS — Beta v9.6.1
 
-Versión basada directamente en Beta v9.5; se conserva el código GPS, incidencias, viento, historial, informes y PDF.
+Actualización puntual basada **directamente en Beta v9.6**. Conserva su diseño, navegación, carga de capas, historial, GPS, viento e informes.
 
-## Cambios de interfaz
-- En **Cargar capas del mapa** hay un botón **Ver historial de trabajos** accesible sin importar parcelas ni preparar jornada. El botón de regreso devuelve a carga de capas.
-- **Consultar / cambiar conjuntos guardados** es ahora un botón desplegable inequívoco, con icono y etiqueta explicativa. Conserva todas las opciones de seleccionar, cargar y eliminar.
-- Cuando hay una configuración de un día anterior, aparece una **ventana ornamental** con **Usar configuración anterior**, **Modificar configuración** y **Volver a cargar capas**. La ayuda **?** explica las opciones y tiene un botón para regresar al aviso. Las observaciones de la jornada anterior no se trasladan al nuevo día.
-- **Configuración de jornada** presenta la fecha actual y los datos operario, tractor, atomizador/cisterna, observaciones con rótulos en negrita, cerca de sus campos. No incluye mensajes repetidos ni botón de historial.
-- Desde **Seleccionar parcela**, regresar lleva a carga de capas si llegó directamente de allí, o a configuración de jornada si esa pantalla se utilizó antes.
+## Correcciones respecto a v9.6
+1. **Versión coherente:** pantalla inicial, `app.js`, `data.js`, manifiesto, archivo `VERSION.txt` e informes PDF (cabecera y pie) identifican la Beta v9.6.1. Se conserva el nombre interno `pdf-v95.js` por compatibilidad con la ruta usada en GitHub Pages; el contenido generado ya muestra la versión correcta.
+2. **Protección al finalizar pendientes:** después de seleccionar un trabajo pendiente del historial, la aplicación **solo** puede finalizarlo si se activó correctamente ese mismo trabajo. Si se cancela el cambio porque existe otro trabajo activo, no se modifica ni finaliza el trabajo anterior.
+3. **Fecha:** la pantalla de configuración muestra la fecha con formato de español correcto: «Viernes, 6 de noviembre de 2026», sin capitalizar «De» ni «Noviembre».
 
-## Pruebas recomendadas en Safari de iPhone
-1. Tras actualizar GitHub Pages, recargar la página y confirmar `Beta v9.6`.
-2. Pulsar **Ver historial de trabajos** antes de cargar capas y consultar una ficha antigua. Regresar debe devolver a carga de capas.
-3. Pulsar el botón de conjuntos guardados: verificar apertura/cierre y cargar un conjunto (sin borrarlo).
-4. Al cambiar de día, comprobar la ventana de reutilización: abrir **?**, leer, pulsar **Volver al aviso**, y elegir la acción adecuada.
-5. En configuración de jornada, comprobar fecha, campos y controles Añadir/Editar/Eliminar.
-6. Tras usar una jornada vigente, **Continuar al mapa** y **Volver** debe regresar a carga de capas. Si se ha comenzado desde configuración de jornada, volver debe regresar a ella.
-7. Abrir informe de historial, compartir resumen, generar PDF y comprobar navegación.
-8. En entorno de pruebas, intentar reanudar un trabajo pendiente sin jornada vigente: debe solicitar confirmar la configuración, permitir regresar a la ficha sin borrarla y, tras comenzar la jornada, recuperar ese trabajo en estado detenido (sin activar el GPS automáticamente).
+## Verificaciones recomendadas en iPhone
+1. Publicar todos los archivos del ZIP en la **raíz** del repositorio de GitHub Pages y comprobar que la pantalla de inicio indica **Beta v9.6.1**.
+2. Desde un informe de trabajo, generar un PDF y verificar que tanto cabecera como pie dicen **Beta v9.6.1**. El nombre `pdf-v95.js` es interno y no se muestra como versión del documento.
+3. En «Configuración de jornada», revisar la fecha: día de la semana con inicial mayúscula, mes y «de» en minúsculas.
+4. **Solo con registros de prueba:** crear dos trabajos pendientes, dejar uno activo, abrir otro desde el historial e intentar finalizarlo. Si se cancela el cambio de trabajo, no debe finalizarse ninguno. Si se acepta, solo debe finalizarse el seleccionado.
+5. Comprobar de nuevo los recorridos de la v9.6: historial directo, ayuda de jornada anterior, regreso, conjuntos guardados, informes.
 
 ## Protección de datos
-No se incluyen capas GeoJSON reales. La actualización mantiene las claves localStorage v08, el almacén IndexedDB de conjuntos v9.5 y la estructura de los trabajos anteriores. No borres datos del sitio de Safari si deseas conservar registros.
+No se incluyen capas GeoJSON ni incidencias reales. Se conservan las mismas claves `localStorage` v08, el almacén IndexedDB `pazo_baion_local_v95` y el formato anterior de los trabajos. **No borres los datos del sitio en Safari** si quieres conservar registros.
 
-## Límites conocidos
-- El GPS en segundo plano con pantalla bloqueada no está garantizado en Safari.
-- La cartografía y el viento requieren internet.
-- Los informes PDF no incluyen las fotografías incrustadas.
+## Limitaciones
+GPS en segundo plano de Safari no garantizado; cartografía y viento requieren internet. Las fotografías de incidencias siguen sin incrustarse en los PDF.

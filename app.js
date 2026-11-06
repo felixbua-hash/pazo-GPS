@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.6";
+  const VERSION = "Beta v9.6.1";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -481,7 +481,9 @@
   }
 
   function formatDayDate(date=new Date()){
-    return new Intl.DateTimeFormat("es-ES", {weekday:"long", day:"numeric", month:"long", year:"numeric"}).format(date);
+    const formatted = new Intl.DateTimeFormat("es-ES", {weekday:"long", day:"numeric", month:"long", year:"numeric"}).format(date);
+    // Solo el día de la semana lleva inicial mayúscula; «de» y el mes permanecen en minúsculas.
+    return formatted.replace(/^./u, letter => letter.toLocaleUpperCase("es-ES"));
   }
 
   function loadSavedDayConfig(){
@@ -1039,8 +1041,9 @@
     if(!confirm("¿Terminar ahora este trabajo pendiente y generar informe definitivo?")) return;
     setPendingActionBusy(true);
     try{
-      activatePendingWorkFromReport();
-      if(!state.work) return;
+      // No finalizar otro trabajo si la activación del pendiente fue cancelada o falló.
+      const activated = activatePendingWorkFromReport();
+      if(!activated || activated.id !== w.id || state.work?.id !== w.id) return;
       const now = Date.now();
       if(shouldTrackWindForWork(state.work)) await recordAutomaticWind("fin");
       const p = await resolveEventPosition();

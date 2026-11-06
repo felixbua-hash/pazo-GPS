@@ -1270,7 +1270,7 @@ input:focus,select:focus,textarea:focus{
 #screen-day-config .day-date-card .ui-icon{width:25px;height:25px;stroke:#937f42;flex:0 0 25px}
 #screen-day-config .day-date-card div{display:flex;flex-direction:column;gap:3px}
 #screen-day-config .day-date-card span{font-size:11px;letter-spacing:.055em;font-weight:800;color:#706950}
-#screen-day-config .day-date-card strong{font:700 17px/1.2 Georgia,'Times New Roman',serif;color:var(--green);text-transform:capitalize}
+#screen-day-config .day-date-card strong{font:700 17px/1.2 Georgia,'Times New Roman',serif;color:var(--green);text-transform:none}
 #screen-day-config .day-config-group{display:flex;flex-direction:column;gap:5px;flex:0 0 auto}
 #screen-day-config .day-config-group label{font-size:17px!important;font-weight:850!important;line-height:1.2!important;color:#174832!important;letter-spacing:.015em;margin:0!important}
 #screen-day-config .day-config-group select{height:44px!important;min-height:44px!important;padding:8px 13px!important}
