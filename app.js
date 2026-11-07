@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.7";
+  const VERSION = "Beta v9.8";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -36,6 +36,7 @@
     reportWork: null,
     reportOrigin: "work",
     reportHistoryIndex: null,
+    reportParentGroup: null,
     tickerStarted: false,
     historyFilter: "all",
     historyCampaign: "all",
@@ -66,7 +67,7 @@
     remove(key){ localStorage.removeItem(key); }
   };
 
-  // V9.7: IndexedDB guarda fichas íntegras en paralelo a las claves históricas v08.
+  // V9.8: IndexedDB guarda fichas íntegras en paralelo a las claves históricas v08.
   // Ninguna migración elimina o reescribe el historial original.
   function getHistoryEntries(){
     return state.historyCache || storage.get(LS.history, []);
@@ -192,7 +193,7 @@
   function workGeometries(w){
     const features=(Array.isArray(w.parcelFeatures)?w.parcelFeatures:[]).filter(Boolean);
     if(w.parcelFeature && !features.some(f=>JSON.stringify(f.geometry)===JSON.stringify(w.parcelFeature.geometry)))features.push(w.parcelFeature);
-    if(!features.length){
+    if(!features.length && w.reportOrigin!=='history'){
       const byName=findParcelFeatureByName(w.parcel,w.parcelId);
       if(byName)features.push(byName);
     }
@@ -232,9 +233,55 @@
       reportOrigin:'history'
     };
   }
+  // Recuperación conservadora: solo una coincidencia inequívoca en las capas guardadas.
+  // No modifica ni sustituye la geometría histórica persistida.
+  async function fillMissingReportGeometry(w){
+    if(!w)return w;
+    const list=w.isTreatmentGroup?(w.partWorks||[]):[w];
+    if(list.every(part=>workGeometries(part).length))return w;
+    let sets=[];
+    try{sets=await layerDb.getAll();}catch(err){console.warn('No se pudieron consultar las capas guardadas',err);return w;}
+    for(const part of list){
+      if(workGeometries(part).length || !part.parcel)continue;
+      const name=String(part.parcel).trim().toLocaleLowerCase('es');
+      const candidates=[];
+      if(state.parcelsGeoJSON?.features?.length){
+        for(const f of state.parcelsGeoJSON.features){
+          if(!f?.geometry || !['Polygon','MultiPolygon'].includes(f.geometry.type))continue;
+          if(String(featureName(f)).trim().toLocaleLowerCase('es')!==name)continue;
+          if(part.parcelId && String(parcelIdentity(f))!==String(part.parcelId))continue;
+          candidates.push({f,source:'capas actualmente cargadas'});
+        }
+      }
+      for(const set of sets){
+        for(const f of (set.parcelsGeoJSON?.features||[])){
+          if(!f?.geometry || !['Polygon','MultiPolygon'].includes(f.geometry.type))continue;
+          if(String(featureName(f)).trim().toLocaleLowerCase('es')!==name)continue;
+          if(part.parcelId && String(parcelIdentity(f))!==String(part.parcelId))continue;
+          candidates.push({f,source:set.name||'Conjunto guardado'});
+        }
+      }
+      const unique=new Map();
+      candidates.forEach(c=>unique.set(JSON.stringify(c.f.geometry),c));
+      if(unique.size===1){
+        const found=[...unique.values()][0];
+        part.parcelFeature=clonePlain(found.f);
+        part.reportRecoveredGeometrySource=found.source;
+      }else if(unique.size>1){part.reportGeometryAmbiguous=true;}
+    }
+    if(w.isTreatmentGroup){
+      w.parcelFeatures=list.flatMap(part=>workGeometries(part));
+      w.reportRecoveredGeometrySource=list.some(part=>part.reportRecoveredGeometrySource) ? 'conjuntos locales' : null;
+      w.reportGeometryAmbiguous=list.some(part=>part.reportGeometryAmbiguous);
+    }
+    return w;
+  }
+
   function reportGeoWarning(w){
     let notices=[];
-    if(!workGeometries(w).length) notices.push('No se conserva el perímetro de la parcela en esta ficha. Carga su conjunto de capas original para intentar recuperarlo; nunca se inventan límites.');
+    if(!workGeometries(w).length) notices.push('No está disponible el perímetro de la parcela en esta ficha. No se inventan límites.');
+    if(w.reportGeometryAmbiguous)notices.push('Existen varias parcelas con el mismo nombre en conjuntos guardados. No se ha elegido ninguna geometría sin confirmación.');
+    if(w.reportRecoveredGeometrySource)notices.push('Contorno tomado de las capas locales guardadas ('+w.reportRecoveredGeometrySource+'). Puede no coincidir con los límites históricos de la fecha del trabajo; no se han modificado los datos originales.');
     const pts=routeSections(w).flat();
     const accuracy=(Number(w.gpsStats?.sum)||0)/(Number(w.gpsStats?.count)||1);
     if(accuracy>20)notices.push(`Precisión GPS media insuficiente: aproximadamente ±${Math.round(accuracy)} m. El dibujo es orientativo.`);
@@ -242,6 +289,16 @@
     const speed=active>0?(Number(w.distanceM)||0)/(active/3600000)/1000:null;
     if(speed!==null && speed>35)notices.push(`Distancia y tiempo incompatibles con un recorrido habitual de tractor (${speed.toFixed(1).replace('.',',')} km/h de media). Conservar y revisar datos originales.`);
     if(pts.length<2)notices.push('No hay suficientes puntos GPS válidos para representar un recorrido completo.');
+    let jumps=0;
+    for(const section of routeSections(w)){
+      for(let i=1;i<section.length;i++){
+        const a=section[i-1],b=section[i],t1=toMs(a.time),t2=toMs(b.time);
+        if(!isValidRoutePoint(a)||!isValidRoutePoint(b)||!t1||!t2||t2<=t1)continue;
+        const kmh=haversine(a,b)/((t2-t1)/3600000)/1000;
+        if(kmh>35)jumps++;
+      }
+    }
+    if(jumps)notices.push(`${jumps} tramo(s) GPS muestran velocidad instantánea superior a 35 km/h; revisar saltos de posición antes de interpretar la distancia.`);
     return notices;
   }
   function exportIncidentsGeoJSON(){
@@ -262,15 +319,20 @@
   async function exportArchiveBundle(){
     try{
       const archive=window.PAZO_BAION_ARCHIVE;
+      await state.archiveWriteQueue.catch(()=>{});
       const fromDb=archive?await archive.getWorks():[];
       const merged=new Map(fromDb.map(w=>[w.id,w]));
-      getHistoryEntries().forEach(w=>{if(w?.id&&!merged.has(w.id))merged.set(w.id,w);});
+      getHistoryEntries().forEach(w=>{if(w?.id && (!merged.has(w.id) || (!w.compactedForStorage && merged.get(w.id)?.compactedForStorage)))merged.set(w.id,w);});
       const active=state.work&&!workIsCompleted(state.work)?state.work:storage.get(LS.active,null);
       if(active?.id)merged.set(active.id,active);
       const payload={format:'PAZO_BAION_GPS_ARCHIVO_V97',version:VERSION,exportedAt:new Date().toISOString(),
         warning:'Copia local sin envío a servidores. Conservar en lugar seguro. Puede incluir coordenadas, notas y fotografías de incidencias.',
         works:[...merged.values()],counters:archive?await archive.getCounters():[],
         layerSets:await layerDb.getAll().catch(()=>[]),
+        currentParcelsGeoJSON:state.parcelsGeoJSON||storage.get(LS.map,null),
+        currentIncidentsGeoJSON:state.incidentsGeoJSON||storage.get(LS.incidentLayer,null),
+        dayConfig:state.dayConfig||storage.get(LS.day,null),
+        savedLists:storage.get(LS.lists,null),
         localIncidents:storage.get(LS.incidents,[]),
         activeLayerSetId:state.activeLayerSetId||null};
       downloadBlob(`PAZO_BAION_COPIA_TRABAJOS_${todayIso()}.json`,JSON.stringify(payload,null,2),'application/json');
@@ -298,6 +360,20 @@
           if(!(await layerDb.get(set.id)))await layerDb.put(set);
         }
         await refreshLayerSets();
+      }
+      if(!storage.get(LS.map,null)&&isValidParcelsGeoJSON(obj.currentParcelsGeoJSON)){
+        if(storage.set(LS.map,obj.currentParcelsGeoJSON)){
+          state.parcelsGeoJSON=obj.currentParcelsGeoJSON;
+          renderParcelPreview(obj.currentParcelsGeoJSON);
+        }
+      }
+      if(!storage.get(LS.incidentLayer,null)&&isValidIncidentsGeoJSON(obj.currentIncidentsGeoJSON)){
+        if(storage.set(LS.incidentLayer,obj.currentIncidentsGeoJSON)){
+          state.incidentsGeoJSON=obj.currentIncidentsGeoJSON;
+        }
+      }
+      if(!storage.get(LS.day,null)&&obj.dayConfig && typeof obj.dayConfig==='object'){
+        storage.set(LS.day,obj.dayConfig);
       }
       if(Array.isArray(obj.localIncidents)){
         const local=storage.get(LS.incidents,[]);
@@ -2773,10 +2849,15 @@
     // Se conserva la función para no romper llamadas existentes.
   }
 
-  function openReportForWork(work, origin="work", historyIndex=null){
-    state.reportWork = normalizeWorkForReport(work, origin);
-    state.reportOrigin = origin;
-    state.reportHistoryIndex = historyIndex;
+  async function openReportForWork(work, origin="work", historyIndex=null, parentGroup=null){
+    const w=normalizeWorkForReport(work,origin);
+    if(origin==='history')await fillMissingReportGeometry(w);
+    state.reportWork=w;
+    if($('reportRecordActions'))$('reportRecordActions').open=false;
+    if($('reportTreatmentParts'))$('reportTreatmentParts').open=false;
+    state.reportOrigin=origin;
+    state.reportHistoryIndex=historyIndex;
+    state.reportParentGroup=parentGroup;
     resetReportTabs();
     show("screen-report");
   }
@@ -2908,6 +2989,25 @@
       if(finalActions) finalActions.classList.remove("hidden");
       $("printFinalReportBtn").textContent = completed ? "Generar / guardar PDF" : "PDF provisional";
       bindReportFinalActions(w);
+      const recordActions=$('reportRecordActions');
+      if(recordActions){
+        const fromHistory=state.reportOrigin==='history';
+        recordActions.classList.toggle('hidden',!fromHistory);
+        if(fromHistory){
+          $('deleteCurrentRecord').textContent=w.isTreatmentGroup?'Eliminar este tratamiento':'Eliminar esta ficha';
+          $('exportCurrentRecord').textContent=w.isTreatmentGroup?'Exportar tratamiento (JSON)':'Exportar ficha y recorrido (JSON)';
+        }
+      }
+      const partsArea=$('reportTreatmentParts');
+      if(partsArea){
+        partsArea.classList.toggle('hidden',!w.isTreatmentGroup);
+        if(w.isTreatmentGroup){
+          partsArea.innerHTML='<summary>Fichas de parcelas y jornadas <span aria-hidden="true">⌄</span></summary>'+
+            (w.partWorks||[]).map((part,i)=>`<button type="button" data-part-work="${i}" class="v98-part-link"><strong>${escapeHtml(part.parcel||'Sin nombre')}</strong><small>${escapeHtml(workHistoryDate(part))} · ${workHistoryStatus(part)}</small><span aria-hidden="true">›</span></button>`).join('');
+          qsa('[data-part-work]').forEach(btn=>btn.onclick=()=>openReportForWork((w.partWorks||[])[Number(btn.dataset.partWork)],'history',null,w));
+        }else partsArea.replaceChildren();
+      }
+      $('backToTreatmentGroup').classList.toggle('hidden',!state.reportParentGroup);
       $("reportTotal").textContent = fmtTime(reportTotalMs(w));
       $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
       $("reportRefills").textContent = String(w.refills || 0);
@@ -3630,7 +3730,8 @@
         daily:dailyWorkBreakdown(work),
         gpsAverage:averageGpsAccuracyText(work),
         windStats:windStats(work.windReadings||[]),
-        isPhytosanitary:shouldTrackWindForWork(work)
+        isPhytosanitary:shouldTrackWindForWork(work),
+        geographicWarnings:reportGeoWarning(work)
       });
       const name=safeFilename(work,"informe_documental","pdf");
       const url=URL.createObjectURL(blob);
@@ -3731,70 +3832,100 @@
     upsertPendingWorkInHistory();
     const hist=getHistoryEntries();
     const campaignSelect=$('historyCampaign');
-    const campaignChoice=state.historyCampaign||'all';
+    const choice=state.historyCampaign||'all';
     const years=[...new Set(hist.map(campaignOfWork).filter(y=>y&&y>=2020))].sort((a,b)=>b-a);
     campaignSelect.innerHTML='<option value="all">Todas las campañas</option>'+years.map(y=>`<option value="${y}">Campaña ${y}</option>`).join('');
-    campaignSelect.value=campaignChoice;
+    campaignSelect.value=choice;
     if(!campaignSelect.value){campaignSelect.value='all';state.historyCampaign='all';}
     const filter=state.historyFilter||'all';
     qsa('[data-history-filter]').forEach(btn=>btn.classList.toggle('active',btn.dataset.historyFilter===filter));
-    const shown=hist.map((w,index)=>({w,index})).filter(({w})=>
-      (state.historyCampaign==='all'||Number(campaignOfWork(w))===Number(state.historyCampaign)) &&
-      (filter==='all'||(filter==='pending'?!workIsCompleted(w):workIsCompleted(w))));
-    const groups=new Map(), singles=[];
-    for(const entry of shown){
-      const key=treatmentKey(entry.w);
-      if(!key){singles.push(entry);continue;}
-      if(!groups.has(key))groups.set(key,{id:entry.w.treatmentId,campaign:Number(entry.w.campaign),number:Number(entry.w.treatmentNumber),entries:[]});
-      groups.get(key).entries.push(entry);
+    const byYear=hist.filter(w=>state.historyCampaign==='all'||Number(campaignOfWork(w))===Number(state.historyCampaign));
+    const groups=new Map(),historic=[];
+    for(const w of byYear){
+      const key=treatmentKey(w);
+      if(!key){historic.push(w);continue;}
+      if(!groups.has(key))groups.set(key,{id:w.treatmentId,campaign:Number(w.campaign),number:Number(w.treatmentNumber),works:[]});
+      groups.get(key).works.push(w);
     }
-    const grpHtml=[...groups.values()].sort((a,b)=>b.campaign-a.campaign||b.number-a.number).map(g=>{
-      g.entries=hist.map((w,index)=>({w,index})).filter(e=>e.w.treatmentId===g.id&&Number(e.w.campaign)===g.campaign);
-      const pending=g.entries.some(e=>!workIsCompleted(e.w));
-      const parcels=[...new Set(g.entries.map(e=>e.w.parcel||'Sin nombre'))];
-      return `<section class="history-treatment-group" aria-label="Tratamiento ${g.number} de ${g.campaign}">
-        <div class="history-treatment-heading"><div><strong>Tratamiento ${g.number} · ${g.campaign}</strong><small>${g.entries.length} fichas · ${parcels.length} parcelas</small></div><span class="history-status ${pending?'pending':'completed'}">${pending?'Con pendientes':'Completado'}</span></div>
-        <button class="btn primary" data-treatment-group="${escapeHtml(g.id)}" type="button">Consultar mapa e informe del tratamiento</button>
-        ${g.entries.map(({w,index})=>`<div class="history-subwork"><button data-history-index="${index}" type="button">${escapeHtml(w.parcel||'Sin nombre')} · ${escapeHtml(workHistoryDate(w))}<small>${workHistoryStatus(w)} · Consultar ficha y recorrido individual</small></button><button class="history-delete-button" data-history-delete="${index}" aria-label="Eliminar ficha individual" type="button">✕</button></div>`).join('')}
-        </section>`;
+    const visibleGroups=[...groups.values()].filter(g=>filter==='all'||(filter==='pending'?!g.works.every(workIsCompleted):g.works.every(workIsCompleted)))
+      .sort((a,b)=>b.campaign-a.campaign||b.number-a.number);
+    const visibleHistoric=historic.filter(w=>filter==='all'||(filter==='pending'?!workIsCompleted(w):workIsCompleted(w)))
+      .sort((a,b)=>(toMs(b.startedAt)||0)-(toMs(a.startedAt)||0));
+    const grpHtml=visibleGroups.map(g=>{
+      const pending=g.works.some(w=>!workIsCompleted(w));
+      const parcels=[...new Set(g.works.map(w=>w.parcel||'Sin nombre'))];
+      const when=g.works.map(w=>toMs(w.startedAt)||toMs(w.createdAt)).filter(Boolean).sort((a,b)=>a-b);
+      const dates=when.length ? `${new Date(when[0]).toLocaleDateString('es-ES')}${when.length>1&&when[0]!==when.at(-1)?' – '+new Date(when.at(-1)).toLocaleDateString('es-ES'):''}` : 'Fecha no disponible';
+      return `<button type="button" class="v98-history-item v98-treatment-item" data-treatment-group="${escapeHtml(g.id)}" data-campaign="${g.campaign}" aria-label="Abrir Tratamiento ${g.number} de ${g.campaign}">
+        <span class="v98-history-item-main"><strong>Tratamiento ${g.number}</strong><small>Campaña ${g.campaign} · ${escapeHtml(dates)}</small><span class="v98-parcel-names">${escapeHtml(parcels.join(' · '))}</span><small>${g.works.length} ficha(s) · ${parcels.length} parcela(s)</small></span>
+        <span class="v98-history-item-side"><span class="history-status ${pending?'pending':'completed'}">${pending?'Pendiente':'Completado'}</span><span class="v98-chevron" aria-hidden="true">›</span></span>
+      </button>`;
     }).join('');
-    const singlesHtml=singles.map(({w,index})=>{
-      const status=workHistoryStatus(w),cls=status==='Pendiente'?'pending':'completed';
-      return `<div class="history-card history-card-v12"><button class="history-main-button" data-history-index="${index}" aria-label="Abrir ficha de trabajo">
-        <span class="history-date">${escapeHtml(workHistoryDate(w))}</span><strong>${escapeHtml(w.parcel||'Parcela sin nombre')}</strong><span class="history-type">${escapeHtml(w.type||'Trabajo sin tipo')} · ${isPhytosanitaryWorkType(w.type)?'Histórico sin numerar':'Otro trabajo'}</span><span class="history-status ${cls}">${status}</span></button>
-        <button class="history-delete-button" data-history-delete="${index}" aria-label="Eliminar esta ficha">✕</button></div>`;
+    const legacyHtml=visibleHistoric.map(w=>{
+      const cls=workIsCompleted(w)?'completed':'pending';
+      return `<button type="button" class="v98-history-item" data-history-id="${escapeHtml(String(w.id))}" aria-label="Abrir ficha de ${escapeHtml(w.parcel||'parcela sin nombre')}">
+        <span class="v98-history-item-main"><strong>${escapeHtml(w.parcel||'Parcela sin nombre')}</strong><small>${escapeHtml(workHistoryDate(w))}</small><span class="v98-parcel-names">${escapeHtml(w.type||'Trabajo sin tipo')}</span></span>
+        <span class="v98-history-item-side"><span class="history-status ${cls}">${workHistoryStatus(w)}</span><span class="v98-chevron" aria-hidden="true">›</span></span>
+      </button>`;
     }).join('');
-    $('historyList').innerHTML=grpHtml+singlesHtml||'<div class="history-empty">No hay trabajos en esta selección.</div>';
-    qsa('[data-treatment-group]').forEach(button=>button.addEventListener('click',()=>{
-      const id=button.dataset.treatmentGroup;
-      const entries=getHistoryEntries().filter(w=>w.treatmentId===id);
-      if(!entries.length)return toast('No se encuentran las fichas del tratamiento.');
-      const group=activeTreatmentGroups(entries[0].campaign).find(g=>g.id===id);
-      if(group)openReportForWork(buildTreatmentReport(group),'history',null);
-    }));
-    qsa('[data-history-index]').forEach(card=>card.addEventListener('click',()=>{
-      const w=getHistoryEntries()[Number(card.dataset.historyIndex)];
-      if(w)openReportForWork(w,'history',Number(card.dataset.historyIndex));
-    }));
-    qsa('[data-history-delete]').forEach(button=>button.addEventListener('click',ev=>{
-      ev.stopPropagation();deleteHistoryItem(Number(button.dataset.historyDelete));
-    }));
+    $('historyList').innerHTML=`<div class="v98-history-section"><h2>Tratamientos numerados</h2><p>Abre un tratamiento para ver sus parcelas, recorridos e informe conjunto.</p>${grpHtml||'<div class="history-empty">No hay tratamientos numerados en esta selección.</div>'}</div>
+      <div class="v98-history-section"><h2>Trabajos históricos sin numerar</h2><p>Fichas anteriores conservadas con sus datos originales.</p>${legacyHtml||'<div class="history-empty">No hay trabajos históricos en esta selección.</div>'}</div>`;
+    qsa('[data-treatment-group]').forEach(button=>button.onclick=()=>{
+      const id=button.dataset.treatmentGroup,campaign=Number(button.dataset.campaign);
+      const group=activeTreatmentGroups(campaign).find(g=>g.id===id);
+      if(group)openReportForWork(buildTreatmentReport(group),'history');
+      else toast('No se encuentran las fichas del tratamiento.');
+    });
+    qsa('[data-history-id]').forEach(button=>button.onclick=()=>{
+      const w=getHistoryEntries().find(w=>w.id===button.dataset.historyId);
+      if(w)openReportForWork(w,'history');
+    });
   }
 
-  function deleteHistoryItem(index){
-    const hist = getHistoryEntries();
-    const item = hist[index];
-    if(!item){ renderHistory(); return; }
-    const label = `${workHistoryDate(item)} · ${item.parcel || "Parcela sin nombre"} · ${item.type || "Trabajo sin tipo"}`;
-    if(!confirm("¿Eliminar solo esta ficha de trabajo?\n\n" + label)) return;
-    const text = prompt("Para confirmar el borrado individual, escribe ELIMINAR:");
-    if(text !== "ELIMINAR") { toast("Borrado cancelado."); return; }
-    hist.splice(index, 1);
-    state.historyCache=hist;
+  function exportSelectedRecord(){
+    const w=state.reportWork;
+    if(state.reportOrigin!=='history'||!w)return;
+    const parts=w.isTreatmentGroup?(w.partWorks||[]):[w];
+    const payload={format:'PAZO_BAION_GPS_ARCHIVO_V97',version:VERSION,exportedAt:new Date().toISOString(),
+      selection:w.isTreatmentGroup?'tratamiento':'ficha',treatmentId:w.treatmentId||null,
+      warning:'Copia individual para restauración sin sobrescritura. Puede contener información geográfica y fotografías.',
+      works:parts.map(part=>{
+        const original=getHistoryEntries().find(x=>x.id===part.id);
+        return clonePlain(original||part);
+      }),counters:w.treatmentNumber&&w.campaign?[{campaign:String(w.campaign),last:Number(w.treatmentNumber)}]:[]};
+    const suffix=w.isTreatmentGroup?`TRATAMIENTO_${w.campaign}_${w.treatmentNumber}`:`FICHA_${safeFileNamePart(w.parcel)}_${safeFileNamePart(w.id)}`;
+    downloadBlob(`PAZO_BAION_${suffix}_${todayIso()}.json`,JSON.stringify(payload,null,2),'application/json');
+  }
+
+  async function deleteSelectedRecord(){
+    const w=state.reportWork;
+    if(state.reportOrigin!=='history'||!w)return;
+    const ids=(w.isTreatmentGroup?(w.partWorks||[]):[w]).map(part=>part.id).filter(Boolean);
+    const unique=[...new Set(ids)];
+    if(!unique.length)return toast('No se puede identificar esta ficha. No se ha borrado nada.');
+    if(state.work && !workIsCompleted(state.work) && unique.includes(state.work.id))return toast('Esta ficha es un trabajo activo. Finalízalo o detén su recuperación antes de eliminarlo.');
+    const group=!!w.isTreatmentGroup;
+    const label=group?`Tratamiento ${w.treatmentNumber} de la campaña ${w.campaign} (${unique.length} fichas)`:`${w.parcel||'Sin nombre'} · ${workHistoryDate(w)}`;
+    if(!confirm(`¿Eliminar ${group?'TODO este tratamiento':'SOLO esta ficha'}?\n\n${label}\n\nEs recomendable exportar antes su JSON desde esta ficha.`))return;
+    const expected=group?'ELIMINAR TRATAMIENTO':'ELIMINAR';
+    if(prompt(`Para confirmar, escribe exactamente ${expected}:`)!==expected){toast('Eliminación cancelada.');return;}
     const archive=window.PAZO_BAION_ARCHIVE;
-    if(archive)state.archiveWriteQueue=state.archiveWriteQueue.catch(()=>{}).then(()=>archive.deleteWork(item.id));
-    if(storage.set(LS.history,hist))renderHistory();
-    else{renderHistory();toast('El archivo IndexedDB conservará el cambio si está disponible. Comprueba una copia de seguridad.');}
+    if(!archive?.deleteWorks)return toast('No está disponible IndexedDB. Se ha cancelado el borrado para evitar que reaparezcan fichas al reiniciar.');
+    const btn=$('deleteCurrentRecord');btn.disabled=true;
+    try{
+      await state.archiveWriteQueue.catch(()=>{});
+      await archive.deleteWorks(unique);
+      state.historyCache=getHistoryEntries().filter(item=>!unique.includes(item.id));
+      if(!storage.set(LS.history,state.historyCache)){
+        // No mantener un espejo antiguo que pudiera resucitar los registros borrados.
+        storage.remove(LS.history);
+        toast('El borrado quedó confirmado en IndexedDB. No cabía actualizar la copia secundaria; conserva una copia JSON de los restantes.');
+      }
+      state.reportWork=null;state.reportParentGroup=null;state.reportHistoryIndex=null;
+      show('screen-history');
+      toast(group?'Tratamiento eliminado de este dispositivo.':'Ficha eliminada de este dispositivo.');
+    }catch(err){toast('No se realizó el borrado: '+(err?.message||err));}
+    finally{btn.disabled=false;}
   }
 
   function restoreIfPossible(){
@@ -3842,6 +3973,16 @@
     $('historyCampaign').onchange=()=>{state.historyCampaign=$('historyCampaign').value;renderHistory();};
     $('exportIncidentsGeoJSON').onclick=exportIncidentsGeoJSON;
     $('exportArchive').onclick=exportArchiveBundle;
+    $('openDataManagement').onclick=()=>show('screen-data-management');
+    $('backFromDataManagement').onclick=()=>show('screen-history');
+    $('managementReturnBtn').onclick=()=>show('screen-history');
+    $('exportCurrentRecord').onclick=exportSelectedRecord;
+    $('deleteCurrentRecord').onclick=deleteSelectedRecord;
+    $('backToTreatmentGroup').onclick=()=>{
+      const parent=state.reportParentGroup;
+      state.reportParentGroup=null;
+      if(parent)openReportForWork(parent,'history');
+    };
     $('importArchive').onchange=async ev=>{await importArchiveBundle(ev.target.files?.[0]);ev.target.value='';};
     $('backFromTreatmentSetup').onclick=()=>show('screen-work-type');
     $('cancelTreatmentSetup').onclick=()=>show('screen-work-type');
@@ -3927,8 +4068,10 @@
       afterLayoutStable(()=>state.maps.report?.invalidateSize());
     };
     $("reportBackBtn").onclick = () => {
-      if(state.reportOrigin === "history") show("screen-history");
-      else show("screen-work");
+      if(state.reportOrigin === "history") {
+        if(state.reportParentGroup){const parent=state.reportParentGroup;state.reportParentGroup=null;openReportForWork(parent,'history');}
+        else show("screen-history");
+      } else show("screen-work");
     };
     if($("resumePendingWorkBtn")) $("resumePendingWorkBtn").onclick = resumePendingWorkFromReport;
     if($("finishPendingWorkBtn")) $("finishPendingWorkBtn").onclick = finishPendingWorkFromReport;
@@ -3949,7 +4092,7 @@
     $("stopWorkBtn").onclick = openStopModal;
     $("continueWorkBtn").onclick = continueWork;
     $("incidentWorkBtn").onclick = () => openIncident("work");
-    $("viewDraftReportBtn").onclick = () => { state.reportWork = null; state.reportOrigin = "work"; state.reportHistoryIndex = null; resetReportTabs(); show("screen-report"); };
+    $("viewDraftReportBtn").onclick = () => { state.reportWork = null; state.reportOrigin = "work"; state.reportHistoryIndex = null; state.reportParentGroup=null; resetReportTabs(); show("screen-report"); };
     $("backFromWork").onclick = () => {
       if(state.work && state.work.status !== "finalizado"){
         if(!confirm("Hay un trabajo en curso. ¿Volver sin finalizar?")) return;
@@ -3985,16 +4128,20 @@
       if(b.dataset.reportTab === "export") renderReportExport(w);
     }));
 
-    $("clearHistory").onclick = () => {
-      if(!confirm("ATENCIÓN: vas a borrar todo el historial local de trabajos de este dispositivo. ¿Continuar?")) return;
-      const text = prompt("Para confirmar, escribe exactamente BORRAR:");
-      if(text !== "BORRAR") { toast("Borrado cancelado."); return; }
-      if(!confirm("Última confirmación: esta acción no se puede deshacer. ¿Borrar historial local?")) return;
-      state.historyCache=[];
-      storage.remove(LS.history);
+    $("clearHistory").onclick = async () => {
+      const savedActive=storage.get(LS.active,null);
+      if((state.work && !workIsCompleted(state.work)) || (savedActive && !workIsCompleted(savedActive)))return toast('No borres el historial mientras exista un trabajo pendiente o activo.');
+      if(!confirm('ATENCIÓN: esta operación elimina todas las fichas locales, no solo un tratamiento. ¿Has exportado la copia JSON completa?'))return;
+      if(prompt('Para confirmar el borrado completo, escribe BORRAR TODO:')!=='BORRAR TODO'){toast('Borrado cancelado.');return;}
+      if(!confirm('ÚLTIMA CONFIRMACIÓN. ¿Borrar de forma permanente todo el historial de trabajos?'))return;
       const archive=window.PAZO_BAION_ARCHIVE;
-      if(archive)state.archiveWriteQueue=state.archiveWriteQueue.catch(()=>{}).then(()=>archive.clearWorks()).catch(err=>toast('No se pudo borrar IndexedDB: '+err.message));
-      renderHistory();
+      if(!archive)return toast('No se puede comprobar el archivo IndexedDB; borrado cancelado.');
+      try{
+        await state.archiveWriteQueue.catch(()=>{});
+        await archive.clearWorks();
+        state.historyCache=[];storage.remove(LS.history);storage.remove(LS.active);
+        show('screen-history');toast('Historial de trabajos borrado. Las capas y el GeoJSON original se conservan.');
+      }catch(err){toast('No se ha borrado el historial: '+err.message);}
     };
   }
 

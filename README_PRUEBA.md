@@ -1,42 +1,40 @@
-# PAZO BAION GPS — Beta v9.7
+# PAZO BAION GPS — BETA v9.8
 
-**Base:** Beta v9.6.1. **Fecha:** 07/11/2026. **Objeto:** prueba funcional del sistema de campañas, tratamientos y mapas históricos. No es una certificación de precisión GPS ni un cuaderno oficial de tratamientos fitosanitarios.
+**Versión de evaluación** · Base: v9.7 · 7 de noviembre de 2026.
 
-## Cambios introducidos
+## Cambios implementados
 
-1. **Parcelas como base geográfica.** El GeoJSON de parcelas sigue siendo la referencia cartográfica. Cada nuevo trabajo conserva una copia de la geometría de la parcela que tenía al registrarse, sin modificar el fichero original.
-2. **Tratamientos numerados por campaña.** Al seleccionar «Aplicación de fitosanitarios», aparece una pantalla para indicar la campaña y elegir «Tratamiento nuevo» o «Añadir otra parcela o jornada» a uno existente. El número de tratamiento se reserva de forma consecutiva en IndexedDB al preparar el nuevo trabajo y no se reutiliza tras borrar una ficha.
-3. **Una ficha por trabajo/parcela; un informe por tratamiento.** Distintas parcelas y jornadas pueden vincularse a un mismo número de tratamiento. Cada ficha conserva puntos originales, puntos depurados, tiempos, meteorología y demás datos. No se mezclan artificialmente los recorridos.
-4. **Historial organizado por campañas.** Filtro de año y listas agrupadas por número de tratamiento, con acceso al informe conjunto y a cada ficha individual. Los registros anteriores sin número permanecen como **históricos sin numerar**; no se les asignan números ficticios.
-5. **Mapas e informes.** El mapa del informe recupera las geometrías guardadas con la ficha y muestra los recorridos independientes. El PDF vectorial incluye los perímetros disponibles de parcelas y los recorridos por separado, además del número de tratamiento y campaña. Si faltan geometrías antiguas, se indica; no se inventan puntos.
-6. **Fiabilidad GPS.** Se avisa sobre baja precisión y sobre posibles incoherencias entre distancia y tiempo (por ejemplo, velocidades medias incompatibles con el uso normal de un tractor). Los datos originales no se alteran.
-7. **Archivo local reforzado.** Nuevo IndexedDB `pazo_baion_trabajos_v97` para fichas completas, más la compatibilidad con `localStorage` v08. La migración es conservadora: no borra el historial anterior. Exportación JSON completa e importación sin eliminar las fichas preexistentes. Los contadores de campañas se pueden restaurar desde una copia.
-8. **Incidencias.** Se conservan las incidencias GeoJSON importadas y las incidencias locales como fuentes distintas, con representación sobre el mismo mapa, identificación del origen y colores por tipo cuando exista correspondencia. Posibilidad de exportar las incidencias geolocalizadas locales en GeoJSON sin fotografías; las fotografías se conservan en el backup JSON completo.
-9. **Continuidad v9.6.1.** Se mantienen las pantallas, navegación, seguridad al finalizar trabajos, jornadas, calibración, meteorología, informes visuales, PDF y las correcciones anteriores.
+1. **Historial simplificado:** selector de campaña, filtros Todos/Pendientes/Completados y dos secciones separadas: «Tratamientos numerados» y «Trabajos históricos sin numerar». Se muestran nombres completos de parcelas y fechas sin botones de eliminación en la lista.
+2. **Ficha de tratamiento:** cada tratamiento numerado abre su mapa e informe conjunto, con acceso a las fichas individuales de sus parcelas y jornadas mediante «Fichas de parcelas y jornadas».
+3. **Acciones por ficha:** en el informe abierto desde el historial, desplegar «Acciones de esta ficha» para exportar JSON de la ficha o eliminar únicamente esa ficha. Si se trata de un tratamiento conjunto, la exportación/eliminación se refiere a todo ese tratamiento, con confirmación específica.
+4. **Gestión general independiente:** botón de engranaje en la cabecera de Historial. Abre «Gestión de datos» para exportar una copia completa, restaurar una copia sin sobrescribir fichas coincidentes o borrar TODO el historial con confirmación reforzada. Estas acciones ya no ocupan la lista de trabajos.
+5. **Mapas históricos:** si una ficha antigua no conserva su perímetro, busca coincidencias en los conjuntos GeoJSON guardados y en la capa actual. Solo recupera el límite si encuentra una única geometría inequívoca; el informe indica que ese límite puede ser distinto al de la fecha original. Si hay ambigüedad, no elige ninguno. **No modifica los registros originales.**
+6. **Control GPS:** el informe advierte si la precisión es deficiente, si la distancia/tiempo equivalen a velocidades anómalas o si existen saltos de velocidad instantánea. Los puntos originales y la distancia registrada se conservan sin corregirse automáticamente.
+7. **PDF:** continúa generándose en el dispositivo con campaña, tratamiento, croquis de los límites disponibles y rutas separadas. Se identifican como «perímetros disponibles», no como límites históricos garantizados, y se incluyen avisos de fiabilidad geográfica.
+8. **Compatibilidad:** conserva las claves antiguas `localStorage` v08, el IndexedDB de conjuntos `pazo_baion_local_v95`, el archivo de trabajos `pazo_baion_trabajos_v97` y el generador `pdf-v95.js`. Sus nombres internos se mantienen por compatibilidad; los textos de versión muestran **Beta v9.8**. No renumera históricos ni elimina registros al instalar.
 
-## Pruebas de aceptación en iPhone (usar parcelas y recorridos de PRUEBA)
+## Antes de publicar en GitHub
 
-1. Descargar y conservar antes **una copia JSON de seguridad** desde «Historial». No borrar datos del sitio de Safari.
-2. Desde la selección de una parcela, iniciar una labor fitosanitaria. Verificar pantalla «Tratamiento fitosanitario» con campaña 2027 y «Tratamiento nuevo». Comenzar una prueba GPS solo en un lugar adecuado y con permiso.
-3. Finalizar esa ficha, seleccionar otra parcela, volver a «Aplicación de fitosanitarios», elegir «Añadir otra parcela o jornada» y vincularla al tratamiento existente. Comprobar que mantiene el mismo número.
-4. En «Historial», seleccionar campaña 2027 y abrir «Consultar mapa e informe del tratamiento». Comprobar límites, dos trazados separados, fechas y sumas. Abrir también cada ficha individual desde el grupo.
-5. Generar PDF y revisar número de tratamiento, campaña, páginas y croquis con geometría. Comprobar que la imagen de fondo satelital **no** se incrusta en el PDF; el croquis es vectorial.
-6. Abrir un trabajo anterior a v9.7. Si no conserva el perímetro, verificar el aviso en vez de un contorno inventado. Los datos anteriores deben mantenerse.
-7. Exportar una copia JSON y comprobar que el archivo se descarga. **No probar borrar o restaurar sobre el historial real sin disponer de una copia fuera de Safari.**
-8. Comprobar la capa de incidencias importadas, los puntos locales y la exportación GeoJSON. Unas incidencias sin coordenadas no pueden representarse como puntos.
-9. Verificar regreso entre pantallas y que los controles siguen siendo pulsables y legibles en el iPhone.
+- **Muy importante:** en la Beta v9.7, abre Historial → «Exportar copia de seguridad completa (JSON)». Comprueba que el archivo está guardado fuera de Safari, en «Archivos». Conserva el ZIP de v9.7.
+- Descomprime la v9.8 y sube los **11 archivos de la raíz**, no el ZIP, a la rama publicada `main` del mismo repositorio. No cambies la URL de GitHub Pages.
+- El ZIP no contiene ninguna parcela, incidencia ni recorrido real.
 
-## Privacidad y limitaciones
+## Pruebas de aceptación en el iPhone
 
-* El ZIP contiene **únicamente código e imágenes ornamentales**: ninguna parcela, incidencia ni recorrido real. Todos los archivos están en la raíz del ZIP.
-* Las claves existentes `localStorage` v08 y el IndexedDB de conjuntos `pazo_baion_local_v95` se conservan. La nueva base `pazo_baion_trabajos_v97` utiliza IndexedDB, pero no protege frente al borrado de datos del sitio o a pérdida del dispositivo. **Mantener copias JSON fuera del navegador.**
-* Las incidencias importadas y las registradas se visualizan juntas, pero **no se fusionan ni sobrescriben automáticamente los GeoJSON originales**. Las fotos no se incrustan en el PDF ni en la exportación GeoJSON de puntos.
-* En iOS, Safari no garantiza captura GPS durante suspensión o bloqueo. Los tiempos sin seguimiento no deben considerarse tiempo GPS efectivo; hay que comprobarlo en el dispositivo.
-* Esri y Open-Meteo requieren conexión y reciben las solicitudes cartográficas o meteorológicas necesarias. Las predicciones de viento no sustituyen mediciones locales.
-* Los registros históricos con mala calidad GPS pueden contener distancia y tiempo incoherentes; esta beta **advierte** de ello, sin reescribir el dato original.
-* La exportación de rutas heredada (GPX, KML, GeoJSON) sigue siendo por ficha individual. El PDF conjunto y el mapa conjunto permiten revisar varios tramos de un mismo tratamiento.
-* El generador PDF conserva el nombre de archivo interno `pdf-v95.js` por compatibilidad de publicación, pero identifica su contenido como **Beta v9.7**.
+1. Abre el historial desde «Cargar capas del mapa» y selecciona campaña 2026: verifica que las fichas antiguas siguen presentes bajo «Trabajos históricos sin numerar».
+2. Cambia a una campaña con un tratamiento numerado, abre su ficha conjunta, despliega «Fichas de parcelas y jornadas» y entra en una ficha. Comprueba su retorno al tratamiento.
+3. En una ficha, despliega «Acciones de esta ficha», **exporta** su JSON. Verifica que el fichero existe en «Archivos».
+4. En Historial, pulsa el **engranaje**. Comprueba la pantalla de gestión y vuelve atrás. **No pruebes borrados con el historial real.**
+5. Abre un trabajo antiguo sin perímetro y comprueba el aviso de ausencia o de reconstrucción inequívoca. Valida visualmente el mapa y su PDF.
+6. En un trabajo con dos parcelas, el PDF debe mostrar ambos perímetros y los dos recorridos por separado.
+7. Prueba en condiciones controladas el GPS y el seguimiento de viento; no se ha certificado el GPS con iPhone bloqueado.
+8. Si existe una ficha pendiente real, **no la elimines** antes de respaldarla. La app impide borrar una ficha que es trabajo activo.
+9. Como prueba de restauración y borrado, utiliza solo datos ficticios en un navegador/perfil de pruebas con copia de seguridad verificable.
 
-## Publicación en GitHub
+## Resultado de la auditoría antes de empaquetar
 
-Descomprimir el ZIP y subir los **11 archivos directamente a la raíz** del repositorio, en `main`, sustituyendo los nombres ya existentes. `campaign-v97.js` es **nuevo** y debe subirse junto con `index.html` y `app.js`; de lo contrario la numeración por campaña no funcionará. No subir el ZIP comprimido. No cambiar la URL de Pages, para conservar el origen de los datos locales.
+- Sintaxis de JavaScript comprobada.
+- Comprobaciones directas (con registros *ficticios*): separación de grupos e históricos, asociación de dos parcelas, recuperación de perímetro solo con coincidencia única, rechazo de límites ambiguos, eliminación individual y de tratamiento contra un archivo simulado y generación de PDF A4 de dos páginas con dos perímetros y dos rutas.
+- Integridad ZIP, raíces y ausencia de datos GeoJSON reales verificadas.
+- **Limitación:** el navegador automatizado de este entorno bloqueó la carga local; no se ha podido completar la prueba visual táctil ni la prueba con GPS real en Safari. La Beta v9.8 debe evaluarse en el dispositivo antes de considerarse estable.
+- Safari puede suspender el GPS en segundo plano. Esri y Open-Meteo requieren conexión. Las copias en IndexedDB y localStorage no sustituyen una exportación JSON guardada fuera del navegador.

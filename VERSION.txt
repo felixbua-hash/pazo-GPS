@@ -1,21 +1,21 @@
 PAZO BAION GPS
-Beta v9.7 · Premium vitícola ornamental
+Beta v9.8 · Premium vitícola ornamental
 Fecha: 07/11/2026
-Base: Beta v9.6.1
+Base: Beta v9.7
 
 NOVEDADES
-- Parcelas como referencia geográfica de cada trabajo.
-- Campañas y números de tratamiento consecutivos; varias fichas/parcela/día por tratamiento.
-- Historial agrupado por tratamiento con informes conjuntos e individuales.
-- Croquis PDF con perímetros disponibles y recorridos separados.
-- Archivo IndexedDB para registros completos, compatibilidad localStorage v08.
-- Exportación e importación conservadora de backups JSON, exportación de incidencias GeoJSON.
-- Advertencias de calidad GPS, sin modificar datos originales.
+- Historial claro por campaña: tratamientos numerados y trabajos históricos separados.
+- Cada ficha incorpora exportación JSON y eliminación individual con confirmación.
+- Desde la ficha conjunta puede accederse a las fichas de las parcelas y eliminar el tratamiento completo tras confirmación reforzada.
+- Gestión global de copias, restauración y borrado general en pantalla separada.
+- Recuperación conservadora de perímetros desde conjuntos locales guardados, solo si existe coincidencia inequívoca y sin modificar registros originales.
+- Avisos sobre geometrías reconstruidas, precisión GPS y saltos de velocidad anómalos.
+- Compatibilidad IndexedDB v97 + claves localStorage v08 para datos anteriores.
 
-PENDIENTE DE PRUEBA REAL
-- GPS y suspensión Safari en iPhone.
-- Publicación GitHub Pages y utilización táctil en dispositivo.
-- Capacidad de almacenamiento y recuperación de historiales grandes.
+PENDIENTE PRUEBA FÍSICA EN IPHONE
+- Navegación táctil Safari; verificación GPS en campo.
+- Copias y restauraciones reales con archivo de prueba, NO con historial irreemplazable.
+- Disponibilidad y fiabilidad de mapas históricos con capas locales reales.
 
-Conservar la Beta v9.6.1 y hacer backup antes de la actualización.
-ZIP RAÍZ · SIN DATOS REALES.
+IMPORTANTE: Antes de actualizar, exportar una copia JSON completa desde la Beta v9.7 y conservarla fuera de Safari.
+El ZIP contiene 11 archivos en la raíz, sin datos reales.

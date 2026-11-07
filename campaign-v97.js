@@ -1,4 +1,4 @@
-/* PAZO BAION GPS · Beta v9.7. Archivo local de trabajos y numeración por campaña.
+/* PAZO BAION GPS · Beta v9.8. Archivo local de trabajos y numeración por campaña.
    No transmite datos a servidores. No elimina ni modifica el historial v08. */
 (() => {
   'use strict';
@@ -37,6 +37,18 @@
   const putWork=work=>transact('works','readwrite',s=>s.put(clone(work)));
   const deleteWork=id=>transact('works','readwrite',s=>s.delete(id));
   const clearWorks=()=>transact('works','readwrite',s=>s.clear());
+  // Eliminar un tratamiento completo en una sola transacción (todo o nada).
+  async function deleteWorks(ids){
+    if(!Array.isArray(ids) || !ids.length || ids.some(id=>typeof id!=='string'))throw new Error('Identificadores inválidos');
+    const db=await open();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction('works','readwrite'), store=tx.objectStore('works');
+      for(const id of [...new Set(ids)])store.delete(id);
+      tx.oncomplete=()=>{db.close();resolve(true);};
+      tx.onerror=()=>{db.close();reject(tx.error||new Error('No se pudo borrar el tratamiento'));};
+      tx.onabort=()=>{db.close();reject(tx.error||new Error('El borrado fue cancelado'));};
+    });
+  }
   // Reserva transaccional: el número no se reutiliza tras borrar la ficha.
   async function nextNumber(campaign, knownMax=0){
     const db=await open();
@@ -76,5 +88,5 @@
     }
     return count;
   }
-  window.PAZO_BAION_ARCHIVE={getWorks,putWork,deleteWork,clearWorks,nextNumber,getCounters,ensureMinimumNumber,importWorks};
+  window.PAZO_BAION_ARCHIVE={getWorks,putWork,deleteWork,deleteWorks,clearWorks,nextNumber,getCounters,ensureMinimumNumber,importWorks};
 })();

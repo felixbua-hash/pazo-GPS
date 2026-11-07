@@ -20,7 +20,7 @@
         <div class="splash-name">PAZO BAION</div>
         <div class="splash-divider" aria-hidden="true"><span></span>●<span></span></div>
         <div class="splash-subtitle">Control GPS de viñedos</div>
-        <div class="splash-version">Beta v9.7</div>
+        <div class="splash-version">Beta v9.8</div>
       </div>
       <div class="splash-landscape" role="img" aria-label="Vista ornamental de un viñedo"></div>
     </section>
@@ -244,7 +244,7 @@
     <section id="screen-treatment-setup" class="screen">
       <header class="topbar">
         <button id="backFromTreatmentSetup" class="back-btn" type="button" aria-label="Volver a tipo de trabajo">‹</button>
-        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.7</div></div>
+        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8</div></div>
       </header>
       <main class="panel treatment-panel">
         <h1>Identificar tratamiento</h1>
@@ -386,6 +386,16 @@
           <button id="printFinalReportBtn" class="btn ghost report-action-btn">Generar / guardar PDF</button>
         </div>
 
+        <details id="reportRecordActions" class="v98-record-actions hidden" aria-label="Acciones de esta ficha">
+          <summary>Acciones de esta ficha <span aria-hidden="true">⌄</span></summary>
+          <div class="v98-record-buttons">
+            <button id="exportCurrentRecord" class="btn ghost" type="button">Exportar ficha y GPS (JSON)</button>
+            <button id="deleteCurrentRecord" class="btn danger outline" type="button">Eliminar esta ficha</button>
+          </div>
+        </details>
+        <details id="reportTreatmentParts" class="v98-treatment-parts hidden"></details>
+        <button id="backToTreatmentGroup" class="btn ghost full v98-back-group hidden" type="button">Volver al tratamiento</button>
+
         <div id="pendingWorkActions" class="pending-work-actions hidden">
           <button id="resumePendingWorkBtn" class="btn primary pending-action-btn">Retomar / continuar</button>
           <button id="finishPendingWorkBtn" class="btn warning pending-action-btn">Terminar trabajo</button>
@@ -402,28 +412,45 @@
         <button id="backFromHistory" class="back-btn" type="button" aria-label="Volver a la pantalla anterior"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
           <div class="brand-title">Historial</div>
-          <div class="brand-subtitle">Trabajos guardados localmente</div>
+          <div class="brand-subtitle">Tratamientos y trabajos</div>
         </div>
+        <button id="openDataManagement" class="v98-header-settings" type="button" aria-label="Gestión de datos y copias de seguridad" title="Gestión de datos"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.07.07-2.1 2.1-.07-.07a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.05 1.57V21h-3v-.8a1.7 1.7 0 0 0-1.05-1.57 1.7 1.7 0 0 0-1.87.34l-.07.07-2.1-2.1.07-.07A1.7 1.7 0 0 0 6.03 15a1.7 1.7 0 0 0-1.57-1.05H4v-3h.46A1.7 1.7 0 0 0 6.03 9.9 1.7 1.7 0 0 0 5.69 8l-.07-.07 2.1-2.1.07.07a1.7 1.7 0 0 0 1.87.34A1.7 1.7 0 0 0 10.71 4.7V4h3v.7a1.7 1.7 0 0 0 1.05 1.57 1.7 1.7 0 0 0 1.87-.34l.07-.07 2.1 2.1-.07.07a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.57 1.05H20v3h-.46A1.7 1.7 0 0 0 19.4 15Z"/></svg></button>
       </header>
 
-      <main class="panel">
+      <main class="panel v98-history-panel">
         <div class="campaign-filter">
           <label for="historyCampaign">CAMPAÑA / AÑO</label>
           <select id="historyCampaign"><option value="all">Todas las campañas</option></select>
-          <small>Selecciona una campaña para consultar los tratamientos numerados. Los trabajos anteriores siguen disponibles.</small>
+
         </div>
         <div class="history-filters" role="group" aria-label="Filtro de historial">
           <button class="history-filter active" data-history-filter="all">Todos</button>
           <button class="history-filter" data-history-filter="pending">Pendientes</button>
           <button class="history-filter" data-history-filter="completed">Completados</button>
         </div>
-        <div id="historyList" class="history-list"></div>
-        <div class="history-backup-actions">
-          <button id="exportArchive" class="btn ghost full" type="button">Exportar copia de seguridad completa (JSON)</button>
+        <div id="historyList" class="history-list" aria-live="polite"></div>
+      </main>
+    </section>
+
+    <!-- Gestión general separada del historial y de las fichas -->
+    <section id="screen-data-management" class="screen">
+      <header class="topbar">
+        <button id="backFromDataManagement" class="back-btn" type="button" aria-label="Volver al historial"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
+        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8</div></div>
+      </header>
+      <main class="panel v98-management-panel">
+        <div class="v98-management-intro"><strong>Datos guardados en este dispositivo</strong><p>Estas operaciones afectan a varios trabajos, no a una ficha concreta. Conserva una copia JSON fuera de Safari antes de borrar o cambiar de teléfono.</p></div>
+        <div class="v98-management-group"><h2>Copias de seguridad generales</h2>
+          <button id="exportArchive" class="btn ghost full" type="button">Exportar copia completa (JSON)</button>
           <label class="btn ghost full archive-import-btn" for="importArchive">Restaurar copia JSON sin borrar trabajos</label>
           <input id="importArchive" type="file" accept=".json,application/json" />
+          <p>La restauración añade las fichas que faltan; no reemplaza automáticamente registros que ya existen.</p>
         </div>
-        <button id="clearHistory" class="btn danger outline full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 12h6l1-12"/></svg></span><span>Borrar historial local</span></button>
+        <div class="v98-management-group v98-management-danger"><h2>Eliminación general</h2>
+          <p>Solo para vaciar el historial completo. No borra los archivos GeoJSON originales ni las capas guardadas.</p>
+          <button id="clearHistory" class="btn danger outline full" type="button">Borrar TODO el historial local</button>
+        </div>
+        <button id="managementReturnBtn" class="btn primary full" type="button">Volver al historial</button>
       </main>
     </section>
 

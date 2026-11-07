@@ -1,4 +1,4 @@
-/* PAZO BAION GPS v9.7 — generador PDF documental local, sin servidores ni librerías externas.
+/* PAZO BAION GPS v9.8 — generador PDF documental local, sin servidores ni librerías externas.
  * PDF multipágina A4 con datos, cronología, incidencias, viento, ruta vectorial y desglose diario.
  * La cartografía satelital no se incrusta; el croquis vectorial se marca expresamente como esquemático.
  */
@@ -60,7 +60,7 @@
       ops=[]; y=98;
       rect(0,0,PW,61,LIGHT);
       T(M,29,'PAZO BAION GPS',18,true,GREEN);
-      T(M,46,'INFORME DOCUMENTAL · BETA v9.7',8,false,MUTED);
+      T(M,46,'INFORME DOCUMENTAL · BETA v9.8',8,false,MUTED);
       rule(M,64,PW-M,64);
     }
     function needed(height){if(y+height>PH-65)page();}
@@ -146,7 +146,7 @@
       }
       ops.push('Q');
       const pCount=parts.reduce((v,p)=>v+p.length,0);
-      T(bx+6,by+bh+10,`${rings.length?'Perímetros históricos incluidos':'Sin perímetro de parcela'} · ${pCount} puntos en ${parts.length} recorridos`,8,false,MUTED);
+      T(bx+6,by+bh+10,`${rings.length?'Perímetros disponibles incluidos':'Sin perímetro de parcela'} · ${pCount} puntos en ${parts.length} recorridos`,8,false,MUTED);
       y+=265;
     }
 
@@ -189,7 +189,11 @@
     row('Puntos originales',(work.pointsOriginal || []).length);
     row('Ruta depurada',(work.pointsClean || []).length);
     if(work.suspensionDetected)textParagraph('Se detectó al menos una interrupción del seguimiento. Los intervalos sin GPS no se han añadido al tiempo activo.');
-    if(!(work.parcelFeature||(work.parcelFeatures||[]).length))textParagraph('Aviso: no se conserva el contorno original de la parcela en esta ficha.');
+    if(!(work.parcelFeature||(work.parcelFeatures||[]).length))textParagraph('Aviso: no está disponible el perímetro de la parcela en esta ficha.');
+    if(work.reportRecoveredGeometrySource)textParagraph('ATENCIÓN: los límites se recuperaron de '+work.reportRecoveredGeometrySource+' y pueden no coincidir con los de la fecha original. El trabajo original no fue modificado.');
+    for(const notice of (payload.geographicWarnings||[])){
+      textParagraph('Comprobación cartográfica: '+String(notice));
+    }
     const avgActive=Number(payload.activeMs)||0;
     const speed=avgActive>0?Number(work.distanceM||0)/(avgActive/3600000)/1000:0;
     if(speed>35)textParagraph(`Alerta de coherencia GPS: distancia y tiempo equivalen a ${number(speed)} km/h de media, probablemente datos anómalos. No se han alterado los originales.`);
@@ -221,7 +225,7 @@
     // Añadir numeración y pie independiente a todas las páginas.
     pages.forEach((page,index)=>{
       page.push(`${col(GOLD)} RG 0.75 w ${f2(M)} 55 m ${f2(PW-M)} 55 l S`);
-      page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(M)} 40 Tm ${quote('Pazo Baion GPS · Beta v9.7 · Documento generado localmente')} Tj ET`);
+      page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(M)} 40 Tm ${quote('Pazo Baion GPS · Beta v9.8 · Documento generado localmente')} Tj ET`);
       page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(PW-M-40)} 40 Tm ${quote(`${index+1} / ${pages.length}`)} Tj ET`);
     });
     const objects=[];
