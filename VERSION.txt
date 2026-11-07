@@ -1,18 +1,21 @@
 PAZO BAION GPS
-Beta v9.6.1 · Premium vitícola ornamental
-Fecha: 06/11/2026
-Base: Beta v9.6
+Beta v9.7 · Premium vitícola ornamental
+Fecha: 07/11/2026
+Base: Beta v9.6.1
 
-CORRECCIONES PUNTUALES (SIN MODIFICAR DISEÑO NI FUNCIONES ACORDADAS)
-- Identificación Beta v9.6.1 coherente en inicio, código, valores por defecto, manifiesto e informes PDF (cabecera y pie).
-- Finalización de trabajo pendiente desde historial: se exige que la activación devuelva el trabajo seleccionado. Si la activación se cancela o falla, no se finaliza otro trabajo.
-- Formato de fecha de jornada en español: inicial del día en mayúscula y preposiciones/mes en minúscula.
+NOVEDADES
+- Parcelas como referencia geográfica de cada trabajo.
+- Campañas y números de tratamiento consecutivos; varias fichas/parcela/día por tratamiento.
+- Historial agrupado por tratamiento con informes conjuntos e individuales.
+- Croquis PDF con perímetros disponibles y recorridos separados.
+- Archivo IndexedDB para registros completos, compatibilidad localStorage v08.
+- Exportación e importación conservadora de backups JSON, exportación de incidencias GeoJSON.
+- Advertencias de calidad GPS, sin modificar datos originales.
 
-CONSERVADO DE V9.6
-- Historial accesible desde la carga de capas sin configurar jornada ni importar GeoJSON.
-- Navegación de regreso sensible al recorrido, jornada anterior con ayuda, fecha de jornada y campos compactos.
-- Conjuntos guardados, módulos GPS/viento, reportes y PDF, sin alteraciones funcionales adicionales.
+PENDIENTE DE PRUEBA REAL
+- GPS y suspensión Safari en iPhone.
+- Publicación GitHub Pages y utilización táctil en dispositivo.
+- Capacidad de almacenamiento y recuperación de historiales grandes.
 
-COMPATIBILIDAD: conserva claves locales v08 e IndexedDB pazo_baion_local_v95.
-LIMITACIONES: GPS en segundo plano de Safari no garantizado; se requiere prueba en iPhone real.
-ZIP EN RAÍZ · SIN GEOJSON REALES
+Conservar la Beta v9.6.1 y hacer backup antes de la actualización.
+ZIP RAÍZ · SIN DATOS REALES.

@@ -20,7 +20,7 @@
         <div class="splash-name">PAZO BAION</div>
         <div class="splash-divider" aria-hidden="true"><span></span>●<span></span></div>
         <div class="splash-subtitle">Control GPS de viñedos</div>
-        <div class="splash-version">Beta v9.6.1</div>
+        <div class="splash-version">Beta v9.7</div>
       </div>
       <div class="splash-landscape" role="img" aria-label="Vista ornamental de un viñedo"></div>
     </section>
@@ -53,6 +53,7 @@
             <span class="file-action-icon" aria-hidden="true">＋</span><span><strong>2 · Elegir archivo de INCIDENCIAS</strong><small>Pulsa aquí para seleccionar INCIDENCIAS_.geojson</small></span><span class="file-action-chevron" aria-hidden="true">›</span>
           </label>
           <div id="incidentLayerStatus" class="status-card muted">Incidencias: no cargadas. Puede estar vacía.</div>
+          <button id="exportIncidentsGeoJSON" class="btn ghost full" type="button">Exportar incidencias registradas (GeoJSON)</button>
         </div>
 
         <div id="parcelListPreview" class="parcel-preview hidden"></div>
@@ -239,6 +240,31 @@
       </main>
     </section>
 
+    <!-- Numeración de tratamiento fitosanitario -->
+    <section id="screen-treatment-setup" class="screen">
+      <header class="topbar">
+        <button id="backFromTreatmentSetup" class="back-btn" type="button" aria-label="Volver a tipo de trabajo">‹</button>
+        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.7</div></div>
+      </header>
+      <main class="panel treatment-panel">
+        <h1>Identificar tratamiento</h1>
+        <p class="lead">Cada tratamiento tiene su número de campaña. Puedes realizarlo en varias parcelas y jornadas, conservando el recorrido individual de cada una.</p>
+        <label for="treatmentCampaign">CAMPAÑA</label>
+        <input id="treatmentCampaign" type="number" min="2020" max="2100" step="1" inputmode="numeric" />
+        <div class="treatment-mode-grid">
+          <label class="treatment-choice"><input type="radio" name="treatmentMode" value="new" checked /> <span><strong>Tratamiento nuevo</strong><small>Asignar el siguiente número libre de esta campaña</small></span></label>
+          <label class="treatment-choice"><input type="radio" name="treatmentMode" value="existing" /> <span><strong>Añadir otra parcela o jornada</strong><small>Vincular este trabajo a un tratamiento ya registrado</small></span></label>
+        </div>
+        <div id="existingTreatmentArea" class="hidden treatment-existing">
+          <label for="existingTreatmentSelect">TRATAMIENTO EXISTENTE</label>
+          <select id="existingTreatmentSelect"></select>
+        </div>
+        <div id="treatmentSetupInfo" class="status-card muted">Se asignará un número al iniciar el trabajo.</div>
+        <button id="confirmTreatmentSetup" class="btn primary full" type="button">Continuar a calibración GPS</button>
+        <button id="cancelTreatmentSetup" class="btn ghost full" type="button">Volver a tipos de trabajo</button>
+      </main>
+    </section>
+
     <!-- Calibración GPS -->
     <section id="screen-gps-calibration" class="screen">
       <header class="topbar">
@@ -381,12 +407,22 @@
       </header>
 
       <main class="panel">
+        <div class="campaign-filter">
+          <label for="historyCampaign">CAMPAÑA / AÑO</label>
+          <select id="historyCampaign"><option value="all">Todas las campañas</option></select>
+          <small>Selecciona una campaña para consultar los tratamientos numerados. Los trabajos anteriores siguen disponibles.</small>
+        </div>
         <div class="history-filters" role="group" aria-label="Filtro de historial">
           <button class="history-filter active" data-history-filter="all">Todos</button>
           <button class="history-filter" data-history-filter="pending">Pendientes</button>
           <button class="history-filter" data-history-filter="completed">Completados</button>
         </div>
         <div id="historyList" class="history-list"></div>
+        <div class="history-backup-actions">
+          <button id="exportArchive" class="btn ghost full" type="button">Exportar copia de seguridad completa (JSON)</button>
+          <label class="btn ghost full archive-import-btn" for="importArchive">Restaurar copia JSON sin borrar trabajos</label>
+          <input id="importArchive" type="file" accept=".json,application/json" />
+        </div>
         <button id="clearHistory" class="btn danger outline full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M8 7l1 12h6l1-12"/></svg></span><span>Borrar historial local</span></button>
       </main>
     </section>
@@ -443,6 +479,7 @@
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="./data.js"></script>
   <script src="./pdf-v95.js"></script>
+  <script src="./campaign-v97.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
