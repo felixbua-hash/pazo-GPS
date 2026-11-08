@@ -20,7 +20,7 @@
         <div class="splash-name">PAZO BAION</div>
         <div class="splash-divider" aria-hidden="true"><span></span>●<span></span></div>
         <div class="splash-subtitle">Control GPS de viñedos</div>
-        <div class="splash-version">Beta v9.8</div>
+        <div class="splash-version">Beta v9.8.1</div>
       </div>
       <div class="splash-landscape" role="img" aria-label="Vista ornamental de un viñedo"></div>
     </section>
@@ -244,7 +244,7 @@
     <section id="screen-treatment-setup" class="screen">
       <header class="topbar">
         <button id="backFromTreatmentSetup" class="back-btn" type="button" aria-label="Volver a tipo de trabajo">‹</button>
-        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8</div></div>
+        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8.1</div></div>
       </header>
       <main class="panel treatment-panel">
         <h1>Identificar tratamiento</h1>
@@ -374,6 +374,11 @@
 
       <main class="report-panel">
         <div id="reportStatusChip" class="status-chip">Borrador</div>
+        <div id="reportTreatmentIdentity" class="v981-treatment-identity hidden">
+          <div class="v981-identity-head"><strong>TRATAMIENTO FITOSANITARIO</strong><button id="openTreatmentHelp" type="button" class="v981-help-button" aria-label="Ayuda sobre la numeración de tratamientos">?</button></div>
+          <div class="v981-identity-values"><span>Campaña <strong id="reportTreatmentCampaign">—</strong></span><span>Nº tratamiento <strong id="reportTreatmentNumber">Sin asignar</strong></span></div>
+          <button id="editTreatmentAssignment" class="btn ghost v981-edit-assignment" type="button">Asignar / editar tratamiento</button>
+        </div>
         <div class="report-cards report-cards-compact">
           <div><span>Tiempo total</span><strong id="reportTotal">—</strong></div>
           <div><span>Distancia</span><strong id="reportDistance">—</strong></div>
@@ -412,7 +417,7 @@
         <button id="backFromHistory" class="back-btn" type="button" aria-label="Volver a la pantalla anterior"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
           <div class="brand-title">Historial</div>
-          <div class="brand-subtitle">Tratamientos y trabajos</div>
+          <div class="brand-subtitle">Todos los trabajos de la explotación</div>
         </div>
         <button id="openDataManagement" class="v98-header-settings" type="button" aria-label="Gestión de datos y copias de seguridad" title="Gestión de datos"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.07.07-2.1 2.1-.07-.07a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.05 1.57V21h-3v-.8a1.7 1.7 0 0 0-1.05-1.57 1.7 1.7 0 0 0-1.87.34l-.07.07-2.1-2.1.07-.07A1.7 1.7 0 0 0 6.03 15a1.7 1.7 0 0 0-1.57-1.05H4v-3h.46A1.7 1.7 0 0 0 6.03 9.9 1.7 1.7 0 0 0 5.69 8l-.07-.07 2.1-2.1.07.07a1.7 1.7 0 0 0 1.87.34A1.7 1.7 0 0 0 10.71 4.7V4h3v.7a1.7 1.7 0 0 0 1.05 1.57 1.7 1.7 0 0 0 1.87-.34l.07-.07 2.1 2.1-.07.07a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.57 1.05H20v3h-.46A1.7 1.7 0 0 0 19.4 15Z"/></svg></button>
       </header>
@@ -421,13 +426,17 @@
         <div class="campaign-filter">
           <label for="historyCampaign">CAMPAÑA / AÑO</label>
           <select id="historyCampaign"><option value="all">Todas las campañas</option></select>
-
+        </div>
+        <div class="v981-type-filter">
+          <label for="historyWorkType">TIPO DE TRABAJO</label>
+          <select id="historyWorkType"><option value="all">Todos los tipos</option></select>
         </div>
         <div class="history-filters" role="group" aria-label="Filtro de historial">
           <button class="history-filter active" data-history-filter="all">Todos</button>
           <button class="history-filter" data-history-filter="pending">Pendientes</button>
           <button class="history-filter" data-history-filter="completed">Completados</button>
         </div>
+        <div class="v981-history-title"><h2>Trabajos</h2><button id="openHistoryHelp" class="v981-help-button" type="button" aria-label="Ayuda sobre el historial" title="Consultar ayuda del historial">?</button></div>
         <div id="historyList" class="history-list" aria-live="polite"></div>
       </main>
     </section>
@@ -436,7 +445,7 @@
     <section id="screen-data-management" class="screen">
       <header class="topbar">
         <button id="backFromDataManagement" class="back-btn" type="button" aria-label="Volver al historial"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
-        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8</div></div>
+        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8.1</div></div>
       </header>
       <main class="panel v98-management-panel">
         <div class="v98-management-intro"><strong>Datos guardados en este dispositivo</strong><p>Estas operaciones afectan a varios trabajos, no a una ficha concreta. Conserva una copia JSON fuera de Safari antes de borrar o cambiar de teléfono.</p></div>
@@ -453,6 +462,51 @@
         <button id="managementReturnBtn" class="btn primary full" type="button">Volver al historial</button>
       </main>
     </section>
+
+    <!-- Ayuda de historial (sin modificar filtros ni trabajos) -->
+    <div id="historyHelpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="historyHelpTitle">
+      <div class="modal-card v981-modal-card">
+        <h2 id="historyHelpTitle">Cómo usar el historial</h2>
+        <p>La lista <strong>Trabajos</strong> reúne todas las labores, antiguas y nuevas, ordenadas desde la más reciente.</p>
+        <p>Puedes combinar tres filtros: <strong>campaña</strong>, <strong>tipo de trabajo</strong> y <strong>estado</strong> (todos, pendientes o completados).</p>
+        <p>Los <strong>tratamientos fitosanitarios numerados</strong> se muestran como una ficha conjunta, aunque abarquen varias parcelas o días. Abre el tratamiento para consultar sus fichas y recorridos.</p>
+        <p>Los trabajos anteriores que todavía no tengan número siguen disponibles y pueden asignarse a un tratamiento desde su ficha, sin perder los datos originales.</p>
+        <p>Para copias de seguridad generales utiliza el engranaje de esta pantalla. Las acciones de una ficha están dentro de ella.</p>
+        <button id="closeHistoryHelp" class="btn primary full" type="button">Volver al historial</button>
+      </div>
+    </div>
+
+    <!-- Ayuda de tratamiento -->
+    <div id="treatmentHelpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="treatmentHelpTitle">
+      <div class="modal-card v981-modal-card">
+        <h2 id="treatmentHelpTitle">Número de tratamiento</h2>
+        <p>El número cuenta los <strong>tratamientos fitosanitarios realizados en toda la explotación durante una campaña</strong>, no las parcelas ni los días trabajados.</p>
+        <p>Un mismo tratamiento puede reunir distintas parcelas, jornadas y recorridos, todos con su información individual.</p>
+        <p>Puedes vincular una ficha a uno existente, crear el siguiente número o introducir un número histórico que aún no esté utilizado. La aplicación impedirá duplicar tratamientos de la misma campaña.</p>
+        <p>Los trabajos de desbroce y otras labores no necesitan esta numeración. Cambiar una asignación no modifica las posiciones GPS, las fechas ni los informes guardados.</p>
+        <button id="closeTreatmentHelp" class="btn primary full" type="button">Volver a la ficha</button>
+      </div>
+    </div>
+
+    <!-- Asignación de tratamiento desde ficha histórica -->
+    <div id="treatmentAssignmentModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="assignmentTitle">
+      <div class="modal-card v981-modal-card v981-assignment-card">
+        <h2 id="assignmentTitle">Asignar / editar tratamiento</h2>
+        <p id="assignmentScopeText" class="v981-modal-intro"></p>
+        <label for="assignmentCampaign">Campaña</label>
+        <input id="assignmentCampaign" type="number" min="2000" max="2100" step="1" inputmode="numeric" />
+        <div class="v981-assign-modes" role="radiogroup" aria-label="Tipo de asignación">
+          <label><input type="radio" name="assignmentMode" value="existing" /> Vincular a un tratamiento existente</label>
+          <label><input type="radio" name="assignmentMode" value="new" /> Crear siguiente tratamiento disponible</label>
+          <label><input type="radio" name="assignmentMode" value="manual" /> Asignar un número histórico concreto</label>
+          <label id="assignmentUnlinkOption"><input type="radio" name="assignmentMode" value="unlink" /> Quitar asignación (conservar ficha)</label>
+        </div>
+        <div id="assignmentExistingWrap" class="v981-assignment-extra hidden"><label for="assignmentExisting">Tratamiento existente</label><select id="assignmentExisting"></select></div>
+        <div id="assignmentManualWrap" class="v981-assignment-extra hidden"><label for="assignmentManualNumber">Número histórico sin utilizar</label><input id="assignmentManualNumber" type="number" min="1" max="9999" inputmode="numeric" placeholder="Ej.: 2" /></div>
+        <p id="assignmentFeedback" class="v981-assignment-feedback" role="status"></p>
+        <div class="v981-assignment-actions"><button id="cancelTreatmentAssignment" class="btn ghost" type="button">Cancelar</button><button id="saveTreatmentAssignment" class="btn primary" type="button">Guardar asignación</button></div>
+      </div>
+    </div>
 
     <!-- Modal parada -->
     <div id="stopModal" class="modal hidden">

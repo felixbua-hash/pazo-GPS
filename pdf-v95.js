@@ -1,4 +1,4 @@
-/* PAZO BAION GPS v9.8 — generador PDF documental local, sin servidores ni librerías externas.
+/* PAZO BAION GPS v9.8.1 — generador PDF documental local, sin servidores ni librerías externas.
  * PDF multipágina A4 con datos, cronología, incidencias, viento, ruta vectorial y desglose diario.
  * La cartografía satelital no se incrusta; el croquis vectorial se marca expresamente como esquemático.
  */
@@ -60,7 +60,7 @@
       ops=[]; y=98;
       rect(0,0,PW,61,LIGHT);
       T(M,29,'PAZO BAION GPS',18,true,GREEN);
-      T(M,46,'INFORME DOCUMENTAL · BETA v9.8',8,false,MUTED);
+      T(M,46,'INFORME DOCUMENTAL · BETA v9.8.1',8,false,MUTED);
       rule(M,64,PW-M,64);
     }
     function needed(height){if(y+height>PH-65)page();}
@@ -225,7 +225,7 @@
     // Añadir numeración y pie independiente a todas las páginas.
     pages.forEach((page,index)=>{
       page.push(`${col(GOLD)} RG 0.75 w ${f2(M)} 55 m ${f2(PW-M)} 55 l S`);
-      page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(M)} 40 Tm ${quote('Pazo Baion GPS · Beta v9.8 · Documento generado localmente')} Tj ET`);
+      page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(M)} 40 Tm ${quote('Pazo Baion GPS · Beta v9.8.1 · Documento generado localmente')} Tj ET`);
       page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(PW-M-40)} 40 Tm ${quote(`${index+1} / ${pages.length}`)} Tj ET`);
     });
     const objects=[];

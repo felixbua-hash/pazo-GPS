@@ -1,21 +1,15 @@
 PAZO BAION GPS
-Beta v9.8 · Premium vitícola ornamental
-Fecha: 07/11/2026
-Base: Beta v9.7
+Beta v9.8.1 · Premium vitícola ornamental
+Fecha: 08/11/2026
+Base: Beta v9.8
 
 NOVEDADES
-- Historial claro por campaña: tratamientos numerados y trabajos históricos separados.
-- Cada ficha incorpora exportación JSON y eliminación individual con confirmación.
-- Desde la ficha conjunta puede accederse a las fichas de las parcelas y eliminar el tratamiento completo tras confirmación reforzada.
-- Gestión global de copias, restauración y borrado general en pantalla separada.
-- Recuperación conservadora de perímetros desde conjuntos locales guardados, solo si existe coincidencia inequívoca y sin modificar registros originales.
-- Avisos sobre geometrías reconstruidas, precisión GPS y saltos de velocidad anómalos.
-- Compatibilidad IndexedDB v97 + claves localStorage v08 para datos anteriores.
+- Historial único «Trabajos» ordenado por fecha con filtro combinable de año, estado y tipo.
+- Ayuda (?) de historial con regreso.
+- Campaña y número visibles en fichas fitosanitarias; asignación/editado desde la ficha, incluso en pendientes.
+- Asignación segura de un mismo tratamiento a varias parcelas/jornadas.
+- Guardado IndexedDB atómico para cambios de asignación múltiples.
+- Conservación de datos y funciones de Beta v9.8.
 
-PENDIENTE PRUEBA FÍSICA EN IPHONE
-- Navegación táctil Safari; verificación GPS en campo.
-- Copias y restauraciones reales con archivo de prueba, NO con historial irreemplazable.
-- Disponibilidad y fiabilidad de mapas históricos con capas locales reales.
-
-IMPORTANTE: Antes de actualizar, exportar una copia JSON completa desde la Beta v9.7 y conservarla fuera de Safari.
-El ZIP contiene 11 archivos en la raíz, sin datos reales.
+PRUEBAS PENDIENTES
+- Comprobar funcionamiento en Safari/iPhone real y copia JSON fuera de Safari.

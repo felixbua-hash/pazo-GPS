@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.8";
+  const VERSION = "Beta v9.8.1";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -40,6 +40,7 @@
     tickerStarted: false,
     historyFilter: "all",
     historyCampaign: "all",
+    historyWorkType: "all",
     historyCache: null,
     archiveWriteQueue: Promise.resolve(),
     treatmentDraft: null,
@@ -2974,6 +2975,7 @@
         return;
       }
       ensureTimeline(w);
+      renderTreatmentIdentity(w);
       const completed = workIsCompleted(w);
       if($("reportTitle")) $("reportTitle").textContent = completed ? "Informe de trabajo" : "Trabajo pendiente";
       $("reportSubtitle").textContent = w.isTreatmentGroup
@@ -3828,48 +3830,79 @@
     }
   }
 
+  function historicWorkTimestamp(w){
+    return toMs(w?.startedAt)||toMs(w?.createdAt)||toMs(w?.finishedAt)||toMs(w?.savedAt)||0;
+  }
+  function matchesHistoryType(type, selection){
+    if(selection==='all')return true;
+    const t=normalizePlainText(type||'');
+    if(selection==='fitosanitarios')return isPhytosanitaryWorkType(type);
+    if(selection==='desbroce')return t.includes('desbroc');
+    if(selection==='otros')return !isPhytosanitaryWorkType(type)&&!t.includes('desbroc');
+    return selection.startsWith('custom:') && t===selection.slice(7);
+  }
+  function updateHistoryTypeOptions(hist){
+    const sel=$('historyWorkType');
+    const catalog=[['all','Todos los tipos'],['fitosanitarios','Aplicación de fitosanitarios'],['desbroce','Desbroce'],['otros','Otros trabajos']];
+    const known=new Set(['','otro','otros','desbroce','aplicacion de fitosanitarios']);
+    for(const w of hist){
+      const type=String(w.type||'').trim(), n=normalizePlainText(type);
+      if(!n||isPhytosanitaryWorkType(type)||n.includes('desbroc')||known.has(n))continue;
+      if(!catalog.some(([value])=>value==='custom:'+n))catalog.push(['custom:'+n,type]);
+    }
+    sel.replaceChildren();
+    for(const [value,label] of catalog){const o=document.createElement('option');o.value=value;o.textContent=label;sel.appendChild(o);}
+    sel.value=state.historyWorkType||'all';
+    if(!sel.value){sel.value='all';state.historyWorkType='all';}
+  }
   function renderHistory(){
     upsertPendingWorkInHistory();
     const hist=getHistoryEntries();
     const campaignSelect=$('historyCampaign');
     const choice=state.historyCampaign||'all';
-    const years=[...new Set(hist.map(campaignOfWork).filter(y=>y&&y>=2020))].sort((a,b)=>b-a);
-    campaignSelect.innerHTML='<option value="all">Todas las campañas</option>'+years.map(y=>`<option value="${y}">Campaña ${y}</option>`).join('');
+    const years=[...new Set(hist.map(campaignOfWork).filter(y=>y&&y>=2000))].sort((a,b)=>b-a);
+    campaignSelect.replaceChildren();
+    const all=document.createElement('option');all.value='all';all.textContent='Todas las campañas';campaignSelect.appendChild(all);
+    years.forEach(y=>{const o=document.createElement('option');o.value=String(y);o.textContent=`Campaña ${y}`;campaignSelect.append(o);});
     campaignSelect.value=choice;
     if(!campaignSelect.value){campaignSelect.value='all';state.historyCampaign='all';}
+    updateHistoryTypeOptions(hist);
     const filter=state.historyFilter||'all';
     qsa('[data-history-filter]').forEach(btn=>btn.classList.toggle('active',btn.dataset.historyFilter===filter));
-    const byYear=hist.filter(w=>state.historyCampaign==='all'||Number(campaignOfWork(w))===Number(state.historyCampaign));
-    const groups=new Map(),historic=[];
-    for(const w of byYear){
-      const key=treatmentKey(w);
-      if(!key){historic.push(w);continue;}
+    const inYear=hist.filter(w=>state.historyCampaign==='all'||Number(campaignOfWork(w))===Number(state.historyCampaign));
+    const groups=new Map(),singles=[];
+    for(const w of inYear){
+      const key=isPhytosanitaryWorkType(w.type)?treatmentKey(w):null;
+      if(!key){singles.push(w);continue;}
       if(!groups.has(key))groups.set(key,{id:w.treatmentId,campaign:Number(w.campaign),number:Number(w.treatmentNumber),works:[]});
       groups.get(key).works.push(w);
     }
-    const visibleGroups=[...groups.values()].filter(g=>filter==='all'||(filter==='pending'?!g.works.every(workIsCompleted):g.works.every(workIsCompleted)))
-      .sort((a,b)=>b.campaign-a.campaign||b.number-a.number);
-    const visibleHistoric=historic.filter(w=>filter==='all'||(filter==='pending'?!workIsCompleted(w):workIsCompleted(w)))
-      .sort((a,b)=>(toMs(b.startedAt)||0)-(toMs(a.startedAt)||0));
-    const grpHtml=visibleGroups.map(g=>{
-      const pending=g.works.some(w=>!workIsCompleted(w));
-      const parcels=[...new Set(g.works.map(w=>w.parcel||'Sin nombre'))];
-      const when=g.works.map(w=>toMs(w.startedAt)||toMs(w.createdAt)).filter(Boolean).sort((a,b)=>a-b);
-      const dates=when.length ? `${new Date(when[0]).toLocaleDateString('es-ES')}${when.length>1&&when[0]!==when.at(-1)?' – '+new Date(when.at(-1)).toLocaleDateString('es-ES'):''}` : 'Fecha no disponible';
-      return `<button type="button" class="v98-history-item v98-treatment-item" data-treatment-group="${escapeHtml(g.id)}" data-campaign="${g.campaign}" aria-label="Abrir Tratamiento ${g.number} de ${g.campaign}">
-        <span class="v98-history-item-main"><strong>Tratamiento ${g.number}</strong><small>Campaña ${g.campaign} · ${escapeHtml(dates)}</small><span class="v98-parcel-names">${escapeHtml(parcels.join(' · '))}</span><small>${g.works.length} ficha(s) · ${parcels.length} parcela(s)</small></span>
+    const rows=[];
+    for(const group of groups.values()){
+      if(!matchesHistoryType('Aplicación de fitosanitarios',state.historyWorkType))continue;
+      const pending=group.works.some(w=>!workIsCompleted(w));
+      if(filter==='pending'&&!pending||filter==='completed'&&pending)continue;
+      const parcels=[...new Set(group.works.map(w=>w.parcel||'Sin nombre'))];
+      const starts=group.works.map(historicWorkTimestamp).filter(Boolean).sort((a,b)=>a-b);
+      const date=starts.length?new Date(starts[0]).toLocaleDateString('es-ES'):'Fecha no disponible';
+      rows.push({time:starts[0]||0,kind:'group',key:`${group.campaign}-${group.id}`,html:`<button type="button" class="v98-history-item v98-treatment-item" data-treatment-group="${escapeHtml(group.id)}" data-campaign="${group.campaign}" aria-label="Abrir tratamiento ${group.number}, campaña ${group.campaign}">
+        <span class="v98-history-item-main"><strong>Tratamiento ${group.number} · ${group.campaign}</strong><small>${escapeHtml(date)} · Aplicación de fitosanitarios</small><span class="v98-parcel-names">${escapeHtml(parcels.join(' · '))}</span><small>${group.works.length} ficha(s) · ${parcels.length} parcela(s)</small></span>
         <span class="v98-history-item-side"><span class="history-status ${pending?'pending':'completed'}">${pending?'Pendiente':'Completado'}</span><span class="v98-chevron" aria-hidden="true">›</span></span>
-      </button>`;
-    }).join('');
-    const legacyHtml=visibleHistoric.map(w=>{
-      const cls=workIsCompleted(w)?'completed':'pending';
-      return `<button type="button" class="v98-history-item" data-history-id="${escapeHtml(String(w.id))}" aria-label="Abrir ficha de ${escapeHtml(w.parcel||'parcela sin nombre')}">
-        <span class="v98-history-item-main"><strong>${escapeHtml(w.parcel||'Parcela sin nombre')}</strong><small>${escapeHtml(workHistoryDate(w))}</small><span class="v98-parcel-names">${escapeHtml(w.type||'Trabajo sin tipo')}</span></span>
+      </button>`});
+    }
+    for(const w of singles){
+      if(!matchesHistoryType(w.type,state.historyWorkType))continue;
+      const completed=workIsCompleted(w);
+      if(filter==='pending'&&completed||filter==='completed'&&!completed)continue;
+      const cls=completed?'completed':'pending';
+      rows.push({time:historicWorkTimestamp(w),kind:'single',key:w.id,html:`<button type="button" class="v98-history-item" data-history-id="${escapeHtml(String(w.id))}" aria-label="Abrir ficha ${escapeHtml(w.parcel||'Sin nombre')}">
+        <span class="v98-history-item-main"><strong>${escapeHtml(w.parcel||'Parcela sin nombre')}</strong><small>${escapeHtml(workHistoryDate(w))} · ${escapeHtml(w.type||'Trabajo sin tipo')}</small>${isPhytosanitaryWorkType(w.type)?'<span class="v98-parcel-names">Tratamiento sin número asignado</span>':''}</span>
         <span class="v98-history-item-side"><span class="history-status ${cls}">${workHistoryStatus(w)}</span><span class="v98-chevron" aria-hidden="true">›</span></span>
-      </button>`;
-    }).join('');
-    $('historyList').innerHTML=`<div class="v98-history-section"><h2>Tratamientos numerados</h2><p>Abre un tratamiento para ver sus parcelas, recorridos e informe conjunto.</p>${grpHtml||'<div class="history-empty">No hay tratamientos numerados en esta selección.</div>'}</div>
-      <div class="v98-history-section"><h2>Trabajos históricos sin numerar</h2><p>Fichas anteriores conservadas con sus datos originales.</p>${legacyHtml||'<div class="history-empty">No hay trabajos históricos en esta selección.</div>'}</div>`;
+      </button>`});
+    }
+    rows.sort((a,b)=>b.time-a.time || a.kind.localeCompare(b.kind) || String(a.key).localeCompare(String(b.key)));
+    $('historyList').innerHTML=rows.length?rows.map(row=>row.html).join(''):
+      '<div class="history-empty v981-history-empty">No hay trabajos que coincidan con los filtros seleccionados.</div>';
     qsa('[data-treatment-group]').forEach(button=>button.onclick=()=>{
       const id=button.dataset.treatmentGroup,campaign=Number(button.dataset.campaign);
       const group=activeTreatmentGroups(campaign).find(g=>g.id===id);
@@ -3880,6 +3913,157 @@
       const w=getHistoryEntries().find(w=>w.id===button.dataset.historyId);
       if(w)openReportForWork(w,'history');
     });
+  }
+
+  function closeInfoModal(id){$(id).classList.add('hidden');}
+  function selectedAssignmentMode(){return document.querySelector('input[name="assignmentMode"]:checked')?.value||'new';}
+  function refreshAssignmentChoices(){
+    const year=Number($('assignmentCampaign').value);
+    const sel=$('assignmentExisting');
+    const old=sel.value;
+    sel.replaceChildren();
+    const groups=Number.isInteger(year)?activeTreatmentGroups(year):[];
+    for(const g of groups){
+      const opt=document.createElement('option');opt.value=g.id;
+      opt.textContent=`Tratamiento ${g.number} · ${year} (${new Set(g.works.map(w=>w.parcel)).size} parcelas)`;
+      sel.appendChild(opt);
+    }
+    if(groups.some(g=>g.id===old))sel.value=old;
+    const mode=selectedAssignmentMode();
+    $('assignmentExistingWrap').classList.toggle('hidden',mode!=='existing');
+    $('assignmentManualWrap').classList.toggle('hidden',mode!=='manual');
+    $('assignmentFeedback').textContent=mode==='existing'
+      ?(groups.length?'La ficha se vinculará al tratamiento seleccionado.':'No hay tratamientos de esta campaña: puedes crear uno nuevo.')
+      :mode==='new'?'Se reservará el siguiente número libre, sin reutilizar números eliminados.'
+      :mode==='manual'?'Solo para regularizar trabajos históricos. Un número ya usado debe seleccionarse como tratamiento existente.'
+      :'Se quitará la vinculación, pero la ficha y su recorrido permanecerán intactos.';
+    $('saveTreatmentAssignment').disabled=mode==='existing'&&!groups.length;
+  }
+  function renderTreatmentIdentity(w){
+    const box=$('reportTreatmentIdentity');
+    if(!box)return;
+    const relevant=!!w && (w.isTreatmentGroup || isPhytosanitaryWorkType(w.type));
+    box.classList.toggle('hidden',!relevant);
+    if(!relevant)return;
+    $('reportTreatmentCampaign').textContent=String(campaignOfWork(w)||'Sin fecha');
+    $('reportTreatmentNumber').textContent=Number(w.treatmentNumber)>0?`Tratamiento ${w.treatmentNumber}`:'Sin asignar';
+    const edit=$('editTreatmentAssignment');
+    edit.classList.toggle('hidden',state.reportOrigin!=='history');
+    edit.textContent=Number(w.treatmentNumber)>0?'Editar asignación':'Asignar / editar tratamiento';
+  }
+  function openTreatmentAssignment(){
+    const w=state.reportWork;
+    if(state.reportOrigin!=='history'||!w||!(w.isTreatmentGroup||isPhytosanitaryWorkType(w.type)))return;
+    const partCount=w.isTreatmentGroup?(w.partWorks||[]).length:1;
+    $('assignmentScopeText').textContent=w.isTreatmentGroup
+      ?`Esta operación afectará a las ${partCount} fichas del tratamiento, sin modificar recorridos ni fechas.`
+      :`Ficha de ${w.parcel||'parcela sin nombre'}. Puedes asignar un número nuevo o vincularla a otro tratamiento de la campaña.`;
+    $('assignmentCampaign').value=String(campaignOfWork(w)||new Date().getFullYear());
+    $('assignmentManualNumber').value='';
+    const unlink=$('assignmentUnlinkOption');
+    unlink.classList.toggle('hidden',!(w.treatmentNumber>0));
+    const prefer=w.treatmentNumber?'existing':'new';
+    const radio=document.querySelector(`input[name="assignmentMode"][value="${prefer}"]`);
+    radio.checked=true;
+    refreshAssignmentChoices();
+    if(w.treatmentId && Number(w.campaign)===Number($('assignmentCampaign').value)){
+      const select=$('assignmentExisting');
+      if([...select.options].some(o=>o.value===w.treatmentId))select.value=w.treatmentId;
+    }
+    $('treatmentAssignmentModal').classList.remove('hidden');
+  }
+  async function saveTreatmentAssignment(){
+    if(state._savingAssignment)return;
+    const current=state.reportWork;
+    if(state.reportOrigin!=='history'||!current)return;
+    const campaign=Number($('assignmentCampaign').value),mode=selectedAssignmentMode();
+    if(!Number.isInteger(campaign)||campaign<2000||campaign>2100)return toast('Selecciona un año de campaña válido.');
+    const originalIds=current.isTreatmentGroup?(current.partWorks||[]).map(w=>w.id):[current.id];
+    const ids=[...new Set(originalIds.filter(x=>typeof x==='string'&&x))];
+    if(!ids.length||ids.length!==originalIds.length)return toast('No se identifican todas las fichas. No se modificó ninguna.');
+    const entries=getHistoryEntries();
+    const matching=ids.map(id=>entries.find(w=>w.id===id));
+    if(matching.some(w=>!w||!isPhytosanitaryWorkType(w.type)))return toast('Las fichas del tratamiento no están disponibles o no son fitosanitarias.');
+    if(state.work?.status==='trabajando' && ids.includes(state.work.id))return toast('No se puede editar mientras el trabajo esté en marcha. Detén primero su seguimiento.');
+    const archive=window.PAZO_BAION_ARCHIVE;
+    if(!archive?.putWorks||!archive?.nextNumber)return toast('El archivo IndexedDB no está disponible: no se cambia ningún dato.');
+    let next=null,existingGroup=null;
+    if(mode==='existing'){
+      existingGroup=activeTreatmentGroups(campaign).find(g=>g.id===$('assignmentExisting').value);
+      if(!existingGroup)return toast('Selecciona un tratamiento existente válido.');
+      next={campaign,treatmentId:existingGroup.id,treatmentNumber:existingGroup.number};
+    }else if(mode==='manual'){
+      const number=Number($('assignmentManualNumber').value);
+      if(!Number.isSafeInteger(number)||number<1||number>9999)return toast('Escribe un número histórico entero entre 1 y 9999.');
+      const occupied=activeTreatmentGroups(campaign).find(g=>g.number===number);
+      if(occupied)return toast(`El Tratamiento ${number} ya existe en esta campaña. Usa «Vincular a un tratamiento existente».`);
+      next={campaign,treatmentNumber:number,treatmentId:`tratamiento-${campaign}-${number}`};
+    }else if(mode==='new'){
+      next={campaign};
+    }else if(mode==='unlink'){
+      if(!current.treatmentId)return toast('Esta ficha no tiene número asignado.');
+      next=null;
+    }else return toast('Selecciona una opción válida.');
+    if(next?.treatmentId && matching.every(w=>Number(w.campaign)===campaign && w.treatmentId===next.treatmentId)){
+      closeInfoModal('treatmentAssignmentModal');return toast('Esta ficha ya pertenece al tratamiento indicado.');
+    }
+    const message=current.isTreatmentGroup
+      ?`¿Cambiar la asignación de las ${ids.length} fichas de este tratamiento?\n\nSe conservarán sus recorridos GPS, fechas y datos originales.`
+      :`¿Cambiar la asignación de esta ficha?\n\nSe conservarán todos sus recorridos y datos originales.`;
+    if(!confirm(message))return;
+    const btn=$('saveTreatmentAssignment');state._savingAssignment=true;btn.disabled=true;
+    try{
+      await state.archiveWriteQueue.catch(()=>{});
+      if(mode==='new'){
+        const highest=Math.max(0,...activeTreatmentGroups(campaign).map(g=>g.number));
+        const number=await archive.nextNumber(campaign,highest);
+        if(!Number.isSafeInteger(number)||number<1)throw new Error('No se pudo reservar el número');
+        next={campaign,treatmentNumber:number,treatmentId:`tratamiento-${campaign}-${number}`};
+      }
+      // Comprobación final de conflictos, antes de modificar las fichas.
+      if(next?.treatmentId){
+        const duplicate=activeTreatmentGroups(campaign).find(g=>g.number===next.treatmentNumber && g.id!==next.treatmentId);
+        if(duplicate)throw new Error('El número está utilizado por otro tratamiento; vuelve a seleccionar el destino.');
+      }
+      const now=new Date().toISOString();
+      const revised=matching.map(w=>{
+        const out=clonePlain(w);
+        if(!next){delete out.treatmentId;delete out.treatmentNumber;out.campaign=campaign;}
+        else Object.assign(out,next);
+        out.savedAt=now;
+        return out;
+      });
+      // La operación de varias parcelas debe confirmarse completa o no guardarse ninguna en IndexedDB.
+      await archive.putWorks(revised);
+      if(next?.treatmentNumber){
+        try{await archive.ensureMinimumNumber(campaign,next.treatmentNumber);}
+        catch(err){console.warn('No se pudo actualizar el contador reservado',err);}
+      }
+      const replacements=new Map(revised.map(w=>[w.id,w]));
+      state.historyCache=entries.map(w=>replacements.get(w.id)||w);
+      if(!storage.set(LS.history,state.historyCache))toast('Cambios archivados en IndexedDB; el espejo local no admite más datos. Exporta una copia JSON.');
+      const active=storage.get(LS.active,null);
+      if(active?.id&&replacements.has(active.id)){
+        const updated={...active,...next};
+        if(!next){delete updated.treatmentId;delete updated.treatmentNumber;updated.campaign=campaign;}
+        updated.savedAt=now;
+        if(!storage.set(LS.active,updated))toast('El trabajo activo no pudo actualizarse en localStorage. No lo reanudes hasta verificar una copia de seguridad.');
+      }
+      if(state.work && replacements.has(state.work.id)){
+        Object.assign(state.work,replacements.get(state.work.id));
+      }
+      closeInfoModal('treatmentAssignmentModal');
+      state.reportParentGroup=null;
+      const target=current.isTreatmentGroup && next?.treatmentId
+        ?activeTreatmentGroups(campaign).find(g=>g.id===next.treatmentId)
+        :null;
+      const item=current.isTreatmentGroup?revised[0]:revised[0];
+      if(target)await openReportForWork(buildTreatmentReport(target),'history');
+      else if(current.isTreatmentGroup && revised.length>1){show('screen-history');}
+      else await openReportForWork(item,'history');
+      toast('Asignación de tratamiento guardada.');
+    }catch(err){toast('No se aplicó el cambio: '+(err?.message||err));}
+    finally{state._savingAssignment=false;btn.disabled=false;}
   }
 
   function exportSelectedRecord(){
@@ -3971,6 +4155,16 @@
     qsa("[data-delete-list]").forEach(b => b.addEventListener("click", () => deleteListItem(b.dataset.deleteList)));
     qsa("[data-history-filter]").forEach(b => b.addEventListener("click", () => { state.historyFilter = b.dataset.historyFilter; renderHistory(); }));
     $('historyCampaign').onchange=()=>{state.historyCampaign=$('historyCampaign').value;renderHistory();};
+    $('historyWorkType').onchange=()=>{state.historyWorkType=$('historyWorkType').value;renderHistory();};
+    $('openHistoryHelp').onclick=()=>$('historyHelpModal').classList.remove('hidden');
+    $('closeHistoryHelp').onclick=()=>closeInfoModal('historyHelpModal');
+    $('openTreatmentHelp').onclick=()=>$('treatmentHelpModal').classList.remove('hidden');
+    $('closeTreatmentHelp').onclick=()=>closeInfoModal('treatmentHelpModal');
+    $('editTreatmentAssignment').onclick=openTreatmentAssignment;
+    $('assignmentCampaign').onchange=refreshAssignmentChoices;
+    qsa('input[name="assignmentMode"]').forEach(r=>r.onchange=refreshAssignmentChoices);
+    $('saveTreatmentAssignment').onclick=saveTreatmentAssignment;
+    $('cancelTreatmentAssignment').onclick=()=>closeInfoModal('treatmentAssignmentModal');
     $('exportIncidentsGeoJSON').onclick=exportIncidentsGeoJSON;
     $('exportArchive').onclick=exportArchiveBundle;
     $('openDataManagement').onclick=()=>show('screen-data-management');

@@ -1,4 +1,4 @@
-/* PAZO BAION GPS · Beta v9.8. Archivo local de trabajos y numeración por campaña.
+/* PAZO BAION GPS · Beta v9.8.1. Archivo local de trabajos y numeración por campaña.
    No transmite datos a servidores. No elimina ni modifica el historial v08. */
 (() => {
   'use strict';
@@ -37,6 +37,18 @@
   const putWork=work=>transact('works','readwrite',s=>s.put(clone(work)));
   const deleteWork=id=>transact('works','readwrite',s=>s.delete(id));
   const clearWorks=()=>transact('works','readwrite',s=>s.clear());
+  // Cambiar la asignación de varias fichas de un tratamiento en una única transacción.
+  async function putWorks(works){
+    if(!Array.isArray(works)||!works.length||works.some(w=>!w||typeof w.id!=='string'))throw new Error('Fichas inválidas');
+    const db=await open();
+    return new Promise((resolve,reject)=>{
+      const tx=db.transaction('works','readwrite'),store=tx.objectStore('works');
+      for(const w of works)store.put(clone(w));
+      tx.oncomplete=()=>{db.close();resolve(true)};
+      tx.onerror=()=>{db.close();reject(tx.error||new Error('No se pudieron guardar las asignaciones'))};
+      tx.onabort=()=>{db.close();reject(tx.error||new Error('Guardado cancelado'))};
+    });
+  }
   // Eliminar un tratamiento completo en una sola transacción (todo o nada).
   async function deleteWorks(ids){
     if(!Array.isArray(ids) || !ids.length || ids.some(id=>typeof id!=='string'))throw new Error('Identificadores inválidos');
@@ -88,5 +100,5 @@
     }
     return count;
   }
-  window.PAZO_BAION_ARCHIVE={getWorks,putWork,deleteWork,deleteWorks,clearWorks,nextNumber,getCounters,ensureMinimumNumber,importWorks};
+  window.PAZO_BAION_ARCHIVE={getWorks,putWork,putWorks,deleteWork,deleteWorks,clearWorks,nextNumber,getCounters,ensureMinimumNumber,importWorks};
 })();
