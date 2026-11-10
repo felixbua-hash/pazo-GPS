@@ -1,4 +1,4 @@
-/* PAZO BAION GPS v9.8.1 — generador PDF documental local, sin servidores ni librerías externas.
+/* PAZO BAION GPS v9.8.2 — generador PDF documental local, sin servidores ni librerías externas.
  * PDF multipágina A4 con datos, cronología, incidencias, viento, ruta vectorial y desglose diario.
  * La cartografía satelital no se incrusta; el croquis vectorial se marca expresamente como esquemático.
  */
@@ -60,7 +60,7 @@
       ops=[]; y=98;
       rect(0,0,PW,61,LIGHT);
       T(M,29,'PAZO BAION GPS',18,true,GREEN);
-      T(M,46,'INFORME DOCUMENTAL · BETA v9.8.1',8,false,MUTED);
+      T(M,46,'INFORME DOCUMENTAL · BETA v9.8.2',8,false,MUTED);
       rule(M,64,PW-M,64);
     }
     function needed(height){if(y+height>PH-65)page();}
@@ -86,6 +86,10 @@
       lines.forEach((line,i)=>T(M+9,y+i*13,line,9,false,MUTED));
       y+=lines.length*13+7;
     }
+    const pruning = String(work.type||"").trim().toLowerCase()==="poda";
+    const zones = (Array.isArray(work.pruningZones) ? work.pruningZones : []).map(zone=>
+      (zone?.geometry?.coordinates?.[0] || []).map(([lng,lat])=>({lng,lat})).filter(valid)
+    ).filter(zone=>zone.length>=3);
     function routeDrawing(){
       const parts=(Array.isArray(work.routeSections)&&work.routeSections.length?work.routeSections:[work.pointsClean||[]])
         .map(arr=>(arr||[]).filter(valid));
@@ -102,15 +106,16 @@
           if(pts.length>=3)rings.push(pts);
         }
       }
-      if(!parts.some(a=>a.length>=2)&&!rings.length){
+      if(!parts.some(a=>a.length>=2)&&!rings.length&&!zones.length){
         textParagraph('No hay datos geográficos suficientes para dibujar la parcela o el recorrido.');return;
       }
       needed(281);
       const bx=M+8,by=y+13,bw=PW-M*2-16,bh=205;
       rect(M,y,PW-M*2,252,LIGHT);
-      T(bx+5,by+12,'Croquis GPS vectorial: perímetro de parcelas (verde) y recorridos (azul)',8,false,MUTED);
+      T(bx+5,by+12,pruning?'Croquis vectorial: perímetro de parcela (verde) y zonas podadas (ocre)':'Croquis GPS vectorial: perímetro de parcelas (verde) y recorridos (azul)',8,false,MUTED);
       const parcelPts=rings.flat();
-      let all=parcelPts.length?parcelPts:parts.flat();
+      const mapPoints=[...parcelPts,...zones.flat()];
+      const all=mapPoints.length?mapPoints:parts.flat();
       const lats=all.map(p=>p.lat),lons=all.map(p=>p.lng);
       let loX=Math.min(...lons),hiX=Math.max(...lons),loY=Math.min(...lats),hiY=Math.max(...lats);
       // Proyección local de lat/lon para que el dibujo no deforme tanto las proporciones.
@@ -122,16 +127,18 @@
       const bottom=by+bh-13-((bh-51)-spanY*factor)/2;
       const mapx=lng=>left+((Number(lng)-loX)*cosLat+(spanX-dx)/2)*factor;
       const mapy=lat=>bottom-((Number(lat)-loY)+(spanY-dy)/2)*factor;
-      const drawLine=(pts,rgb,width,closed=false)=>{
+      const drawLine=(pts,rgb,width,closed=false,fill=null)=>{
         if(pts.length<2)return;
         let commands=`${col(rgb)} RG ${f2(width)} w `;
+        if(fill)commands+=`${col(fill)} rg `;
         pts.forEach((p,i)=>{commands+=`${f2(mapx(p.lng))} ${f2(PH-mapy(p.lat))} ${i?'l':'m'} `;});
         if(closed)commands+='h ';
-        ops.push(commands+'S');
+        ops.push(commands+(fill?'B':'S'));
       };
       // Clip to the plot box; bad GPS coordinates must never draw over the PDF text.
       ops.push(`q ${f2(bx+7)} ${f2(PH-by-bh+20)} ${f2(bw-14)} ${f2(bh-45)} re W n`);
       rings.forEach(ring=>drawLine(ring,[.12,.38,.23],2.8,true));
+      zones.forEach(zone=>drawLine(zone,[.55,.33,.10],1.8,true,[.93,.80,.54]));
       for(const arr of parts){
         const onMap=parcelPts.length ? arr.filter(p=>p.lng>=loX-0.01&&p.lng<=hiX+0.01&&p.lat>=loY-0.01&&p.lat<=hiY+0.01):arr;
         drawLine(onMap,[.13,.47,.78],1.9,false);
@@ -146,7 +153,7 @@
       }
       ops.push('Q');
       const pCount=parts.reduce((v,p)=>v+p.length,0);
-      T(bx+6,by+bh+10,`${rings.length?'Perímetros disponibles incluidos':'Sin perímetro de parcela'} · ${pCount} puntos en ${parts.length} recorridos`,8,false,MUTED);
+      T(bx+6,by+bh+10,pruning?`${zones.length} zonas de poda delimitadas a mano`:`${rings.length?'Perímetros disponibles incluidos':'Sin perímetro de parcela'} · ${pCount} puntos en ${parts.length} recorridos`,8,false,MUTED);
       y+=265;
     }
 
@@ -168,27 +175,36 @@
     }
     section('JORNADA');
     row('Operario',work.day?.operator || '—');
-    row('Tractor',work.day?.tractor || '—');
-    row('Atomizador / cisterna',work.day?.sprayer || '—');
+    if(!pruning){
+      row('Tractor',work.day?.tractor || '—');
+      row('Atomizador / cisterna',work.day?.sprayer || '—');
+    }
     if(work.day?.notes)row('Observaciones',work.day.notes);
     section('TIEMPOS Y TRABAJO');
     row('Tiempo activo',clock(payload.activeMs));
     row('Tiempo parado',clock(payload.stoppedMs));
     row('Tiempo total transcurrido',clock(payload.elapsedMs));
-    row('Distancia',`${number((Number(work.distanceM)||0)/1000)} km`);
-    row('Recargas',work.refills || 0);
+    if(pruning){
+      row('Zonas podadas',zones.length);
+    }else{
+      row('Distancia',`${number((Number(work.distanceM)||0)/1000)} km`);
+      row('Recargas',work.refills || 0);
+    }
     row('Paradas',work.stops || 0);
     row('Incidencias',(work.incidents || []).length);
     if(payload.daily?.length){
       section('DESGLOSE POR DÍA');
       for(const d of payload.daily)row(d.date,`activo ${clock(d.activeMs)} · parado ${clock(d.stoppedMs)} · tramos ${d.segments}`);
     }
-    section('GPS Y RUTA');
-    row('Precisión media',payload.gpsAverage || '—');
-    row('Calibración',work.gpsCalibration?.quality || '—');
-    row('Puntos originales',(work.pointsOriginal || []).length);
-    row('Ruta depurada',(work.pointsClean || []).length);
-    if(work.suspensionDetected)textParagraph('Se detectó al menos una interrupción del seguimiento. Los intervalos sin GPS no se han añadido al tiempo activo.');
+    if(pruning) needed(306);
+    section(pruning?'MAPA DE PODA':'GPS Y RUTA');
+    if(!pruning){
+      row('Precisión media',payload.gpsAverage || '—');
+      row('Calibración',work.gpsCalibration?.quality || '—');
+      row('Puntos originales',(work.pointsOriginal || []).length);
+      row('Ruta depurada',(work.pointsClean || []).length);
+      if(work.suspensionDetected)textParagraph('Se detectó al menos una interrupción del seguimiento. Los intervalos sin GPS no se han añadido al tiempo activo.');
+    }
     if(!(work.parcelFeature||(work.parcelFeatures||[]).length))textParagraph('Aviso: no está disponible el perímetro de la parcela en esta ficha.');
     if(work.reportRecoveredGeometrySource)textParagraph('ATENCIÓN: los límites se recuperaron de '+work.reportRecoveredGeometrySource+' y pueden no coincidir con los de la fecha original. El trabajo original no fue modificado.');
     for(const notice of (payload.geographicWarnings||[])){
@@ -225,7 +241,7 @@
     // Añadir numeración y pie independiente a todas las páginas.
     pages.forEach((page,index)=>{
       page.push(`${col(GOLD)} RG 0.75 w ${f2(M)} 55 m ${f2(PW-M)} 55 l S`);
-      page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(M)} 40 Tm ${quote('Pazo Baion GPS · Beta v9.8.1 · Documento generado localmente')} Tj ET`);
+      page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(M)} 40 Tm ${quote('Pazo Baion GPS · Beta v9.8.2 · Documento generado localmente')} Tj ET`);
       page.push(`${col(MUTED)} rg BT /FR 8 Tf 1 0 0 1 ${f2(PW-M-40)} 40 Tm ${quote(`${index+1} / ${pages.length}`)} Tj ET`);
     });
     const objects=[];

@@ -1427,3 +1427,36 @@ input:focus,select:focus,textarea:focus{
 .v981-assignment-actions .btn{min-height:43px;font-size:13px!important;padding:8px!important}
 @media(max-height:740px){#screen-history .v98-history-panel{gap:5px!important}#screen-history .v981-history-title h2{font-size:21px!important}}
 .v981-assign-modes input[type="radio"]{width:18px!important;height:18px!important;min-width:18px!important;min-height:18px!important;flex:0 0 18px!important;padding:0!important;margin:1px 0 0!important;border-radius:50%!important;box-shadow:none!important}
+
+/* Beta v9.8.2: flujo de selección de parcelas y delimitación de poda. */
+#screen-map-load .map-management-content{display:flex;flex-direction:column;gap:10px;padding-top:12px}
+#screen-map-load #activeMapSummary{flex:0 0 auto}
+#screen-parcel-select .map-wrap,#screen-pruning-zones .map-wrap{flex:1 1 0!important;height:auto!important;min-height:140px!important;max-height:none!important}
+#screen-parcel-select .fixed-footer,#screen-pruning-zones .fixed-footer{height:auto!important;flex:0 0 auto!important;display:grid;gap:6px;padding:7px 0 0}
+#screen-parcel-select .footer-info,#screen-pruning-zones .footer-info{margin:0;min-height:0;display:block;padding:7px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mapPruning{position:absolute!important;inset:0!important}
+.v982-pruning-footer .button-row{display:flex;gap:6px}
+.v982-pruning-footer .button-row .btn{flex:1;min-width:0;font-size:12px;padding:8px 4px}
+#screen-work-type .panel{gap:8px;padding:14px;overflow-y:auto}
+#screen-work-type .panel h1{font-size:24px;margin:0}
+#screen-work-type .work-type-grid{gap:7px;flex:0 0 auto}
+#screen-work-type .work-type-card{min-height:57px!important;padding:6px 9px!important;gap:10px}
+#screen-work-type .work-type-card .choice-icon{width:38px;height:38px;flex-basis:38px}
+#screen-work-type .work-type-card .choice-copy strong{font-size:15px}
+#screen-work-type .work-type-card .choice-copy small{font-size:11px}
+.v982-parcel-choice{display:grid;gap:4px;font-size:12px}
+.v982-parcel-choice select{padding:7px 9px;min-height:38px}
+.v982-work-links{display:grid;gap:5px;flex:0 0 auto}
+#screen-work-type .v982-work-links .btn,#screen-work-type #repeatWorkType{min-height:40px;padding:8px;font-size:13px}
+.v982-history-heading{font:700 15px Georgia,serif;color:#184b34;margin:7px 0 2px}
+#screen-work.v982-pruning-work .work-stats-primary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+#screen-work.v982-pruning-work .work-stats-secondary{grid-template-columns:1fr!important}
+.v982-pruning-work .metric-card:has(#liveSpeed),
+.v982-pruning-work .metric-card:has(#distanceKm),
+.v982-pruning-work .metric-card:has(#liveAccuracy),
+.v982-pruning-work .metric-card:has(#refillCount),
+.v982-pruning-work #centerTractor,
+.v982-pruning-report .report-cards div:has(#reportDistance),
+.v982-pruning-report .report-cards div:has(#reportRefills),
+.v982-pruning-report .report-cards div:has(#reportWind){display:none!important}
+#screen-work.v982-pruning-work .work-actions{height:auto;flex:0 0 auto}

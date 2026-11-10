@@ -20,7 +20,7 @@
         <div class="splash-name">PAZO BAION</div>
         <div class="splash-divider" aria-hidden="true"><span></span>●<span></span></div>
         <div class="splash-subtitle">Control GPS de viñedos</div>
-        <div class="splash-version">Beta v9.8.1</div>
+        <div class="splash-version">Beta v9.8.2</div>
       </div>
       <div class="splash-landscape" role="img" aria-label="Vista ornamental de un viñedo"></div>
     </section>
@@ -37,44 +37,50 @@
 
       <main class="panel">
         <h1>Cargar capas del mapa</h1>
-        <p class="lead">Selecciona desde este terminal las dos capas exportadas desde SW Maps: <strong>PARCELAS.geojson</strong> e <strong>INCIDENCIAS_.geojson</strong>. Los archivos no se envían íntegros a GitHub ni a terceros.</p>
-
-        <div class="privacy-entry"><span><strong>Privacidad de los datos</strong><small>Información disponible bajo consulta.</small></span><button id="openPrivacy" class="btn ghost privacy-action" type="button">Consultar</button></div>
-
-        <div class="layer-load-grid">
-          <label class="file-box">
-            <input id="parcelGeojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
-            <span class="file-action-icon" aria-hidden="true">＋</span><span><strong>1 · Elegir archivo de PARCELAS</strong><small>Pulsa aquí para seleccionar PARCELAS.geojson</small></span><span class="file-action-chevron" aria-hidden="true">›</span>
-          </label>
-          <div id="mapLoadStatus" class="status-card muted">Parcelas: no cargadas.</div>
-
-          <label class="file-box secondary-file">
-            <input id="incidentGeojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
-            <span class="file-action-icon" aria-hidden="true">＋</span><span><strong>2 · Elegir archivo de INCIDENCIAS</strong><small>Pulsa aquí para seleccionar INCIDENCIAS_.geojson</small></span><span class="file-action-chevron" aria-hidden="true">›</span>
-          </label>
-          <div id="incidentLayerStatus" class="status-card muted">Incidencias: no cargadas. Puede estar vacía.</div>
-          <button id="exportIncidentsGeoJSON" class="btn ghost full" type="button">Exportar incidencias registradas (GeoJSON)</button>
-        </div>
-
-        <div id="parcelListPreview" class="parcel-preview hidden"></div>
-
-        <div class="layer-set-save">
-          <label for="layerSetName">Nombre para guardar este conjunto de capas</label>
-          <div class="layer-set-save-row"><input id="layerSetName" maxlength="70" autocomplete="off" placeholder="Ej.: Pazo Baion" /><button id="saveLayerSet" class="btn ghost" type="button">Guardar conjunto</button></div>
-          <small id="activeLayerSetInfo" class="layer-set-hint">Sin conjunto guardado seleccionado.</small>
-        </div>
-        <details id="savedSetsDetails" class="saved-sets-panel">
-          <summary aria-label="Abrir o cerrar los conjuntos guardados">
-            <span class="saved-sets-button-icon" aria-hidden="true">▤</span>
-            <span class="saved-sets-button-label">Consultar / cambiar conjuntos guardados <span id="savedSetCount"></span><small>Pulse para mostrar u ocultar la lista</small></span>
-            <span class="saved-sets-button-chevron" aria-hidden="true">⌄</span>
-          </summary>
-          <label for="savedLayerSetSelect">Conjunto de parcelas que deseas cargar</label>
-          <select id="savedLayerSetSelect" aria-label="Elegir conjunto guardado"></select>
-          <div class="button-row"><button id="loadLayerSet" class="btn ghost" type="button">Cargar seleccionado</button><button id="deleteLayerSet" class="btn danger outline" type="button">Eliminar</button></div>
-          <small>Los conjuntos se guardan por separado en este dispositivo. Las parcelas y las incidencias de cada conjunto se cargan juntas.</small>
-        </details>
+        <div id="activeMapSummary" class="status-card muted" role="status">Selecciona un conjunto para abrir el mapa.</div>
         <button id="continueAfterMap" class="btn primary full" disabled>Continuar al mapa</button>
+
+        <details id="mapManagement" class="saved-sets-panel">
+          <summary><span class="saved-sets-button-label">Cambiar o importar conjunto</span><span class="saved-sets-button-chevron" aria-hidden="true">⌄</span></summary>
+          <div class="map-management-content">
+            <p class="lead">Importa las parcelas de SW Maps. Puedes añadir el archivo de incidencias si lo tienes.</p>
+            <div class="privacy-entry"><span><strong>Privacidad de los datos</strong><small>Información disponible bajo consulta.</small></span><button id="openPrivacy" class="btn ghost privacy-action" type="button">Consultar</button></div>
+
+            <div class="layer-load-grid">
+              <label class="file-box">
+                <input id="parcelGeojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
+                <span class="file-action-icon" aria-hidden="true">＋</span><span><strong>1 · Elegir archivo de PARCELAS</strong><small>Pulsa aquí para seleccionar PARCELAS.geojson</small></span><span class="file-action-chevron" aria-hidden="true">›</span>
+              </label>
+              <div id="mapLoadStatus" class="status-card muted">Parcelas: no cargadas.</div>
+
+              <label class="file-box secondary-file">
+                <input id="incidentGeojsonInput" type="file" accept=".geojson,application/geo+json,application/json" />
+                <span class="file-action-icon" aria-hidden="true">＋</span><span><strong>2 · Elegir archivo de INCIDENCIAS</strong><small>Pulsa aquí para seleccionar INCIDENCIAS_.geojson</small></span><span class="file-action-chevron" aria-hidden="true">›</span>
+              </label>
+              <div id="incidentLayerStatus" class="status-card muted">Incidencias: no cargadas. Puede estar vacía.</div>
+              <button id="exportIncidentsGeoJSON" class="btn ghost full" type="button">Exportar incidencias registradas (GeoJSON)</button>
+            </div>
+
+            <div id="parcelListPreview" class="parcel-preview hidden"></div>
+
+            <div class="layer-set-save">
+              <label for="layerSetName">Nombre para guardar este conjunto de capas</label>
+              <div class="layer-set-save-row"><input id="layerSetName" maxlength="70" autocomplete="off" placeholder="Ej.: Pazo Baion" /><button id="saveLayerSet" class="btn ghost" type="button">Guardar conjunto</button></div>
+              <small id="activeLayerSetInfo" class="layer-set-hint">Sin conjunto guardado seleccionado.</small>
+            </div>
+            <details id="savedSetsDetails" class="saved-sets-panel">
+              <summary aria-label="Abrir o cerrar los conjuntos guardados">
+                <span class="saved-sets-button-icon" aria-hidden="true">▤</span>
+                <span class="saved-sets-button-label">Consultar / cambiar conjuntos guardados <span id="savedSetCount"></span><small>Pulse para mostrar u ocultar la lista</small></span>
+                <span class="saved-sets-button-chevron" aria-hidden="true">⌄</span>
+              </summary>
+              <label for="savedLayerSetSelect">Conjunto de parcelas que deseas cargar</label>
+              <select id="savedLayerSetSelect" aria-label="Elegir conjunto guardado"></select>
+              <div class="button-row"><button id="loadLayerSet" class="btn ghost" type="button">Cargar seleccionado</button><button id="deleteLayerSet" class="btn danger outline" type="button">Eliminar</button></div>
+              <small>Los conjuntos se guardan por separado en este dispositivo. Las parcelas y las incidencias de cada conjunto se cargan juntas.</small>
+            </details>
+          </div>
+        </details>
         <button id="openHistoryFromMap" class="btn ghost full v96-history-access" type="button"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7"/><path d="M4 4v5h5"/><path d="M12 8v5l3 2"/></svg></span><span>Ver historial de trabajos</span></button>
       </main>
     </section>
@@ -97,7 +103,7 @@
         <p id="previousDayMessage">Puedes mantener los mismos datos de operario, tractor y atomizador o revisarlos antes de empezar.</p>
         <button id="reusePreviousDay" class="btn primary full" type="button">Usar configuración anterior</button>
         <button id="modifyPreviousDay" class="btn ghost full" type="button">Modificar configuración</button>
-        <button id="closePreviousDay" class="btn ghost full previous-day-close" type="button">Volver a cargar capas</button>
+        <button id="closePreviousDay" class="btn ghost full previous-day-close" type="button">Volver a tipos de trabajo</button>
       </div>
     </div>
     <div id="previousDayHelpModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="previousDayHelpTitle">
@@ -166,8 +172,8 @@
       <header class="topbar">
         <button id="backFromParcelSelect" class="back-btn" type="button" aria-label="Volver a la pantalla anterior"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
-          <div class="brand-title">Seleccionar parcela</div>
-          <div class="brand-subtitle">Toca una parcela para continuar</div>
+          <div class="brand-title">Seleccionar parcelas</div>
+          <div class="brand-subtitle">Toca una o varias parcelas en el mapa</div>
         </div>
       </header>
 
@@ -179,7 +185,8 @@
         </div>
       </div>
       <footer class="fixed-footer">
-        <div id="parcelSelectInfo" class="footer-info">Mapa cargado. Selecciona una parcela.</div>
+        <div id="parcelSelectInfo" class="footer-info" aria-live="polite">Selecciona una o varias parcelas.</div>
+        <button id="confirmParcelSelection" class="btn primary full" type="button" disabled>Elegir tipo de trabajo</button>
       </footer>
     </section>
 
@@ -214,7 +221,7 @@
     <!-- Tipo de trabajo -->
     <section id="screen-work-type" class="screen">
       <header class="topbar">
-        <button class="back-btn" data-go="screen-parcel-detail"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
+        <button id="backFromWorkType" class="back-btn" type="button" aria-label="Volver al mapa de parcelas"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
           <div class="brand-title">Tipo de trabajo</div>
           <div class="brand-subtitle">Selecciona la labor</div>
@@ -223,6 +230,11 @@
 
       <main class="panel">
         <h1 id="workTypeParcel">Parcela</h1>
+        <label id="workParcelChoice" class="v982-parcel-choice hidden">Parcela que vas a trabajar ahora
+          <select id="workParcelSelect"></select>
+        </label>
+        <button id="resumeParcelWork" class="btn warning full hidden" type="button"></button>
+        <button id="repeatWorkType" class="btn primary full hidden" type="button"></button>
         <div class="work-type-grid">
           <button class="choice-btn work-type-card" data-work-type="Aplicación de fitosanitarios">
             <span class="choice-icon ui-circle"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9h8v10H6z"/><path d="M14 11h2a2 2 0 0 0 2-2V7h-2"/><path d="M9 9V6h2"/><path d="M18 13h2"/></svg></span>
@@ -232,10 +244,18 @@
             <span class="choice-icon ui-circle"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="17" r="2.5"/><circle cx="7" cy="7" r="2.5"/><path d="M20 5l-8.5 6.5"/><path d="M20 19l-8.5-6.5"/></svg></span>
             <span class="choice-copy"><strong>Desbroce</strong><small>Seguimiento de la labor realizada en parcela</small></span>
           </button>
+          <button class="choice-btn work-type-card" data-work-type="Poda">
+            <span class="choice-icon ui-circle"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17c3-7 7-9 12-10M9 14c-3 0-5-2-5-5 4 0 6 2 6 4M13 11c0-3 2-5 5-6 0 4-2 6-4 7"/></svg></span>
+            <span class="choice-copy"><strong>Poda</strong><small>Dibujar las zonas podadas al finalizar</small></span>
+          </button>
           <button class="choice-btn work-type-card" data-work-type="Otro">
             <span class="choice-icon ui-circle"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l4 4"/><path d="M7 17l8-8"/><path d="M6 14l4 4"/><path d="M17 7l2-2"/><path d="M5 19l2-2"/></svg></span>
             <span class="choice-copy"><strong>Otro</strong><small>Registrar cualquier otro trabajo de jornada</small></span>
           </button>
+        </div>
+        <div class="v982-work-links">
+          <button id="openParcelHistory" class="btn ghost full" type="button">Historial de la parcela</button>
+          <button id="viewSelectedParcel" class="btn ghost full" type="button">Ver parcela e incidencias</button>
         </div>
       </main>
     </section>
@@ -244,7 +264,7 @@
     <section id="screen-treatment-setup" class="screen">
       <header class="topbar">
         <button id="backFromTreatmentSetup" class="back-btn" type="button" aria-label="Volver a tipo de trabajo">‹</button>
-        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8.1</div></div>
+        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8.2</div></div>
       </header>
       <main class="panel treatment-panel">
         <h1>Identificar tratamiento</h1>
@@ -354,12 +374,37 @@
           <button id="beginWorkBtn" class="btn primary work-main-btn"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Comienzo</strong><small>Registrar inicio del trabajo</small></span></button>
           <button id="stopWorkBtn" class="btn warning work-main-btn hidden"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Parada</strong><small>Detener y registrar motivo</small></span></button>
           <button id="continueWorkBtn" class="btn primary work-main-btn hidden"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Continuar</strong><small>Reanudar el trabajo</small></span></button>
+          <button id="finishPausedPruning" class="btn warning full hidden" type="button">Delimitar zonas podadas</button>
           <div class="work-secondary-actions">
             <button id="incidentWorkBtn" class="btn ghost work-secondary-btn"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5l8 14H4z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Incidencia</strong><small>Registrar incidencia</small></span></button>
             <button id="viewDraftReportBtn" class="btn ghost work-secondary-btn"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h10"/><path d="M8 12h10"/><path d="M8 17h10"/><circle cx="5" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="17" r="1" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Resumen</strong><small>Ver informe de trabajo</small></span></button>
           </div>
         </div>
       </main>
+    </section>
+
+    <!-- Delimitación manual de zonas podadas -->
+    <section id="screen-pruning-zones" class="screen">
+      <header class="topbar">
+        <button id="backFromPruningZones" class="back-btn" type="button" aria-label="Volver al trabajo de poda">‹</button>
+        <div><div class="brand-title">Zonas podadas</div><div id="pruningParcelLabel" class="brand-subtitle"></div></div>
+      </header>
+      <div class="map-wrap">
+        <div id="mapPruning" class="map"></div>
+      </div>
+      <footer class="fixed-footer v982-pruning-footer">
+        <p id="pruningInstructions" class="footer-info" aria-live="polite"></p>
+        <div id="pruningSavedActions" class="button-row">
+          <button id="startPruningZone" class="btn primary" type="button">Dibujar zona</button>
+          <button id="removePruningZone" class="btn ghost" type="button" disabled>Quitar zona</button>
+        </div>
+        <div id="pruningDrawingActions" class="button-row hidden">
+          <button id="undoPruningPoint" class="btn ghost" type="button">Deshacer</button>
+          <button id="cancelPruningZone" class="btn ghost" type="button">Cancelar</button>
+          <button id="savePruningZone" class="btn primary" type="button">Guardar zona</button>
+        </div>
+        <button id="finishPruningWork" class="btn primary full" type="button" disabled>Finalizar poda</button>
+      </footer>
     </section>
 
     <!-- Informe -->
@@ -417,7 +462,7 @@
         <button id="backFromHistory" class="back-btn" type="button" aria-label="Volver a la pantalla anterior"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
         <div>
           <div class="brand-title">Historial</div>
-          <div class="brand-subtitle">Todos los trabajos de la explotación</div>
+          <div id="historyScopeTitle" class="brand-subtitle">Todos los trabajos de la explotación</div>
         </div>
         <button id="openDataManagement" class="v98-header-settings" type="button" aria-label="Gestión de datos y copias de seguridad" title="Gestión de datos"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.07.07-2.1 2.1-.07-.07a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.05 1.57V21h-3v-.8a1.7 1.7 0 0 0-1.05-1.57 1.7 1.7 0 0 0-1.87.34l-.07.07-2.1-2.1.07-.07A1.7 1.7 0 0 0 6.03 15a1.7 1.7 0 0 0-1.57-1.05H4v-3h.46A1.7 1.7 0 0 0 6.03 9.9 1.7 1.7 0 0 0 5.69 8l-.07-.07 2.1-2.1.07.07a1.7 1.7 0 0 0 1.87.34A1.7 1.7 0 0 0 10.71 4.7V4h3v.7a1.7 1.7 0 0 0 1.05 1.57 1.7 1.7 0 0 0 1.87-.34l.07-.07 2.1 2.1-.07.07a1.7 1.7 0 0 0-.34 1.87 1.7 1.7 0 0 0 1.57 1.05H20v3h-.46A1.7 1.7 0 0 0 19.4 15Z"/></svg></button>
       </header>
@@ -445,7 +490,7 @@
     <section id="screen-data-management" class="screen">
       <header class="topbar">
         <button id="backFromDataManagement" class="back-btn" type="button" aria-label="Volver al historial"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
-        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8.1</div></div>
+        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8.2</div></div>
       </header>
       <main class="panel v98-management-panel">
         <div class="v98-management-intro"><strong>Datos guardados en este dispositivo</strong><p>Estas operaciones afectan a varios trabajos, no a una ficha concreta. Conserva una copia JSON fuera de Safari antes de borrar o cambiar de teléfono.</p></div>
@@ -512,10 +557,12 @@
     <div id="stopModal" class="modal hidden">
       <div class="modal-card">
         <h2>Motivo de parada</h2>
+        <button class="choice-btn v982-pruning-only hidden" data-stop-reason="Pausa de poda">Pausa de poda</button>
         <button class="choice-btn" data-stop-reason="Recarga cisterna">Recarga cisterna</button>
         <button class="choice-btn" data-stop-reason="Pausa técnica / incidencia">Pausa técnica / incidencia</button>
         <button class="choice-btn" data-stop-reason="Avería / revisión">Avería / revisión</button>
         <button class="choice-btn" data-stop-reason="Otro motivo">Otro motivo</button>
+        <button class="choice-btn danger-choice v982-pruning-only hidden" data-stop-reason="Delimitar zonas podadas">Delimitar zonas podadas</button>
         <button class="choice-btn danger-choice" data-stop-reason="Fin de tratamiento de la parcela">Fin de tratamiento de la parcela</button>
         <button id="cancelStopModal" class="btn ghost full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></span><span>Cancelar</span></button>
       </div>

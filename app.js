@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.8.1";
+  const VERSION = "Beta v9.8.2";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -22,6 +22,10 @@
     parcelsGeoJSON: null,
     incidentsGeoJSON: null,
     selectedFeature: null,
+    selectedParcels: [],
+    historyScope: null,
+    repeatWorkType: "",
+    pruningEditor: null,
     selectedParcelName: "",
     workType: "",
     dayConfig: null,
@@ -44,7 +48,6 @@
     historyCache: null,
     archiveWriteQueue: Promise.resolve(),
     treatmentDraft: null,
-    parcelSelectReturnTo: "screen-map-load",
     historyReturnTo: "screen-map-load",
     pendingResumeAfterDay: null,
     liveSpeedKmh: null,
@@ -111,6 +114,7 @@
         if(!prev || prev!==w && JSON.stringify(prev)!==JSON.stringify(w)) await archive.putWork(w);
       }
       if(document.querySelector('#screen-history.active'))renderHistory();
+      if(document.querySelector('#screen-work-type.active'))renderWorkTypeSelection();
     }catch(err){
       console.warn('Archivo IndexedDB no disponible; se conserva historial anterior',err);
       state.historyCache=storage.get(LS.history, []);
@@ -289,7 +293,7 @@
     const active=reportEffectiveActiveMs(w);
     const speed=active>0?(Number(w.distanceM)||0)/(active/3600000)/1000:null;
     if(speed!==null && speed>35)notices.push(`Distancia y tiempo incompatibles con un recorrido habitual de tractor (${speed.toFixed(1).replace('.',',')} km/h de media). Conservar y revisar datos originales.`);
-    if(pts.length<2)notices.push('No hay suficientes puntos GPS válidos para representar un recorrido completo.');
+    if(pts.length<2 && !isPruningWork(w))notices.push('No hay suficientes puntos GPS válidos para representar un recorrido completo.');
     let jumps=0;
     for(const section of routeSections(w)){
       for(let i=1;i<section.length;i++){
@@ -403,13 +407,18 @@
     qsa(".screen").forEach(s => s.classList.remove("active"));
     if(screenId !== "screen-report" && $("reportMapShell")) $("reportMapShell").classList.remove("is-expanded");
     const screen = $(screenId);
+    state.gpsCalibrationRequest = null;
     screen.classList.add("active");
+    if(screenId === "screen-gps-calibration") resetGpsCalibrationUi();
+    if(screenId === "screen-work-type") renderWorkTypeSelection();
+    if(screenId === "screen-work") updatePruningWorkControls();
     afterLayoutStable(() => {
       if(screenId === "screen-parcel-select") setupAllMap();
       if(screenId === "screen-parcel-detail") setupParcelMap();
       if(screenId === "screen-work") setupWorkMap();
       if(screenId === "screen-report") renderReport();
       if(screenId === "screen-history") renderHistory();
+      if(screenId === "screen-pruning-zones" && screen.classList.contains("active")) setupPruningMap();
     });
   }
 
@@ -533,6 +542,14 @@
     updateContinueAvailability();
     $("saveLayerSet").disabled = !isValidParcelsGeoJSON(state.parcelsGeoJSON);
     setLayerSetInfo();
+    const count = (state.parcelsGeoJSON?.features || []).filter(f=>["Polygon","MultiPolygon"].includes(f.geometry?.type)).length;
+    const summary = $("activeMapSummary");
+    summary.classList.toggle("ok", count > 0);
+    summary.classList.toggle("muted", !count);
+    summary.textContent = count
+      ? `${state.activeLayerSetId ? ($("layerSetName").value.trim() || "Conjunto guardado") : "Capas cargadas"} · ${count} ${count === 1 ? "parcela" : "parcelas"}`
+      : "Abre un conjunto guardado o importa el archivo de parcelas.";
+    $("continueAfterMap").textContent = count ? "Continuar con este mapa" : "Continuar al mapa";
   }
 
   async function refreshLayerSets(){
@@ -572,8 +589,7 @@
     if(!isValidParcelsGeoJSON(gj)) throw new Error("El conjunto no contiene parcelas válidas.");
     state.parcelsGeoJSON = gj;
     state.incidentsGeoJSON = isValidIncidentsGeoJSON(incidents) ? incidents : EMPTY_INCIDENT_LAYER();
-    state.selectedFeature = null;
-    state.selectedParcelName = "";
+    clearParcelSelection();
     state.activeLayerSetId = set?.id || null;
     state.layersDirty = false;
     $("layerSetName").value = set?.name || "";
@@ -630,7 +646,7 @@
       storage.set(LS.layerSetId, id);
       await refreshLayerSets();
       $("savedLayerSetSelect").value = id;
-      setLayerSetInfo();
+      updateLayerButtons();
       toast(`Conjunto «${name}» guardado con sus capas de parcelas e incidencias.`);
     }catch(err){
       toast("No se pudo guardar el conjunto: " + err.message + ". Conserva los GeoJSON originales.");
@@ -662,7 +678,7 @@
       const set = await layerDb.get(id);
       if(!set) throw new Error("Ya no existe el conjunto elegido.");
       setActiveLayers(set.parcelsGeoJSON, set.incidentsGeoJSON, set);
-      toast(`Conjunto «${set.name}» cargado. Pulsa «Continuar al mapa» para utilizarlo.`);
+      $("mapManagement").open = false;
     }catch(err){ toast("No se pudo cargar el conjunto: " + err.message); }
   }
 
@@ -675,7 +691,7 @@
       await layerDb.delete(id);
       if(state.activeLayerSetId === id){ state.activeLayerSetId = null; state.layersDirty = true; storage.remove(LS.layerSetId); }
       await refreshLayerSets();
-      setLayerSetInfo();
+      updateLayerButtons();
     }catch(err){ toast("No se pudo eliminar el conjunto: " + err.message); }
   }
 
@@ -683,8 +699,7 @@
     // Elegir nuevas parcelas inicia otro conjunto: nunca conservar las incidencias de la finca anterior.
     state.parcelsGeoJSON = gj;
     state.incidentsGeoJSON = null;
-    state.selectedFeature = null;
-    state.selectedParcelName = "";
+    clearParcelSelection();
     state.activeLayerSetId = null;
     state.layersDirty = true;
     storage.remove(LS.layerSetId);
@@ -836,7 +851,7 @@
     const dateLabel = Number.isFinite(prior.getTime())
       ? new Intl.DateTimeFormat("es-ES", {day:"numeric", month:"long", year:"numeric"}).format(prior)
       : String(day.date);
-    $("previousDayMessage").textContent = `Hay una configuración guardada del ${dateLabel}. ¿Deseas utilizar los mismos datos hoy o revisarlos antes de continuar al mapa?`;
+    $("previousDayMessage").textContent = `Hay una configuración guardada del ${dateLabel}. ¿Deseas utilizar los mismos datos hoy o revisarlos antes de preparar el trabajo?`;
     $("previousDayModal").classList.remove("hidden");
   }
 
@@ -844,7 +859,7 @@
     const day = storage.get(LS.day, null);
     if(!day || !day.date || day.date === todayIso()){
       closePreviousDayDialog();
-      goAfterMapReady();
+      prepareSelectedWork();
       return;
     }
     const cfg = {...day, date:todayIso(), notes:""};
@@ -855,8 +870,7 @@
     state.dayConfig = cfg;
     closePreviousDayDialog();
     loadSavedDayConfig();
-    state.parcelSelectReturnTo = "screen-map-load";
-    show("screen-parcel-select");
+    continueSelectedWorkSetup();
   }
 
   function modifyPreviousDayConfig(){
@@ -885,8 +899,7 @@
       resumePendingWorkFromReport();
       return;
     }
-    state.parcelSelectReturnTo = "screen-day-config";
-    show("screen-parcel-select");
+    continueSelectedWorkSetup();
   }
 
   function ensureLeaflet(){
@@ -1019,12 +1032,18 @@
       if(!map) return;
       state.layers.all = L.geoJSON(state.parcelsGeoJSON, {
         filter: feature => feature.geometry && ["Polygon","MultiPolygon"].includes(feature.geometry.type),
-        style: parcelStyle(false),
+        style: feature => parcelStyle(state.selectedParcels.includes(feature)),
         interactive: true,
         onEachFeature: (feature, layer) => {
           const name = featureName(feature);
           layer.bindTooltip(name, { permanent: true, direction: "center", className: "parcel-label" });
-          layer.on("click", () => selectParcel(feature));
+          layer.on("click", () => {
+            const index = state.selectedParcels.indexOf(feature);
+            if(index < 0) state.selectedParcels.push(feature);
+            else state.selectedParcels.splice(index, 1);
+            layer.setStyle(parcelStyle(index < 0));
+            updateParcelSelection();
+          });
         }
       }).addTo(map).bringToFront();
       drawImportedIncidents(map, "allImportedIncidents");
@@ -1032,16 +1051,70 @@
       if(state.layers.allImportedIncidents) state.layers.allImportedIncidents.bringToFront();
       const bounds = state.layers.all.getBounds && state.layers.all.getBounds().isValid() ? state.layers.all.getBounds() : getBoundsFromGeoJSON(state.parcelsGeoJSON);
       if(bounds) stabilizeMap(map, bounds, [34,34]);
-      $("parcelSelectInfo").textContent = "Mapa cargado. Selecciona una parcela.";
+      updateParcelSelection();
     });
   }
 
-  function selectParcel(feature){
+  function clearParcelSelection(){
+    state.selectedFeature = null;
+    state.selectedParcelName = "";
+    state.selectedParcels = [];
+    state.historyScope = null;
+    state.repeatWorkType = "";
+  }
+
+  function updateParcelSelection(){
+    const count = state.selectedParcels.length;
+    $("confirmParcelSelection").disabled = !count;
+    const names = state.selectedParcels.map(featureName);
+    $("parcelSelectInfo").textContent = count
+      ? `${count === 1 ? "Seleccionada" : count + " seleccionadas"} · ${names.join(" · ")}`
+      : "Selecciona una o varias parcelas.";
+    $("parcelSelectInfo").title = names.join(" · ");
+  }
+
+  function setCurrentParcel(feature){
     state.selectedFeature = feature;
-    state.selectedParcelName = featureName(feature);
+    state.selectedParcelName = feature ? featureName(feature) : "";
     $("selectedParcelName").textContent = state.selectedParcelName;
-    $("workTypeParcel").textContent = state.selectedParcelName;
-    show("screen-parcel-detail");
+  }
+
+  function renderWorkTypeSelection(){
+    const parcels = state.selectedParcels;
+    if(!parcels.includes(state.selectedFeature)) setCurrentParcel(parcels[0]);
+    const multiple = parcels.length > 1;
+    const choice = $("workParcelSelect");
+    choice.replaceChildren();
+    parcels.forEach((feature,index)=>{
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = featureName(feature);
+      choice.append(option);
+    });
+    choice.value = String(parcels.indexOf(state.selectedFeature));
+    $("workParcelChoice").classList.toggle("hidden", !multiple);
+    $("workTypeParcel").textContent = multiple ? `${parcels.length} parcelas seleccionadas` : state.selectedParcelName;
+    $("openParcelHistory").textContent = multiple ? "Historial de las parcelas seleccionadas" : "Historial de la parcela";
+    const repeat = $("repeatWorkType");
+    repeat.classList.toggle("hidden", !multiple || !state.repeatWorkType);
+    repeat.textContent = `Continuar con ${state.repeatWorkType}`;
+    const pending = getHistoryEntries().filter(w=>!workIsCompleted(w) && workMatchesParcel(w,state.selectedFeature,state.activeLayerSetId))
+      .sort((a,b)=>historicWorkTimestamp(b)-historicWorkTimestamp(a))[0];
+    const resume = $("resumeParcelWork");
+    resume.classList.toggle("hidden", !pending);
+    if(pending){
+      resume.textContent = `Retomar ${pending.type || "trabajo"} pendiente`;
+      resume.onclick = ()=>openParcelHistory(pending);
+    }else resume.onclick = null;
+  }
+
+  function openParcelHistory(pending=null){
+    state.historyScope = {parcels:state.selectedParcels.slice(), layerSetId:state.activeLayerSetId};
+    state.historyReturnTo = "screen-work-type";
+    state.historyFilter = state.historyCampaign = state.historyWorkType = "all";
+    upsertPendingWorkInHistory();
+    if(pending) openReportForWork(pending,"history");
+    else show("screen-history");
   }
 
   function setupParcelMap(){
@@ -1084,25 +1157,54 @@
   }
 
   function chooseWorkType(type){
+    if(!state.selectedFeature) return show("screen-parcel-select");
     state.workType = type;
     state.treatmentDraft = null;
+    state.gpsCalibration = null;
     $("workHeader").textContent = `${state.selectedParcelName} · ${state.workType}`;
-    if(isPhytosanitaryWorkType(type))openTreatmentSetup();
+    prepareSelectedWork();
+  }
+
+  function prepareSelectedWork(){
+    const day = storage.get(LS.day, null);
+    if(day?.date === todayIso()){
+      state.dayConfig = day;
+      continueSelectedWorkSetup();
+    }else if(day?.date){
+      offerPreviousDayConfig(day);
+    }else{
+      loadSavedDayConfig();
+      show("screen-day-config");
+    }
+  }
+
+  function continueSelectedWorkSetup(){
+    if(isPruningWork({type:state.workType})) return startWorkShell();
+    if(isPhytosanitaryWorkType(state.workType)) openTreatmentSetup();
     else show("screen-gps-calibration");
   }
 
-  async function runGpsCalibration(){
-    const samples = [];
+  function resetGpsCalibrationUi(){
+    state.gpsCalibration = null;
     $("gpsQualityText").className = "status-card muted";
-    $("gpsQualityText").textContent = "Tomando muestras GPS durante unos segundos...";
-    $("runGpsCalibration").disabled = true;
+    $("gpsQualityText").textContent = "Pulsa iniciar comprobación.";
+    $("gpsQualityDial").className = "gps-dial";
+    $("runGpsCalibration").disabled = false;
     $("startAfterCalibration").disabled = true;
     $("forceStartWork").classList.add("hidden");
     $("gpsSamples").textContent = "0";
     $("gpsBest").textContent = "—";
     $("gpsAvg").textContent = "—";
     $("gpsAccuracyValue").textContent = "—";
+  }
 
+  async function runGpsCalibration(){
+    resetGpsCalibrationUi();
+    const request = Symbol("calibración");
+    state.gpsCalibrationRequest = request;
+    const samples = [];
+    $("gpsQualityText").textContent = "Tomando muestras GPS durante unos segundos...";
+    $("runGpsCalibration").disabled = true;
     if(!navigator.geolocation){
       $("gpsQualityText").className = "status-card bad";
       $("gpsQualityText").textContent = "Este navegador no permite geolocalización.";
@@ -1111,15 +1213,15 @@
     }
 
     const endAt = Date.now() + 10000;
-    let stop = false;
     const options = { enableHighAccuracy: true, maximumAge: 0, timeout: 7000 };
 
     const collect = () => new Promise(resolve => {
       navigator.geolocation.getCurrentPosition(pos => resolve(pos), err => resolve({error: err}), options);
     });
 
-    while(Date.now() < endAt && !stop){
+    while(Date.now() < endAt && state.gpsCalibrationRequest === request){
       const pos = await collect();
+      if(state.gpsCalibrationRequest !== request) return;
       if(pos && !pos.error){
         const acc = pos.coords.accuracy;
         samples.push({ 
@@ -1136,6 +1238,7 @@
       await new Promise(r => setTimeout(r, 900));
     }
 
+    if(state.gpsCalibrationRequest !== request) return;
     const last = samples.at(-1);
     const best = samples.length ? Math.min(...samples.map(s=>s.accuracy)) : Infinity;
     const avg = samples.length ? samples.reduce((a,s)=>a+s.accuracy,0)/samples.length : Infinity;
@@ -1162,8 +1265,11 @@
     state._startingNewWork=true;
     try{
     if(!ensureNoUnsecuredWork("iniciar un nuevo trabajo")) return;
-    if(!state.gpsCalibration) state.gpsCalibration = {samples:0, best:Infinity, avg:Infinity, quality:"No comprobado", forced, at:new Date().toISOString()};
-    state.gpsCalibration.forced = forced;
+    const pruning = isPruningWork({type:state.workType});
+    const calibration = pruning ? null : {
+      ...(state.gpsCalibration || {samples:0, best:Infinity, avg:Infinity, quality:"No comprobado", at:new Date().toISOString()}),
+      forced
+    };
     let treatment={};
     if(isPhytosanitaryWorkType(state.workType)){
       try{treatment=await allocateTreatment();}
@@ -1176,9 +1282,12 @@
       id: "trabajo-" + Date.now(),
       parcel: state.selectedParcelName,
       parcelId: parcelIdentity(state.selectedFeature),
+      parcelLayerSetId: state.activeLayerSetId,
       parcelFeature: state.selectedFeature,
       type: state.workType,
-      day: state.dayConfig || storage.get(LS.day, {}),
+      day: pruning
+        ? {...(state.dayConfig || storage.get(LS.day, {})), tractor:"", sprayer:""}
+        : state.dayConfig || storage.get(LS.day, {}),
       status: "preparado",
       startedAt: null,
       finishedAt: null,
@@ -1189,7 +1298,8 @@
       distanceM: 0,
       refills: 0,
       stops: 0,
-      gpsCalibration: state.gpsCalibration,
+      gpsCalibration: calibration,
+      ...(pruning ? {pruningZones:[]} : {}),
       pointsOriginal: [],
       pointsClean: [],
       events: [],
@@ -1208,6 +1318,7 @@
       finalSnapshot: null,
       forcedStart: forced
     };
+    state.gpsCalibration = calibration;
     if(!storage.set(LS.active, state.work)){
       toast("No se puede iniciar el trabajo: el navegador no permite guardar su ficha activa.");
       state.work = null;
@@ -1215,6 +1326,7 @@
     }
     state.reportWork = null;
     state.reportOrigin = "work";
+    state.repeatWorkType = state.work.type;
     if(state.work.treatmentNumber)$('workHeader').textContent=`${treatmentCaption(state.work)} · ${state.work.parcel}`;
     resetLiveUi();
     show("screen-work");
@@ -1285,8 +1397,10 @@
     state.workType = state.work.type || state.workType || "Trabajo sin tipo";
     state.selectedFeature = state.work.parcelFeature || findParcelFeatureByName(state.work.parcel) || state.selectedFeature || null;
     if(state.selectedFeature) state.work.parcelFeature = state.work.parcelFeature || state.selectedFeature;
-    state.dayConfig = state.work.day || state.dayConfig || storage.get(LS.day, {});
-    state.gpsCalibration = state.work.gpsCalibration || state.gpsCalibration;
+    state.dayConfig = isPruningWork(state.work)
+      ? storage.get(LS.day, state.work.day || {})
+      : state.work.day || state.dayConfig || storage.get(LS.day, {});
+    state.gpsCalibration = isPruningWork(state.work) ? null : state.work.gpsCalibration || state.gpsCalibration;
 
     const headerText = `${state.selectedParcelName} · ${state.workType}`;
     if($("workHeader")) $("workHeader").textContent = headerText;
@@ -1396,6 +1510,10 @@
       // No finalizar otro trabajo si la activación del pendiente fue cancelada o falló.
       const activated = activatePendingWorkFromReport();
       if(!activated || activated.id !== w.id || state.work?.id !== w.id) return;
+      if(isPruningWork(activated)){
+        openPruningEditor("screen-work");
+        return;
+      }
       const now = Date.now();
       if(shouldTrackWindForWork(state.work)) await recordAutomaticWind("fin");
       const p = await resolveEventPosition();
@@ -1448,6 +1566,7 @@
     push(w.finishedAt);
     push(w.lastGpsAt);
     push(w.lastEventAt);
+    push(w.pruningCheckpointAt);
     push(w.pausedAt);
     (w.segments || []).forEach(seg => { push(seg.startAt); push(seg.endAt); });
     (w.stopLog || []).forEach(stop => { push(stop.at); push(stop.resumedAt); });
@@ -1860,6 +1979,7 @@
   }
 
   async function resolveEventPosition(){
+    if(isPruningWork(state.work)) return null;
     let p = freshPosition(state.currentPos) ? state.currentPos : null;
     if(!p){
       try{
@@ -1895,7 +2015,7 @@
     const evId = `ev-interrupcion-${last}`;
     if(!w.events.some(ev => ev.id === evId)) w.events.push({
       id:evId, type:"Parada", label:reason,
-      notes:"Intervalo sin seguimiento GPS: no se cuenta como tiempo efectivo ni como parada de trabajo.",
+      notes:isPruningWork(w) ? "El intervalo sin registro se excluye del tiempo efectivo." : "Intervalo sin seguimiento GPS: no se cuenta como tiempo efectivo ni como parada de trabajo.",
       at:new Date(last).toISOString(), timeLabel:timeLabelFromMs(last),
       lat:null, lng:null, accuracy:null
     });
@@ -1910,6 +2030,11 @@
 
   function suspendCurrentWork(reason, at=Date.now()){
     if(!state.work || state.work.status !== "trabajando") return;
+    if(isPruningWork(state.work)){
+      state.work.pruningCheckpointAt = at;
+      persistActiveWork();
+      return;
+    }
     closeInterruptedWork(state.work, at, reason);
     stopGpsWatch();
     persistActiveWork();
@@ -1917,7 +2042,7 @@
   }
 
   function checkExecutionGap(now){
-    if(state.work?.status === "trabajando" && state.lastHeartbeatAt && now - state.lastHeartbeatAt > 45000){
+    if(state.work?.status === "trabajando" && !isPruningWork(state.work) && state.lastHeartbeatAt && now - state.lastHeartbeatAt > 45000){
       suspendCurrentWork("Interrupción de seguimiento GPS", state.lastHeartbeatAt);
     }
     state.lastHeartbeatAt = now;
@@ -1938,7 +2063,7 @@
     const btn = $("beginWorkBtn");
     btn.disabled = true;
     const previousText = btn.querySelector("small")?.textContent;
-    if(btn.querySelector("small")) btn.querySelector("small").textContent = "Obteniendo GPS inicial...";
+    if(btn.querySelector("small") && !isPruningWork(state.work)) btn.querySelector("small").textContent = "Obteniendo GPS inicial...";
     try{
       startGpsWatch();
       const now = Date.now();
@@ -1963,7 +2088,7 @@
       updateRouteLayers();
       updateLiveStats();
       persistActiveWork();
-      centerWorkMapOnTractor(false);
+      if(!isPruningWork(state.work)) centerWorkMapOnTractor(false);
       updateWindControls();
       if(shouldTrackWindForWork(state.work)) setTimeout(() => recordAutomaticWind("inicio"), 600);
       if(!state.tickerStarted){
@@ -1977,6 +2102,7 @@
   }
 
   function startGpsWatch(){
+    if(isPruningWork(state.work)) return;
     if(!navigator.geolocation){
       toast("GPS no disponible en este navegador.");
       return;
@@ -2022,6 +2148,20 @@
   function isPhytosanitaryWorkType(type){
     const t = normalizePlainText(type);
     return t.includes("fitosanit");
+  }
+
+  function isPruningWork(w){
+    return normalizePlainText(w?.type) === "poda";
+  }
+
+  function pruningZones(w){
+    if(!Array.isArray(w?.pruningZones)) return [];
+    return w.pruningZones.filter(zone=>{
+      const ring = zone?.geometry?.coordinates?.[0];
+      return zone?.type==="Feature" && zone.geometry?.type==="Polygon" && Array.isArray(ring) && ring.length>=4 &&
+        ring.every(point=>Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]) &&
+          Math.abs(point[0])<=180 && Math.abs(point[1])<=90) && sameMapPoint(ring[0],ring.at(-1));
+    });
   }
 
   function shouldTrackWindForWork(w){
@@ -2379,8 +2519,8 @@
     if(pts.length > 1){
       state.layers.workRoute = L.polyline(pts, { color:"#1f7ed0", weight:5, opacity:.95 }).addTo(map);
     }
-    drawCurrentPosition(state.currentPos);
-    if(state.trackingFollow && state.currentPos && state.work?.status === "trabajando"){
+    if(!isPruningWork(state.work)) drawCurrentPosition(state.currentPos);
+    if(!isPruningWork(state.work) && state.trackingFollow && state.currentPos && state.work?.status === "trabajando"){
       map.setView([state.currentPos.lat, state.currentPos.lng], Math.max(map.getZoom() || 0, 19));
     }
     drawEventMarkers(map);
@@ -2408,7 +2548,7 @@
 
   function addEvent(type, label, notes="", position=null, atMs=Date.now()){
     if(!state.work) return null;
-    const p = position || state.currentPos || state.gpsCalibration?.last || null;
+    const p = isPruningWork(state.work) ? position : position || state.currentPos || state.gpsCalibration?.last || null;
     const ev = {
       id: "ev-" + atMs + "-" + Math.random().toString(16).slice(2),
       at: new Date(atMs).toISOString(),
@@ -2423,12 +2563,22 @@
     return ev;
   }
 
-  function openStopModal(){ $("stopModal").classList.remove("hidden"); }
+  function openStopModal(){
+    const pruning = isPruningWork(state.work);
+    qsa("[data-stop-reason]").forEach(button=>{
+      button.classList.toggle("hidden", button.classList.contains("v982-pruning-only") !== pruning);
+    });
+    $("stopModal").classList.remove("hidden");
+  }
   function closeStopModal(){ $("stopModal").classList.add("hidden"); }
 
   async function handleStop(reason){
     closeStopModal();
     if(!state.work || state.work.status !== "trabajando") return;
+    if(reason === "Delimitar zonas podadas" && isPruningWork(state.work)){
+      openPruningEditor("screen-work");
+      return;
+    }
 
     const now = Date.now();
     const p = await resolveEventPosition();
@@ -2482,6 +2632,7 @@
     $("stopWorkBtn").classList.add("hidden");
     $("continueWorkBtn").classList.remove("hidden");
     setWorkStateUi("Parado");
+    updatePruningWorkControls();
     $("refillCount").textContent = String(state.work.refills);
     updateLiveStats();
     persistActiveWork();
@@ -2502,9 +2653,204 @@
     $("stopWorkBtn").classList.remove("hidden");
     $("continueWorkBtn").classList.add("hidden");
     setWorkStateUi("Trabajando");
+    updatePruningWorkControls();
     updateLiveStats();
     persistActiveWork();
     upsertPendingWorkInHistory();
+  }
+
+  function updatePruningWorkControls(){
+    const pruning = isPruningWork(state.work);
+    $("screen-work").classList.toggle("v982-pruning-work", pruning);
+    $("beginWorkBtn").querySelector("strong").textContent = pruning ? "Comenzar poda" : "Comienzo";
+    $("stopWorkBtn").querySelector("strong").textContent = pruning ? "Pausa o finalizar poda" : "Parada";
+    $("stopWorkBtn").querySelector("small").textContent = pruning ? "Pausar o marcar zonas trabajadas" : "Detener y registrar motivo";
+    $("finishPausedPruning").classList.toggle("hidden", !pruning || state.work.status !== "parado");
+  }
+
+  function openPruningEditor(returnTo){
+    const work = state.work;
+    if(!isPruningWork(work) || workIsCompleted(work)) return;
+    const parcel = work.parcelFeature || findParcelFeatureByName(work.parcel, work.parcelId);
+    if(!parcel) return toast("Carga las capas de la parcela para poder delimitar la poda.");
+    state.pruningEditor = {workId:work.id, parcel, finishAt:Date.now(), returnTo, draft:null, selected:null};
+    $("pruningParcelLabel").textContent = work.parcel;
+    show("screen-pruning-zones");
+    updatePruningEditor();
+  }
+
+  function setupPruningMap(){
+    const editor = state.pruningEditor;
+    if(!editor) return;
+    waitForMapContainer("mapPruning", () => {
+      if(state.pruningEditor !== editor) return;
+      const map = makeMap("mapPruning", "pruning");
+      if(!map) return;
+      const parcel = L.geoJSON(editor.parcel, {style:parcelStyle(true), interactive:false}).addTo(map);
+      editor.layers = L.layerGroup().addTo(map);
+      map.on("click", ({latlng}) => {
+        if(!editor.draft) return;
+        const point = [latlng.lng, latlng.lat];
+        if(editor.draft.some(vertex=>sameMapPoint(vertex,point))) return;
+        editor.draft.push(point);
+        updatePruningEditor();
+      });
+      const bounds = parcel.getBounds();
+      if(bounds.isValid()) stabilizeMap(map, bounds, [32,32]);
+      updatePruningEditor();
+    });
+  }
+
+  function sameMapPoint(a,b){
+    return Math.abs(a[0]-b[0]) < 1e-10 && Math.abs(a[1]-b[1]) < 1e-10;
+  }
+
+  function crossMapPoints(a,b,p){
+    return (b[0]-a[0])*(p[1]-a[1]) - (b[1]-a[1])*(p[0]-a[0]);
+  }
+
+  function polygonEdges(ring){
+    const points = ring.length > 1 && sameMapPoint(ring[0],ring.at(-1)) ? ring.slice(0,-1) : ring;
+    return points.map((point,index)=>[point,points[(index+1)%points.length]]);
+  }
+
+  function pointOnMapSegment(point,a,b){
+    return Math.abs(crossMapPoints(a,b,point)) < 1e-16 &&
+      [0,1].every(axis=>point[axis]>=Math.min(a[axis],b[axis])-1e-10 && point[axis]<=Math.max(a[axis],b[axis])+1e-10);
+  }
+
+  function pointInRing(point,edges){
+    let inside = false;
+    for(const [a,b] of edges){
+      if(pointOnMapSegment(point,a,b)) return 0;
+      if((a[1]>point[1])!==(b[1]>point[1]) && point[0] < a[0]+(b[0]-a[0])*(point[1]-a[1])/(b[1]-a[1])) inside = !inside;
+    }
+    return inside ? 1 : -1;
+  }
+
+  function polygonEdgesCross([a,b],[c,d]){
+    const opposite = (x,y)=>(x>1e-16&&y< -1e-16)||(x< -1e-16&&y>1e-16);
+    return opposite(crossMapPoints(a,b,c),crossMapPoints(a,b,d)) &&
+      opposite(crossMapPoints(c,d,a),crossMapPoints(c,d,b));
+  }
+
+  function validPruningZone(points, geometry){
+    if(points.length<3) return false;
+    const edges = polygonEdges(points);
+    const origin = points[0];
+    const area = Math.abs(edges.reduce((sum,[a,b])=>sum+crossMapPoints(origin,a,b),0));
+    if(area<1e-16) return false;
+    const intersectsItself = edges.some(([a,b],i)=>edges.some(([c,d],j)=>{
+      if(j<=i+1 || (i===0 && j===edges.length-1)) return false;
+      return polygonEdgesCross([a,b],[c,d]) || pointOnMapSegment(a,c,d) || pointOnMapSegment(b,c,d) ||
+        pointOnMapSegment(c,a,b) || pointOnMapSegment(d,a,b);
+    }));
+    if(intersectsItself) return false;
+    const polygons = geometry.type==="MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
+    return polygons.some(rings=>{
+      const [boundary,...holes] = rings.map(polygonEdges);
+      if(!boundary?.length) return false;
+      const midpoints = edges.map(([a,b])=>[(a[0]+b[0])/2,(a[1]+b[1])/2]);
+      if(![...points,...midpoints].every(point=>pointInRing(point,boundary)>=0 && holes.every(hole=>pointInRing(point,hole)<=0))) return false;
+      if(holes.some(hole=>hole.some(([point])=>pointInRing(point,edges)>0))) return false;
+      return edges.every(edge=>[boundary,...holes].every(ring=>ring.every(border=>!polygonEdgesCross(edge,border))));
+    });
+  }
+
+  function updatePruningEditor(){
+    const editor = state.pruningEditor;
+    if(!editor) return;
+    const zones = pruningZones(state.work);
+    const drawing = Array.isArray(editor.draft);
+    $("pruningInstructions").textContent = drawing
+      ? `Toca las esquinas de la zona · ${editor.draft.length} vértices`
+      : `${zones.length} ${zones.length===1 ? "zona guardada" : "zonas guardadas"} · toca una zona para seleccionarla.`;
+    $("pruningSavedActions").classList.toggle("hidden", drawing);
+    $("pruningDrawingActions").classList.toggle("hidden", !drawing);
+    $("removePruningZone").disabled = editor.selected === null;
+    $("undoPruningPoint").disabled = !editor.draft?.length;
+    $("savePruningZone").disabled = !drawing || editor.draft.length < 3;
+    $("finishPruningWork").disabled = drawing || !zones.length;
+    if(!editor.layers) return;
+    editor.layers.clearLayers();
+    zones.forEach((zone,index)=>{
+      const selected = editor.selected === index;
+      L.geoJSON(zone,{style:{color:selected?"#8b5419":"#b27325",weight:selected?4:3,fillOpacity:.35},interactive:!drawing})
+        .bindTooltip(`Zona ${index+1}`)
+        .on("click",event=>{
+          L.DomEvent.stopPropagation(event);
+          editor.selected = index;
+          updatePruningEditor();
+        }).addTo(editor.layers);
+    });
+    if(drawing){
+      const vertices = editor.draft.map(([lng,lat])=>[lat,lng]);
+      if(vertices.length>=3) L.polygon(vertices,{color:"#b27325",dashArray:"5 4",fillOpacity:.22,interactive:false}).addTo(editor.layers);
+      else if(vertices.length===2) L.polyline(vertices,{color:"#b27325",interactive:false}).addTo(editor.layers);
+      vertices.forEach(vertex=>L.circleMarker(vertex,{radius:4,color:"#b27325",fillOpacity:1,interactive:false}).addTo(editor.layers));
+    }
+  }
+
+  function storePruningZones(zones){
+    const previous = state.work.pruningZones;
+    state.work.pruningZones = zones;
+    if(storage.set(LS.active,state.work)) return true;
+    state.work.pruningZones = previous;
+    toast("No se pudo guardar la zona de poda en el dispositivo. El cambio sigue pendiente.");
+    return false;
+  }
+
+  function savePruningZone(){
+    const editor = state.pruningEditor;
+    if(!editor?.draft || state.work?.id !== editor.workId) return;
+    if(!validPruningZone(editor.draft, editor.parcel.geometry)){
+      return toast("Dibuja un contorno sin cruces, con al menos tres vértices y dentro de la parcela.");
+    }
+    const ring = [...editor.draft,editor.draft[0]];
+    const zone = {type:"Feature",properties:{},geometry:{type:"Polygon",coordinates:[ring]}};
+    const zones = [...pruningZones(state.work),zone];
+    if(!storePruningZones(zones)) return;
+    editor.draft = null;
+    editor.selected = zones.length-1;
+    updatePruningEditor();
+  }
+
+  function removePruningZone(){
+    const editor = state.pruningEditor;
+    if(!editor || editor.selected===null || state.work?.id!==editor.workId) return;
+    if(!confirm("¿Quitar la zona de poda seleccionada?")) return;
+    if(!storePruningZones(pruningZones(state.work).filter((zone,index)=>index!==editor.selected))) return;
+    editor.selected = null;
+    updatePruningEditor();
+  }
+
+  function closePruningEditor(){
+    const editor = state.pruningEditor;
+    if(!editor) return;
+    if(editor.draft?.length && !confirm("¿Volver y descartar el contorno que estás dibujando?")) return;
+    state.pruningEditor = null;
+    destroyMap("pruning","mapPruning");
+    show(editor.returnTo);
+  }
+
+  function finishPruningWork(){
+    const editor = state.pruningEditor;
+    const work = state.work;
+    if(!editor || work?.id!==editor.workId || editor.draft || !pruningZones(work).length || workIsCompleted(work)) return;
+    const now = editor.finishAt;
+    if(work.status === "trabajando") closeWorkSegment(now,"Fin de poda");
+    addEvent("Fin de poda","Zonas podadas confirmadas","Delimitación manual",null,now);
+    work.status = "finalizado";
+    work.finishedAt = now;
+    freezeFinalSnapshot(work);
+    prepareWorkScreenFromState();
+    const saved = saveFinishedWork();
+    state.reportWork = normalizeWorkForReport(work,"work");
+    state.reportOrigin = "work";
+    state.pruningEditor = null;
+    destroyMap("pruning","mapPruning");
+    show("screen-report");
+    if(!saved) toast("La poda finalizó. Si falla el historial, el trabajo se conserva para recuperación.");
   }
 
   function updateLiveStats(){
@@ -2869,6 +3215,17 @@
     return explicit !== undefined && explicit !== null ? String(explicit) : JSON.stringify(feature.geometry?.coordinates || []).slice(0,180);
   }
 
+  function workMatchesParcel(work, feature, layerSetId){
+    if(!feature) return false;
+    const identity = parcelIdentity(feature);
+    if(work.parcelLayerSetId && layerSetId && work.parcelLayerSetId !== layerSetId) return false;
+    if(work.parcelId != null && String(work.parcelId) !== identity) return false;
+    if(work.parcelLayerSetId && work.parcelLayerSetId === layerSetId && work.parcelId != null) return true;
+    const geometry = JSON.stringify(feature.geometry?.coordinates || []);
+    if(work.parcelFeature?.geometry) return JSON.stringify(work.parcelFeature.geometry.coordinates) === geometry;
+    return work.parcel === featureName(feature) && geometry.length <= 180 && work.parcelId === geometry;
+  }
+
   function findParcelFeatureByName(name, id=null){
     if(!state.parcelsGeoJSON || !name) return null;
     if(id){
@@ -3011,6 +3368,7 @@
       }
       $('backToTreatmentGroup').classList.toggle('hidden',!state.reportParentGroup);
       $("reportTotal").textContent = fmtTime(reportTotalMs(w));
+      $("screen-report").classList.toggle("v982-pruning-report", isPruningWork(w));
       $("reportDistance").textContent = ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km";
       $("reportRefills").textContent = String(w.refills || 0);
       const ws = windStats(w.windReadings || []);
@@ -3018,7 +3376,7 @@
 
       renderReportSummary(w);
       const recoveredRoute = recoverRouteForReport(w);
-      const hasMapData = workGeometries(w).length > 0 || recoveredRoute.length > 1 || (w.events || []).some(e=>isValidRoutePoint(e)) || (w.incidents || []).some(i=>isValidRoutePoint(i)) || (w.windReadings || []).some(r=>r.status === "ok" && isValidRoutePoint(r));
+      const hasMapData = workGeometries(w).length > 0 || pruningZones(w).length > 0 || recoveredRoute.length > 1 || (w.events || []).some(e=>isValidRoutePoint(e)) || (w.incidents || []).some(i=>isValidRoutePoint(i)) || (w.windReadings || []).some(r=>r.status === "ok" && isValidRoutePoint(r));
       $("reportMapShell").classList.toggle("hidden", !hasMapData);
       $("reportMapShell").classList.remove("is-expanded");
       $("collapseReportMap").classList.add("hidden");
@@ -3065,6 +3423,11 @@
       for(const feature of features){
         const layer=L.geoJSON(feature,{style:parcelStyle(true)}).addTo(map).bringToFront();
         const b=layer.getBounds();if(b.isValid())areaBounds=areaBounds?areaBounds.extend(b):b;
+      }
+      for(const [index,zone] of pruningZones(w).entries()){
+        const layer = L.geoJSON(zone,{style:{color:"#b27325",weight:3,fillOpacity:.35}}).bindTooltip(`Zona podada ${index+1}`).addTo(map);
+        const b = layer.getBounds();
+        if(b.isValid()) areaBounds = areaBounds ? areaBounds.extend(b) : b;
       }
       // En historiales no mostrar incidencias importadas de otro conjunto de parcelas.
       if(!w.isTreatmentGroup && state.parcelsGeoJSON &&
@@ -3210,6 +3573,7 @@
           ${reportKpi("Parcela", w.parcel || "—")}
           ${treatmentLabel ? reportKpi('Tratamiento',treatmentLabel):''}
           ${reportKpi("Labor", w.type || "—")}
+          ${isPruningWork(w) ? reportKpi("Zonas podadas", String(pruningZones(w).length)) : ""}
           ${reportKpi("Estado", status)}
           ${reportKpi("Fecha", dateLabelDMY(reportDateSource(w)))}
           ${reportKpi("Inicio", started)}
@@ -3219,21 +3583,21 @@
         <div class="report-section-title">Jornada</div>
         <div class="report-list">
           <div><span>Operario</span><strong>${escapeHtml(day.operator || "—")}</strong></div>
-          <div><span>Tractor</span><strong>${escapeHtml(day.tractor || "—")}</strong></div>
-          <div><span>Atomizador / cisterna</span><strong>${escapeHtml(day.sprayer || "—")}</strong></div>
+          ${isPruningWork(w) ? "" : `<div><span>Tractor</span><strong>${escapeHtml(day.tractor || "—")}</strong></div>
+          <div><span>Atomizador / cisterna</span><strong>${escapeHtml(day.sprayer || "—")}</strong></div>`}
           <div><span>Observaciones de jornada</span><strong>${escapeHtml(observations || "Sin observaciones registradas.")}</strong></div>
         </div>
 
-        <div class="report-section-title">Tiempos y recorrido</div>
+        <div class="report-section-title">${isPruningWork(w) ? "Tiempos" : "Tiempos y recorrido"}</div>
         <div class="report-grid">
           ${reportKpi("Tiempo activo", fmtTime(reportEffectiveActiveMs(w)))}
           ${reportKpi("Tiempo parado", fmtTime(reportStoppedMs(w)))}
           ${reportKpi("Tiempo total/transcurrido", fmtTime(reportTotalMs(w)))}
-          ${reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
-          ${reportKpi("Recargas", String(w.refills || 0))}
+          ${isPruningWork(w) ? "" : reportKpi("Distancia", ((w.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km")}
+          ${isPruningWork(w) ? "" : reportKpi("Recargas", String(w.refills || 0))}
           ${reportKpi("Paradas", String(stops.filter(st=>!st.excludedFromStoppedTime).length || w.stops || 0))}
           ${reportKpi("Incidencias", String((w.incidents || []).length))}
-          ${reportKpi("Velocidad GPS media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
+          ${isPruningWork(w) ? "" : reportKpi("Velocidad GPS media", avg === null ? "—" : avg.toFixed(1).replace(".", ",") + " km/h")}
         </div>
 
         <div class="report-section-title">Desglose por día</div>
@@ -3246,7 +3610,7 @@
         <div class="report-section-title">Paradas registradas</div>
         <div class="report-list">${stopRows || reportEmpty("Sin paradas intermedias registradas.")}</div>
 
-        <div class="report-section-title">GPS y ruta</div>
+        ${isPruningWork(w) ? "" : `<div class="report-section-title">GPS y ruta</div>
         <div class="report-grid">
           ${reportKpi("Ruta GPS disponible", routeAvailable(w) ? "Sí" : "No")}
           ${reportKpi("Precisión media GPS", averageGpsAccuracyText(w))}
@@ -3260,7 +3624,7 @@
           ${reportKpi("Descartados", String(gps.discarded || 0))}
         </div>
 
-        ${windBlock}
+        ${windBlock}`}
 
         <div class="report-section-title">Eventos relevantes</div>
         <div class="report-list">${eventRows || reportEmpty("Sin eventos registrados todavía.")}</div>
@@ -3560,6 +3924,7 @@
       `Parcela: ${work.parcel || "—"}`,
       ...(treatmentCaption(work)?[`Tratamiento: ${treatmentCaption(work)}`]:[]),
       `Trabajo: ${work.type || "—"}`,
+      ...(isPruningWork(work) ? [`Zonas podadas: ${pruningZones(work).length}`] : []),
       `Fecha: ${dateLabelDMY(reportDateSource(work))}`,
       "",
       "TIEMPOS",
@@ -3609,8 +3974,10 @@
 
   function routeSvgForPrint(w){
     const route = recoverRouteForReport(w).filter(isValidRoutePoint);
-    const parcelPts = featureCoordinatePairs(w?.parcelFeature || findParcelFeatureByName(w?.parcel));
-    const all = [...route, ...parcelPts];
+    const pruning = isPruningWork(w);
+    const parcelPts = featureCoordinatePairs(w?.parcelFeature || (!pruning && findParcelFeatureByName(w?.parcel)));
+    const zones = pruningZones(w).map(featureCoordinatePairs);
+    const all = [...route, ...parcelPts, ...zones.flat()];
     if(all.length < 2) return "";
     const minLat = Math.min(...all.map(p=>Number(p.lat)));
     const maxLat = Math.max(...all.map(p=>Number(p.lat)));
@@ -3624,21 +3991,23 @@
       const y = pad + ((maxLat-Number(p.lat))/dy) * (hBox - pad*2);
       return [x,y];
     };
-    const routeLine = route.length > 1 ? route.map(p=>project(p).map(n=>n.toFixed(1)).join(",")).join(" ") : "";
+    const projectLine = points => points.map(p=>project(p).map(n=>n.toFixed(1)).join(",")).join(" ");
+    const routeLine = route.length > 1 ? projectLine(route) : "";
     const parcelLine = parcelPts.length > 2 ? parcelPts.map(p=>project(p).map(n=>n.toFixed(1)).join(",")).join(" ") : "";
     const start = route[0] ? project(route[0]) : null;
     const end = route[route.length-1] ? project(route[route.length-1]) : null;
     return `
       <div class="print-map-box">
-        <div class="print-map-title">Ruta / mapa esquemático del trabajo</div>
-        <svg viewBox="0 0 ${wBox} ${hBox}" role="img" aria-label="Ruta GPS del trabajo">
+        <div class="print-map-title">${pruning ? "Mapa esquemático de zonas podadas" : "Ruta / mapa esquemático del trabajo"}</div>
+        <svg viewBox="0 0 ${wBox} ${hBox}" role="img" aria-label="${pruning ? "Zonas podadas" : "Ruta GPS del trabajo"}">
           <rect x="0" y="0" width="${wBox}" height="${hBox}" rx="18" fill="#f7f3e9"/>
           ${parcelLine ? `<polyline points="${parcelLine}" fill="none" stroke="#d2bb7a" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+          ${zones.map(points=>`<polygon points="${projectLine(points)}" fill="#edcb89" stroke="#8b5419" stroke-width="3"/>`).join("")}
           ${routeLine ? `<polyline points="${routeLine}" fill="none" stroke="#1f7ed0" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
           ${start ? `<circle cx="${start[0].toFixed(1)}" cy="${start[1].toFixed(1)}" r="7" fill="#2f7d44" stroke="#fff" stroke-width="3"/>` : ""}
           ${end ? `<circle cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="7" fill="#a8483a" stroke="#fff" stroke-width="3"/>` : ""}
         </svg>
-        <div class="print-map-legend"><span>Verde: comienzo</span><span>Rojo: fin</span><span>Azul: recorrido GPS</span><span>Oro: parcela</span></div>
+        <div class="print-map-legend">${pruning ? "<span>Ocre: zonas podadas</span>" : "<span>Verde: comienzo</span><span>Rojo: fin</span><span>Azul: recorrido GPS</span>"}<span>Oro: parcela</span></div>
       </div>`;
   }
 
@@ -3677,7 +4046,10 @@
         ${routeWarning ? `<div class="warn"><strong>${escapeHtml(routeWarning)}</strong></div>` : ""}
         <h2>Cabecera</h2><div class="grid">${reportRowsHtml([["Parcela", work.parcel || "—"],["Trabajo", work.type || "—"],["Fecha", dateLabelDMY(reportDateSource(work))],["Estado", workIsCompleted(work) ? "Finalizado" : "Pendiente de terminar"],["Inicio", timeLabelHMS(startMs)],["Fin", timeLabelHMS(endMs)]])}</div>
         <h2>Tiempos y recorrido</h2><div class="grid">${reportRowsHtml([["Tiempo activo", fmtTime(reportEffectiveActiveMs(work))],["Tiempo parado", fmtTime(reportStoppedMs(work))],["Tiempo total/transcurrido", fmtTime(reportTotalMs(work))],["Distancia", ((work.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km"],["Recargas", String(work.refills || 0)],["Paradas", String(stopCount)],["Incidencias", String((work.incidents || []).length)],["Velocidad GPS media", avgSpeed === null ? "—" : avgSpeed.toFixed(1).replace(".", ",") + " km/h"]])}</div>
-        <h2>GPS y ruta</h2><div class="grid">${reportRowsHtml([["Ruta GPS disponible", routeAvailable(work) ? "Sí" : "No"],["Precisión media GPS", averageGpsAccuracyText(work)],["Puntos originales", String((work.pointsOriginal || []).length)],["Ruta depurada", String((work.pointsClean || []).length)]])}</div>${routeSvg || ""}
+        ${isPruningWork(work)
+          ? `<h2>Zonas de poda</h2><div class="grid">${reportRowsHtml([["Zonas podadas", String(pruningZones(work).length)],["Operario",work.day?.operator || "—"]])}</div>`
+          : `<h2>GPS y ruta</h2><div class="grid">${reportRowsHtml([["Ruta GPS disponible", routeAvailable(work) ? "Sí" : "No"],["Precisión media GPS", averageGpsAccuracyText(work)],["Puntos originales", String((work.pointsOriginal || []).length)],["Ruta depurada", String((work.pointsClean || []).length)]])}</div>`}
+        ${routeSvg || ""}
         ${windSection}
         <h2>Eventos</h2>${events ? `<table><thead><tr><th>Hora</th><th>Tipo</th><th>Punto</th><th>GPS</th><th>Observación</th></tr></thead><tbody>${events}</tbody></table>` : `<div class="warn">Sin eventos registrados.</div>`}
         <h2>Incidencias</h2>${incidents ? `<table><thead><tr><th>Hora</th><th>Tipo</th><th>Estado</th><th>GPS</th><th>Observación</th></tr></thead><tbody>${incidents}</tbody></table>` : `<div class="warn">Sin incidencias registradas.</div>`}
@@ -3724,7 +4096,7 @@
     try{
       const work = normalizeWorkForReport(w, "pdf");
       const blob = window.PAZO_BAION_PDF.createDocument({
-        work,
+        work:isPruningWork(work) ? {...work,pruningZones:pruningZones(work)} : work,
         completed:workIsCompleted(work),
         activeMs:reportEffectiveActiveMs(work),
         stoppedMs:reportStoppedMs(work),
@@ -3838,13 +4210,14 @@
     const t=normalizePlainText(type||'');
     if(selection==='fitosanitarios')return isPhytosanitaryWorkType(type);
     if(selection==='desbroce')return t.includes('desbroc');
-    if(selection==='otros')return !isPhytosanitaryWorkType(type)&&!t.includes('desbroc');
+    if(selection==='poda')return t==='poda';
+    if(selection==='otros')return !isPhytosanitaryWorkType(type)&&!t.includes('desbroc')&&t!=='poda';
     return selection.startsWith('custom:') && t===selection.slice(7);
   }
   function updateHistoryTypeOptions(hist){
     const sel=$('historyWorkType');
-    const catalog=[['all','Todos los tipos'],['fitosanitarios','Aplicación de fitosanitarios'],['desbroce','Desbroce'],['otros','Otros trabajos']];
-    const known=new Set(['','otro','otros','desbroce','aplicacion de fitosanitarios']);
+    const catalog=[['all','Todos los tipos'],['fitosanitarios','Aplicación de fitosanitarios'],['desbroce','Desbroce'],['poda','Poda'],['otros','Otros trabajos']];
+    const known=new Set(['','otro','otros','desbroce','poda','aplicacion de fitosanitarios']);
     for(const w of hist){
       const type=String(w.type||'').trim(), n=normalizePlainText(type);
       if(!n||isPhytosanitaryWorkType(type)||n.includes('desbroc')||known.has(n))continue;
@@ -3857,7 +4230,12 @@
   }
   function renderHistory(){
     upsertPendingWorkInHistory();
-    const hist=getHistoryEntries();
+    const scope = state.historyScope;
+    const matchingParcel = w=>scope?.parcels.findIndex(feature=>workMatchesParcel(w,feature,scope.layerSetId));
+    const hist = scope ? getHistoryEntries().filter(w=>matchingParcel(w)>=0) : getHistoryEntries();
+    $("historyScopeTitle").textContent = scope
+      ? (scope.parcels.length === 1 ? featureName(scope.parcels[0]) : `${scope.parcels.length} parcelas seleccionadas`)
+      : "Todos los trabajos de la explotación";
     const campaignSelect=$('historyCampaign');
     const choice=state.historyCampaign||'all';
     const years=[...new Set(hist.map(campaignOfWork).filter(y=>y&&y>=2000))].sort((a,b)=>b-a);
@@ -3872,7 +4250,7 @@
     const inYear=hist.filter(w=>state.historyCampaign==='all'||Number(campaignOfWork(w))===Number(state.historyCampaign));
     const groups=new Map(),singles=[];
     for(const w of inYear){
-      const key=isPhytosanitaryWorkType(w.type)?treatmentKey(w):null;
+      const key=!scope&&isPhytosanitaryWorkType(w.type)?treatmentKey(w):null;
       if(!key){singles.push(w);continue;}
       if(!groups.has(key))groups.set(key,{id:w.treatmentId,campaign:Number(w.campaign),number:Number(w.treatmentNumber),works:[]});
       groups.get(key).works.push(w);
@@ -3895,14 +4273,20 @@
       const completed=workIsCompleted(w);
       if(filter==='pending'&&completed||filter==='completed'&&!completed)continue;
       const cls=completed?'completed':'pending';
-      rows.push({time:historicWorkTimestamp(w),kind:'single',key:w.id,html:`<button type="button" class="v98-history-item" data-history-id="${escapeHtml(String(w.id))}" aria-label="Abrir ficha ${escapeHtml(w.parcel||'Sin nombre')}">
-        <span class="v98-history-item-main"><strong>${escapeHtml(w.parcel||'Parcela sin nombre')}</strong><small>${escapeHtml(workHistoryDate(w))} · ${escapeHtml(w.type||'Trabajo sin tipo')}</small>${isPhytosanitaryWorkType(w.type)?'<span class="v98-parcel-names">Tratamiento sin número asignado</span>':''}</span>
+      rows.push({time:historicWorkTimestamp(w),kind:'single',key:w.id,parcelIndex:matchingParcel(w),html:`<button type="button" class="v98-history-item" data-history-id="${escapeHtml(String(w.id))}" aria-label="Abrir ficha ${escapeHtml(w.parcel||'Sin nombre')}">
+        <span class="v98-history-item-main"><strong>${escapeHtml(w.parcel||'Parcela sin nombre')}</strong><small>${escapeHtml(workHistoryDate(w))} · ${escapeHtml(w.type||'Trabajo sin tipo')}</small>${isPhytosanitaryWorkType(w.type)?`<span class="v98-parcel-names">${escapeHtml(treatmentCaption(w) || 'Tratamiento sin número asignado')}</span>`:''}</span>
         <span class="v98-history-item-side"><span class="history-status ${cls}">${workHistoryStatus(w)}</span><span class="v98-chevron" aria-hidden="true">›</span></span>
       </button>`});
     }
     rows.sort((a,b)=>b.time-a.time || a.kind.localeCompare(b.kind) || String(a.key).localeCompare(String(b.key)));
-    $('historyList').innerHTML=rows.length?rows.map(row=>row.html).join(''):
-      '<div class="history-empty v981-history-empty">No hay trabajos que coincidan con los filtros seleccionados.</div>';
+    let list = rows.map(row=>row.html).join('');
+    if(scope?.parcels.length > 1){
+      list = scope.parcels.map((feature,index)=>{
+        const items = rows.filter(row=>row.parcelIndex===index);
+        return items.length ? `<h3 class="v982-history-heading">${escapeHtml(featureName(feature))}</h3>${items.map(row=>row.html).join('')}` : '';
+      }).join('');
+    }
+    $('historyList').innerHTML=list || '<div class="history-empty v981-history-empty">No hay trabajos que coincidan con la selección y los filtros.</div>';
     qsa('[data-treatment-group]').forEach(button=>button.onclick=()=>{
       const id=button.dataset.treatmentGroup,campaign=Number(button.dataset.campaign);
       const group=activeTreatmentGroups(campaign).find(g=>g.id===id);
@@ -4133,19 +4517,7 @@
       toast("No hay capa de parcelas válida cargada en este dispositivo.");
       return;
     }
-    const day = storage.get(LS.day, null);
-    if(day && day.date === todayIso()){
-      state.dayConfig = day;
-      state.parcelSelectReturnTo = "screen-map-load";
-      show("screen-parcel-select");
-      return;
-    }
-    if(day && day.date && day.date !== todayIso()){
-      offerPreviousDayConfig(day);
-      return;
-    }
-    loadSavedDayConfig();
-    show("screen-day-config");
+    show("screen-parcel-select");
   }
 
   function bind(){
@@ -4218,12 +4590,25 @@
 
     $("continueAfterMap").onclick = goAfterMapReady;
     $("openHistoryFromMap").onclick = () => {
+      if(state.historyScope) state.historyFilter = state.historyCampaign = state.historyWorkType = "all";
+      state.historyScope = null;
       state.historyReturnTo = "screen-map-load";
       upsertPendingWorkInHistory();
       show("screen-history");
     };
     $("backFromHistory").onclick = () => show(state.historyReturnTo || "screen-map-load");
-    $("backFromParcelSelect").onclick = () => show(state.parcelSelectReturnTo || "screen-map-load");
+    $("backFromParcelSelect").onclick = () => show("screen-map-load");
+    $("confirmParcelSelection").onclick = () => {
+      if(state.selectedParcels.length) show("screen-work-type");
+    };
+    $("backFromWorkType").onclick = () => show("screen-parcel-select");
+    $("workParcelSelect").onchange = () => {
+      setCurrentParcel(state.selectedParcels[Number($("workParcelSelect").value)]);
+      renderWorkTypeSelection();
+    };
+    $("openParcelHistory").onclick = () => openParcelHistory();
+    $("viewSelectedParcel").onclick = () => show("screen-parcel-detail");
+    $("repeatWorkType").onclick = () => chooseWorkType(state.repeatWorkType);
     $("previousDayHelp").onclick = () => {
       $("previousDayModal").classList.add("hidden");
       $("previousDayHelpModal").classList.remove("hidden");
@@ -4247,7 +4632,7 @@
     $("backFromDayConfig").onclick = () => {
       const cameFromPending = !!state.pendingResumeAfterDay;
       state.pendingResumeAfterDay = null;
-      show(cameFromPending ? "screen-report" : "screen-map-load");
+      show(cameFromPending ? "screen-report" : "screen-work-type");
     };
     $("expandReportMap").onclick = () => {
       $("reportMapShell").classList.add("is-expanded");
@@ -4265,7 +4650,8 @@
       if(state.reportOrigin === "history") {
         if(state.reportParentGroup){const parent=state.reportParentGroup;state.reportParentGroup=null;openReportForWork(parent,'history');}
         else show("screen-history");
-      } else show("screen-work");
+      } else if(workIsCompleted(state.work) && state.selectedParcels.length) show("screen-work-type");
+      else show("screen-work");
     };
     if($("resumePendingWorkBtn")) $("resumePendingWorkBtn").onclick = resumePendingWorkFromReport;
     if($("finishPendingWorkBtn")) $("finishPendingWorkBtn").onclick = finishPendingWorkFromReport;
@@ -4292,7 +4678,7 @@
         if(!confirm("Hay un trabajo en curso. ¿Volver sin finalizar?")) return;
         upsertPendingWorkInHistory();
       }
-      show("screen-parcel-detail");
+      show(state.selectedParcels.length ? "screen-work-type" : "screen-parcel-detail");
     };
     $("centerTractor").onclick = () => {
       state.trackingFollow = true;
@@ -4300,6 +4686,24 @@
       else centerWorkMapOnTractor(true);
     };
     $("windReadingBtn").onclick = () => recordAutomaticWind("actualizacion_usuario", {notify:true});
+
+    $("backFromPruningZones").onclick = closePruningEditor;
+    $("startPruningZone").onclick = () => {
+      state.pruningEditor.draft = [];
+      updatePruningEditor();
+    };
+    $("undoPruningPoint").onclick = () => {
+      state.pruningEditor.draft.pop();
+      updatePruningEditor();
+    };
+    $("cancelPruningZone").onclick = () => {
+      state.pruningEditor.draft = null;
+      updatePruningEditor();
+    };
+    $("savePruningZone").onclick = savePruningZone;
+    $("removePruningZone").onclick = removePruningZone;
+    $("finishPruningWork").onclick = finishPruningWork;
+    $("finishPausedPruning").onclick = () => openPruningEditor("screen-work");
 
     $("cancelStopModal").onclick = closeStopModal;
     qsa("[data-stop-reason]").forEach(b => b.addEventListener("click", () => handleStop(b.dataset.stopReason)));

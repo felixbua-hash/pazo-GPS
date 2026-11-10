@@ -1,15 +1,15 @@
 PAZO BAION GPS
-Beta v9.8.1 · Premium vitícola ornamental
-Fecha: 08/11/2026
-Base: Beta v9.8
+Beta v9.8.2 · Premium vitícola ornamental
+Fecha: 09/11/2026
+Base: Beta v9.8.1
 
 NOVEDADES
-- Historial único «Trabajos» ordenado por fecha con filtro combinable de año, estado y tipo.
-- Ayuda (?) de historial con regreso.
-- Campaña y número visibles en fichas fitosanitarias; asignación/editado desde la ficha, incluso en pendientes.
-- Asignación segura de un mismo tratamiento a varias parcelas/jornadas.
-- Guardado IndexedDB atómico para cambios de asignación múltiples.
-- Conservación de datos y funciones de Beta v9.8.
+- Pantalla de carga con el conjunto activo y acceso directo al mapa.
+- Selección de una o varias parcelas antes de elegir la labor.
+- Historial de la selección con acceso a trabajos pendientes.
+- Configuración de jornada y de tratamiento tras seleccionar la labor.
+- Poda con delimitación manual de zonas, ficha e informes con croquis.
+- Compatibilidad con el historial, las capas y las copias JSON existentes.
 
 PRUEBAS PENDIENTES
-- Comprobar funcionamiento en Safari/iPhone real y copia JSON fuera de Safari.
+- Validar mapa táctil, persistencia y exportación en Safari de iPhone.
