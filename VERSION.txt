@@ -1,15 +1,12 @@
 PAZO BAION GPS
-Beta v9.8.2 · Premium vitícola ornamental
-Fecha: 09/11/2026
-Base: Beta v9.8.1
+Beta v9.8.3 · Premium vitícola ornamental
+Fecha: 10/11/2026
+Base: Beta v9.8.2
 
-NOVEDADES
-- Pantalla de carga con el conjunto activo y acceso directo al mapa.
-- Selección de una o varias parcelas antes de elegir la labor.
-- Historial de la selección con acceso a trabajos pendientes.
-- Configuración de jornada y de tratamiento tras seleccionar la labor.
-- Poda con delimitación manual de zonas, ficha e informes con croquis.
-- Compatibilidad con el historial, las capas y las copias JSON existentes.
+CAMBIOS
+- Poda por tramos dibujados como líneas abiertas, con inicio, fin y giros opcionales.
+- Parcelas seleccionadas con contorno turquesa, relleno semitransparente y etiqueta con marca de verificación.
+- Conservación de los registros de poda por superficies creados en v9.8.2.
 
-PRUEBAS PENDIENTES
-- Validar mapa táctil, persistencia y exportación en Safari de iPhone.
+PENDIENTE
+- Verificar el uso táctil de ambos cambios en Safari de iPhone.

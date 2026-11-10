@@ -20,7 +20,7 @@
         <div class="splash-name">PAZO BAION</div>
         <div class="splash-divider" aria-hidden="true"><span></span>●<span></span></div>
         <div class="splash-subtitle">Control GPS de viñedos</div>
-        <div class="splash-version">Beta v9.8.2</div>
+        <div class="splash-version">Beta v9.8.3</div>
       </div>
       <div class="splash-landscape" role="img" aria-label="Vista ornamental de un viñedo"></div>
     </section>
@@ -246,7 +246,7 @@
           </button>
           <button class="choice-btn work-type-card" data-work-type="Poda">
             <span class="choice-icon ui-circle"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17c3-7 7-9 12-10M9 14c-3 0-5-2-5-5 4 0 6 2 6 4M13 11c0-3 2-5 5-6 0 4-2 6-4 7"/></svg></span>
-            <span class="choice-copy"><strong>Poda</strong><small>Dibujar las zonas podadas al finalizar</small></span>
+            <span class="choice-copy"><strong>Poda</strong><small>Marcar los tramos podados al finalizar</small></span>
           </button>
           <button class="choice-btn work-type-card" data-work-type="Otro">
             <span class="choice-icon ui-circle"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l4 4"/><path d="M7 17l8-8"/><path d="M6 14l4 4"/><path d="M17 7l2-2"/><path d="M5 19l2-2"/></svg></span>
@@ -264,7 +264,7 @@
     <section id="screen-treatment-setup" class="screen">
       <header class="topbar">
         <button id="backFromTreatmentSetup" class="back-btn" type="button" aria-label="Volver a tipo de trabajo">‹</button>
-        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8.2</div></div>
+        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8.3</div></div>
       </header>
       <main class="panel treatment-panel">
         <h1>Identificar tratamiento</h1>
@@ -374,7 +374,7 @@
           <button id="beginWorkBtn" class="btn primary work-main-btn"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Comienzo</strong><small>Registrar inicio del trabajo</small></span></button>
           <button id="stopWorkBtn" class="btn warning work-main-btn hidden"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Parada</strong><small>Detener y registrar motivo</small></span></button>
           <button id="continueWorkBtn" class="btn primary work-main-btn hidden"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Continuar</strong><small>Reanudar el trabajo</small></span></button>
-          <button id="finishPausedPruning" class="btn warning full hidden" type="button">Delimitar zonas podadas</button>
+          <button id="finishPausedPruning" class="btn warning full hidden" type="button">Marcar tramos podados</button>
           <div class="work-secondary-actions">
             <button id="incidentWorkBtn" class="btn ghost work-secondary-btn"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5l8 14H4z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Incidencia</strong><small>Registrar incidencia</small></span></button>
             <button id="viewDraftReportBtn" class="btn ghost work-secondary-btn"><span class="btn-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7h10"/><path d="M8 12h10"/><path d="M8 17h10"/><circle cx="5" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="5" cy="17" r="1" fill="currentColor" stroke="none"/></svg></span><span class="btn-copy"><strong>Resumen</strong><small>Ver informe de trabajo</small></span></button>
@@ -383,11 +383,11 @@
       </main>
     </section>
 
-    <!-- Delimitación manual de zonas podadas -->
+    <!-- Marcado manual de tramos podados -->
     <section id="screen-pruning-zones" class="screen">
       <header class="topbar">
         <button id="backFromPruningZones" class="back-btn" type="button" aria-label="Volver al trabajo de poda">‹</button>
-        <div><div class="brand-title">Zonas podadas</div><div id="pruningParcelLabel" class="brand-subtitle"></div></div>
+        <div><div class="brand-title">Tramos podados</div><div id="pruningParcelLabel" class="brand-subtitle"></div></div>
       </header>
       <div class="map-wrap">
         <div id="mapPruning" class="map"></div>
@@ -395,13 +395,13 @@
       <footer class="fixed-footer v982-pruning-footer">
         <p id="pruningInstructions" class="footer-info" aria-live="polite"></p>
         <div id="pruningSavedActions" class="button-row">
-          <button id="startPruningZone" class="btn primary" type="button">Dibujar zona</button>
-          <button id="removePruningZone" class="btn ghost" type="button" disabled>Quitar zona</button>
+          <button id="startPruningSegment" class="btn primary" type="button">Dibujar tramo</button>
+          <button id="removePruningSegment" class="btn ghost" type="button" disabled>Quitar tramo</button>
         </div>
         <div id="pruningDrawingActions" class="button-row hidden">
           <button id="undoPruningPoint" class="btn ghost" type="button">Deshacer</button>
-          <button id="cancelPruningZone" class="btn ghost" type="button">Cancelar</button>
-          <button id="savePruningZone" class="btn primary" type="button">Guardar zona</button>
+          <button id="cancelPruningSegment" class="btn ghost" type="button">Cancelar</button>
+          <button id="savePruningSegment" class="btn primary" type="button">Guardar tramo</button>
         </div>
         <button id="finishPruningWork" class="btn primary full" type="button" disabled>Finalizar poda</button>
       </footer>
@@ -490,7 +490,7 @@
     <section id="screen-data-management" class="screen">
       <header class="topbar">
         <button id="backFromDataManagement" class="back-btn" type="button" aria-label="Volver al historial"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
-        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8.2</div></div>
+        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8.3</div></div>
       </header>
       <main class="panel v98-management-panel">
         <div class="v98-management-intro"><strong>Datos guardados en este dispositivo</strong><p>Estas operaciones afectan a varios trabajos, no a una ficha concreta. Conserva una copia JSON fuera de Safari antes de borrar o cambiar de teléfono.</p></div>
@@ -562,7 +562,7 @@
         <button class="choice-btn" data-stop-reason="Pausa técnica / incidencia">Pausa técnica / incidencia</button>
         <button class="choice-btn" data-stop-reason="Avería / revisión">Avería / revisión</button>
         <button class="choice-btn" data-stop-reason="Otro motivo">Otro motivo</button>
-        <button class="choice-btn danger-choice v982-pruning-only hidden" data-stop-reason="Delimitar zonas podadas">Delimitar zonas podadas</button>
+        <button class="choice-btn danger-choice v982-pruning-only hidden" data-stop-reason="Marcar tramos podados">Marcar tramos podados</button>
         <button class="choice-btn danger-choice" data-stop-reason="Fin de tratamiento de la parcela">Fin de tratamiento de la parcela</button>
         <button id="cancelStopModal" class="btn ghost full"><span class="inline-icon"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></span><span>Cancelar</span></button>
       </div>

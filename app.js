@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.8.2";
+  const VERSION = "Beta v9.8.3";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -1025,6 +1025,19 @@
     }).addTo(map);
   }
 
+  function parcelSelectionStyle(selected){
+    return selected
+      ? {color:"#37f0f2",weight:5,opacity:1,fillColor:"#14c9d2",fillOpacity:.38}
+      : {color:"#f4ecd1",weight:2,opacity:.85,fillColor:"#25563a",fillOpacity:.10};
+  }
+
+  function parcelSelectionLabel(name,selected){
+    const label = document.createElement("span");
+    label.textContent = selected ? `✓ ${name}` : name;
+    label.classList.toggle("v983-selected-parcel-name",selected);
+    return label;
+  }
+
   function setupAllMap(){
     if(!state.parcelsGeoJSON) return;
     waitForMapContainer("mapAll", () => {
@@ -1032,25 +1045,38 @@
       if(!map) return;
       state.layers.all = L.geoJSON(state.parcelsGeoJSON, {
         filter: feature => feature.geometry && ["Polygon","MultiPolygon"].includes(feature.geometry.type),
-        style: feature => parcelStyle(state.selectedParcels.includes(feature)),
+        style: feature => parcelSelectionStyle(state.selectedParcels.includes(feature)),
         interactive: true,
         onEachFeature: (feature, layer) => {
           const name = featureName(feature);
-          layer.bindTooltip(name, { permanent: true, direction: "center", className: "parcel-label" });
+          const selected = state.selectedParcels.includes(feature);
+          layer.bindTooltip(parcelSelectionLabel(name,selected), {permanent:true,direction:"center",className:"parcel-label"});
           layer.on("click", () => {
             const index = state.selectedParcels.indexOf(feature);
             if(index < 0) state.selectedParcels.push(feature);
             else state.selectedParcels.splice(index, 1);
-            layer.setStyle(parcelStyle(index < 0));
+            const selected = index < 0;
+            layer.setStyle(parcelSelectionStyle(selected));
+            layer.setTooltipContent(parcelSelectionLabel(name,selected));
+            if(selected){
+              layer.bringToFront();
+              layer.openTooltip();
+            }else layer.bringToBack();
             updateParcelSelection();
           });
         }
-      }).addTo(map).bringToFront();
+      }).addTo(map);
+      const bounds = state.layers.all.getBounds && state.layers.all.getBounds().isValid() ? state.layers.all.getBounds() : getBoundsFromGeoJSON(state.parcelsGeoJSON);
+      if(bounds) stabilizeMap(map, bounds, [34,34]);
+      state.layers.all.eachLayer(layer=>{
+        if(state.selectedParcels.includes(layer.feature)){
+          layer.bringToFront();
+          layer.openTooltip();
+        }
+      });
       drawImportedIncidents(map, "allImportedIncidents");
       drawSavedIncidentMarkers(map,'allRecordedIncidents');
       if(state.layers.allImportedIncidents) state.layers.allImportedIncidents.bringToFront();
-      const bounds = state.layers.all.getBounds && state.layers.all.getBounds().isValid() ? state.layers.all.getBounds() : getBoundsFromGeoJSON(state.parcelsGeoJSON);
-      if(bounds) stabilizeMap(map, bounds, [34,34]);
       updateParcelSelection();
     });
   }
@@ -1299,7 +1325,7 @@
       refills: 0,
       stops: 0,
       gpsCalibration: calibration,
-      ...(pruning ? {pruningZones:[]} : {}),
+      ...(pruning ? {pruningSegments:[]} : {}),
       pointsOriginal: [],
       pointsClean: [],
       events: [],
@@ -2154,14 +2180,35 @@
     return normalizePlainText(w?.type) === "poda";
   }
 
+  function isMapCoordinate(point){
+    return Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]) &&
+      Math.abs(point[0])<=180 && Math.abs(point[1])<=90;
+  }
+
+  function pruningSegments(w){
+    if(!Array.isArray(w?.pruningSegments)) return [];
+    return w.pruningSegments.filter(segment=>{
+      const points = segment?.geometry?.coordinates;
+      return segment?.type==="Feature" && segment.geometry?.type==="LineString" &&
+        Array.isArray(points) && points.length>=2 && points.every(isMapCoordinate) &&
+        points.some(point=>!sameMapPoint(point,points[0]));
+    });
+  }
+
   function pruningZones(w){
     if(!Array.isArray(w?.pruningZones)) return [];
     return w.pruningZones.filter(zone=>{
       const ring = zone?.geometry?.coordinates?.[0];
       return zone?.type==="Feature" && zone.geometry?.type==="Polygon" && Array.isArray(ring) && ring.length>=4 &&
-        ring.every(point=>Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]) &&
-          Math.abs(point[0])<=180 && Math.abs(point[1])<=90) && sameMapPoint(ring[0],ring.at(-1));
+        ring.every(isMapCoordinate) && sameMapPoint(ring[0],ring.at(-1));
     });
+  }
+
+  function pruningSummary(w){
+    const segments = pruningSegments(w).length;
+    const zones = pruningZones(w).length;
+    const lines = `${segments} ${segments===1 ? "tramo" : "tramos"}`;
+    return zones ? `${lines} · ${zones} ${zones===1 ? "superficie anterior" : "superficies anteriores"}` : lines;
   }
 
   function shouldTrackWindForWork(w){
@@ -2575,7 +2622,7 @@
   async function handleStop(reason){
     closeStopModal();
     if(!state.work || state.work.status !== "trabajando") return;
-    if(reason === "Delimitar zonas podadas" && isPruningWork(state.work)){
+    if(reason === "Marcar tramos podados" && isPruningWork(state.work)){
       openPruningEditor("screen-work");
       return;
     }
@@ -2664,7 +2711,7 @@
     $("screen-work").classList.toggle("v982-pruning-work", pruning);
     $("beginWorkBtn").querySelector("strong").textContent = pruning ? "Comenzar poda" : "Comienzo";
     $("stopWorkBtn").querySelector("strong").textContent = pruning ? "Pausa o finalizar poda" : "Parada";
-    $("stopWorkBtn").querySelector("small").textContent = pruning ? "Pausar o marcar zonas trabajadas" : "Detener y registrar motivo";
+    $("stopWorkBtn").querySelector("small").textContent = pruning ? "Pausar o marcar tramos podados" : "Detener y registrar motivo";
     $("finishPausedPruning").classList.toggle("hidden", !pruning || state.work.status !== "parado");
   }
 
@@ -2672,7 +2719,7 @@
     const work = state.work;
     if(!isPruningWork(work) || workIsCompleted(work)) return;
     const parcel = work.parcelFeature || findParcelFeatureByName(work.parcel, work.parcelId);
-    if(!parcel) return toast("Carga las capas de la parcela para poder delimitar la poda.");
+    if(!parcel) return toast("Carga las capas de la parcela para poder marcar los tramos de poda.");
     state.pruningEditor = {workId:work.id, parcel, finishAt:Date.now(), returnTo, draft:null, selected:null};
     $("pruningParcelLabel").textContent = work.parcel;
     show("screen-pruning-zones");
@@ -2734,49 +2781,54 @@
       opposite(crossMapPoints(c,d,a),crossMapPoints(c,d,b));
   }
 
-  function validPruningZone(points, geometry){
-    if(points.length<3) return false;
-    const edges = polygonEdges(points);
-    const origin = points[0];
-    const area = Math.abs(edges.reduce((sum,[a,b])=>sum+crossMapPoints(origin,a,b),0));
-    if(area<1e-16) return false;
-    const intersectsItself = edges.some(([a,b],i)=>edges.some(([c,d],j)=>{
-      if(j<=i+1 || (i===0 && j===edges.length-1)) return false;
-      return polygonEdgesCross([a,b],[c,d]) || pointOnMapSegment(a,c,d) || pointOnMapSegment(b,c,d) ||
-        pointOnMapSegment(c,a,b) || pointOnMapSegment(d,a,b);
-    }));
-    if(intersectsItself) return false;
+  function validPruningSegment(points, geometry){
+    if(points.length<2 || !points.every(isMapCoordinate) || points.every(point=>sameMapPoint(point,points[0]))) return false;
     const polygons = geometry.type==="MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
     return polygons.some(rings=>{
       const [boundary,...holes] = rings.map(polygonEdges);
       if(!boundary?.length) return false;
-      const midpoints = edges.map(([a,b])=>[(a[0]+b[0])/2,(a[1]+b[1])/2]);
-      if(![...points,...midpoints].every(point=>pointInRing(point,boundary)>=0 && holes.every(hole=>pointInRing(point,hole)<=0))) return false;
-      if(holes.some(hole=>hole.some(([point])=>pointInRing(point,edges)>0))) return false;
-      return edges.every(edge=>[boundary,...holes].every(ring=>ring.every(border=>!polygonEdgesCross(edge,border))));
+      const inside = point=>pointInRing(point,boundary)>=0 && holes.every(hole=>pointInRing(point,hole)<=0);
+      if(!points.every(inside)) return false;
+      const borders = [boundary,...holes].flat();
+      return points.slice(1).every((b,index)=>{
+        const a = points[index];
+        if(borders.some(border=>polygonEdgesCross([a,b],border))) return false;
+        // Check every interval when the line touches a boundary vertex or follows a boundary edge.
+        const axis = Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1]) ? 0 : 1;
+        const cuts = [a,b,...borders.map(([vertex])=>vertex).filter(vertex=>pointOnMapSegment(vertex,a,b))]
+          .sort((p,q)=>p[axis]-q[axis]);
+        return cuts.slice(1).every((end,i)=>{
+          const start = cuts[i];
+          return inside([(start[0]+end[0])/2,(start[1]+end[1])/2]);
+        });
+      });
     });
   }
 
   function updatePruningEditor(){
     const editor = state.pruningEditor;
     if(!editor) return;
+    const segments = pruningSegments(state.work);
     const zones = pruningZones(state.work);
     const drawing = Array.isArray(editor.draft);
     $("pruningInstructions").textContent = drawing
-      ? `Toca las esquinas de la zona · ${editor.draft.length} vértices`
-      : `${zones.length} ${zones.length===1 ? "zona guardada" : "zonas guardadas"} · toca una zona para seleccionarla.`;
+      ? "Toca el inicio, los giros y el final del tramo."
+      : `${pruningSummary(state.work)} · toca una línea para seleccionarla.`;
     $("pruningSavedActions").classList.toggle("hidden", drawing);
     $("pruningDrawingActions").classList.toggle("hidden", !drawing);
-    $("removePruningZone").disabled = editor.selected === null;
+    $("removePruningSegment").disabled = editor.selected === null;
     $("undoPruningPoint").disabled = !editor.draft?.length;
-    $("savePruningZone").disabled = !drawing || editor.draft.length < 3;
-    $("finishPruningWork").disabled = drawing || !zones.length;
+    $("savePruningSegment").disabled = !drawing || editor.draft.length < 2;
+    $("finishPruningWork").disabled = drawing || !(segments.length || zones.length);
     if(!editor.layers) return;
     editor.layers.clearLayers();
-    zones.forEach((zone,index)=>{
+    zones.forEach(zone=>{
+      L.geoJSON(zone,{style:{color:"#b27325",weight:2,fillOpacity:.20},interactive:false}).addTo(editor.layers);
+    });
+    segments.forEach((segment,index)=>{
       const selected = editor.selected === index;
-      L.geoJSON(zone,{style:{color:selected?"#8b5419":"#b27325",weight:selected?4:3,fillOpacity:.35},interactive:!drawing})
-        .bindTooltip(`Zona ${index+1}`)
+      L.geoJSON(segment,{style:{color:selected?"#fff1a3":"#f4bc4d",weight:selected?5:3},interactive:!drawing})
+        .bindTooltip(`Tramo ${index+1}`)
         .on("click",event=>{
           L.DomEvent.stopPropagation(event);
           editor.selected = index;
@@ -2785,41 +2837,40 @@
     });
     if(drawing){
       const vertices = editor.draft.map(([lng,lat])=>[lat,lng]);
-      if(vertices.length>=3) L.polygon(vertices,{color:"#b27325",dashArray:"5 4",fillOpacity:.22,interactive:false}).addTo(editor.layers);
-      else if(vertices.length===2) L.polyline(vertices,{color:"#b27325",interactive:false}).addTo(editor.layers);
-      vertices.forEach(vertex=>L.circleMarker(vertex,{radius:4,color:"#b27325",fillOpacity:1,interactive:false}).addTo(editor.layers));
+      if(vertices.length>=2) L.polyline(vertices,{color:"#f4bc4d",weight:3,dashArray:"5 4",interactive:false}).addTo(editor.layers);
+      vertices.forEach(vertex=>L.circleMarker(vertex,{radius:4,color:"#f4bc4d",fillOpacity:1,interactive:false}).addTo(editor.layers));
     }
   }
 
-  function storePruningZones(zones){
-    const previous = state.work.pruningZones;
-    state.work.pruningZones = zones;
+  function storePruningSegments(segments){
+    const previous = state.work.pruningSegments;
+    state.work.pruningSegments = segments;
     if(storage.set(LS.active,state.work)) return true;
-    state.work.pruningZones = previous;
-    toast("No se pudo guardar la zona de poda en el dispositivo. El cambio sigue pendiente.");
+    if(previous === undefined) delete state.work.pruningSegments;
+    else state.work.pruningSegments = previous;
+    toast("No se pudo guardar el tramo de poda en el dispositivo. El cambio sigue pendiente.");
     return false;
   }
 
-  function savePruningZone(){
+  function savePruningSegment(){
     const editor = state.pruningEditor;
     if(!editor?.draft || state.work?.id !== editor.workId) return;
-    if(!validPruningZone(editor.draft, editor.parcel.geometry)){
-      return toast("Dibuja un contorno sin cruces, con al menos tres vértices y dentro de la parcela.");
+    if(!validPruningSegment(editor.draft, editor.parcel.geometry)){
+      return toast("Marca al menos dos puntos distintos. El tramo debe quedar dentro de la parcela.");
     }
-    const ring = [...editor.draft,editor.draft[0]];
-    const zone = {type:"Feature",properties:{},geometry:{type:"Polygon",coordinates:[ring]}};
-    const zones = [...pruningZones(state.work),zone];
-    if(!storePruningZones(zones)) return;
+    const segment = {type:"Feature",properties:{},geometry:{type:"LineString",coordinates:editor.draft}};
+    const segments = [...pruningSegments(state.work),segment];
+    if(!storePruningSegments(segments)) return;
     editor.draft = null;
-    editor.selected = zones.length-1;
+    editor.selected = segments.length-1;
     updatePruningEditor();
   }
 
-  function removePruningZone(){
+  function removePruningSegment(){
     const editor = state.pruningEditor;
     if(!editor || editor.selected===null || state.work?.id!==editor.workId) return;
-    if(!confirm("¿Quitar la zona de poda seleccionada?")) return;
-    if(!storePruningZones(pruningZones(state.work).filter((zone,index)=>index!==editor.selected))) return;
+    if(!confirm("¿Quitar el tramo de poda seleccionado?")) return;
+    if(!storePruningSegments(pruningSegments(state.work).filter((segment,index)=>index!==editor.selected))) return;
     editor.selected = null;
     updatePruningEditor();
   }
@@ -2827,7 +2878,7 @@
   function closePruningEditor(){
     const editor = state.pruningEditor;
     if(!editor) return;
-    if(editor.draft?.length && !confirm("¿Volver y descartar el contorno que estás dibujando?")) return;
+    if(editor.draft?.length && !confirm("¿Volver y descartar el tramo que estás dibujando?")) return;
     state.pruningEditor = null;
     destroyMap("pruning","mapPruning");
     show(editor.returnTo);
@@ -2836,10 +2887,10 @@
   function finishPruningWork(){
     const editor = state.pruningEditor;
     const work = state.work;
-    if(!editor || work?.id!==editor.workId || editor.draft || !pruningZones(work).length || workIsCompleted(work)) return;
+    if(!editor || work?.id!==editor.workId || editor.draft || !(pruningSegments(work).length || pruningZones(work).length) || workIsCompleted(work)) return;
     const now = editor.finishAt;
     if(work.status === "trabajando") closeWorkSegment(now,"Fin de poda");
-    addEvent("Fin de poda","Zonas podadas confirmadas","Delimitación manual",null,now);
+    addEvent("Fin de poda","Registro de poda confirmado","Marcado manual",null,now);
     work.status = "finalizado";
     work.finishedAt = now;
     freezeFinalSnapshot(work);
@@ -3376,7 +3427,7 @@
 
       renderReportSummary(w);
       const recoveredRoute = recoverRouteForReport(w);
-      const hasMapData = workGeometries(w).length > 0 || pruningZones(w).length > 0 || recoveredRoute.length > 1 || (w.events || []).some(e=>isValidRoutePoint(e)) || (w.incidents || []).some(i=>isValidRoutePoint(i)) || (w.windReadings || []).some(r=>r.status === "ok" && isValidRoutePoint(r));
+      const hasMapData = workGeometries(w).length > 0 || pruningSegments(w).length > 0 || pruningZones(w).length > 0 || recoveredRoute.length > 1 || (w.events || []).some(e=>isValidRoutePoint(e)) || (w.incidents || []).some(i=>isValidRoutePoint(i)) || (w.windReadings || []).some(r=>r.status === "ok" && isValidRoutePoint(r));
       $("reportMapShell").classList.toggle("hidden", !hasMapData);
       $("reportMapShell").classList.remove("is-expanded");
       $("collapseReportMap").classList.add("hidden");
@@ -3425,9 +3476,14 @@
         const b=layer.getBounds();if(b.isValid())areaBounds=areaBounds?areaBounds.extend(b):b;
       }
       for(const [index,zone] of pruningZones(w).entries()){
-        const layer = L.geoJSON(zone,{style:{color:"#b27325",weight:3,fillOpacity:.35}}).bindTooltip(`Zona podada ${index+1}`).addTo(map);
+        const layer = L.geoJSON(zone,{style:{color:"#b27325",weight:2,fillOpacity:.20}}).bindTooltip(`Superficie anterior ${index+1}`).addTo(map);
         const b = layer.getBounds();
         if(b.isValid()) areaBounds = areaBounds ? areaBounds.extend(b) : b;
+      }
+      for(const [index,segment] of pruningSegments(w).entries()){
+        const layer = L.geoJSON(segment,{style:{color:"#f4bc4d",weight:3}}).bindTooltip(`Tramo podado ${index+1}`).addTo(map);
+        const bounds = layer.getBounds();
+        if(bounds.isValid()) areaBounds = areaBounds ? areaBounds.extend(bounds) : bounds;
       }
       // En historiales no mostrar incidencias importadas de otro conjunto de parcelas.
       if(!w.isTreatmentGroup && state.parcelsGeoJSON &&
@@ -3573,7 +3629,7 @@
           ${reportKpi("Parcela", w.parcel || "—")}
           ${treatmentLabel ? reportKpi('Tratamiento',treatmentLabel):''}
           ${reportKpi("Labor", w.type || "—")}
-          ${isPruningWork(w) ? reportKpi("Zonas podadas", String(pruningZones(w).length)) : ""}
+          ${isPruningWork(w) ? reportKpi("Marcado de poda", pruningSummary(w)) : ""}
           ${reportKpi("Estado", status)}
           ${reportKpi("Fecha", dateLabelDMY(reportDateSource(w)))}
           ${reportKpi("Inicio", started)}
@@ -3924,7 +3980,7 @@
       `Parcela: ${work.parcel || "—"}`,
       ...(treatmentCaption(work)?[`Tratamiento: ${treatmentCaption(work)}`]:[]),
       `Trabajo: ${work.type || "—"}`,
-      ...(isPruningWork(work) ? [`Zonas podadas: ${pruningZones(work).length}`] : []),
+      ...(isPruningWork(work) ? [`Marcado de poda: ${pruningSummary(work)}`] : []),
       `Fecha: ${dateLabelDMY(reportDateSource(work))}`,
       "",
       "TIEMPOS",
@@ -3977,7 +4033,8 @@
     const pruning = isPruningWork(w);
     const parcelPts = featureCoordinatePairs(w?.parcelFeature || (!pruning && findParcelFeatureByName(w?.parcel)));
     const zones = pruningZones(w).map(featureCoordinatePairs);
-    const all = [...route, ...parcelPts, ...zones.flat()];
+    const segments = pruningSegments(w).map(segment=>segment.geometry.coordinates.map(([lng,lat])=>({lng,lat})));
+    const all = [...route, ...parcelPts, ...zones.flat(), ...segments.flat()];
     if(all.length < 2) return "";
     const minLat = Math.min(...all.map(p=>Number(p.lat)));
     const maxLat = Math.max(...all.map(p=>Number(p.lat)));
@@ -3998,16 +4055,17 @@
     const end = route[route.length-1] ? project(route[route.length-1]) : null;
     return `
       <div class="print-map-box">
-        <div class="print-map-title">${pruning ? "Mapa esquemático de zonas podadas" : "Ruta / mapa esquemático del trabajo"}</div>
-        <svg viewBox="0 0 ${wBox} ${hBox}" role="img" aria-label="${pruning ? "Zonas podadas" : "Ruta GPS del trabajo"}">
+        <div class="print-map-title">${pruning ? "Mapa esquemático de poda" : "Ruta / mapa esquemático del trabajo"}</div>
+        <svg viewBox="0 0 ${wBox} ${hBox}" role="img" aria-label="${pruning ? "Marcado de poda" : "Ruta GPS del trabajo"}">
           <rect x="0" y="0" width="${wBox}" height="${hBox}" rx="18" fill="#f7f3e9"/>
           ${parcelLine ? `<polyline points="${parcelLine}" fill="none" stroke="#d2bb7a" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
           ${zones.map(points=>`<polygon points="${projectLine(points)}" fill="#edcb89" stroke="#8b5419" stroke-width="3"/>`).join("")}
+          ${segments.map(points=>`<polyline points="${projectLine(points)}" fill="none" stroke="#a65a17" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`).join("")}
           ${routeLine ? `<polyline points="${routeLine}" fill="none" stroke="#1f7ed0" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
           ${start ? `<circle cx="${start[0].toFixed(1)}" cy="${start[1].toFixed(1)}" r="7" fill="#2f7d44" stroke="#fff" stroke-width="3"/>` : ""}
           ${end ? `<circle cx="${end[0].toFixed(1)}" cy="${end[1].toFixed(1)}" r="7" fill="#a8483a" stroke="#fff" stroke-width="3"/>` : ""}
         </svg>
-        <div class="print-map-legend">${pruning ? "<span>Ocre: zonas podadas</span>" : "<span>Verde: comienzo</span><span>Rojo: fin</span><span>Azul: recorrido GPS</span>"}<span>Oro: parcela</span></div>
+        <div class="print-map-legend">${pruning ? `${segments.length ? "<span>Líneas ocres · tramos podados</span>" : ""}${zones.length ? "<span>Relleno ocre · superficies anteriores</span>" : ""}` : "<span>Verde: comienzo</span><span>Rojo: fin</span><span>Azul: recorrido GPS</span>"}<span>Oro: parcela</span></div>
       </div>`;
   }
 
@@ -4047,7 +4105,7 @@
         <h2>Cabecera</h2><div class="grid">${reportRowsHtml([["Parcela", work.parcel || "—"],["Trabajo", work.type || "—"],["Fecha", dateLabelDMY(reportDateSource(work))],["Estado", workIsCompleted(work) ? "Finalizado" : "Pendiente de terminar"],["Inicio", timeLabelHMS(startMs)],["Fin", timeLabelHMS(endMs)]])}</div>
         <h2>Tiempos y recorrido</h2><div class="grid">${reportRowsHtml([["Tiempo activo", fmtTime(reportEffectiveActiveMs(work))],["Tiempo parado", fmtTime(reportStoppedMs(work))],["Tiempo total/transcurrido", fmtTime(reportTotalMs(work))],["Distancia", ((work.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km"],["Recargas", String(work.refills || 0)],["Paradas", String(stopCount)],["Incidencias", String((work.incidents || []).length)],["Velocidad GPS media", avgSpeed === null ? "—" : avgSpeed.toFixed(1).replace(".", ",") + " km/h"]])}</div>
         ${isPruningWork(work)
-          ? `<h2>Zonas de poda</h2><div class="grid">${reportRowsHtml([["Zonas podadas", String(pruningZones(work).length)],["Operario",work.day?.operator || "—"]])}</div>`
+          ? `<h2>Marcado de poda</h2><div class="grid">${reportRowsHtml([["Registro", pruningSummary(work)],["Operario",work.day?.operator || "—"]])}</div>`
           : `<h2>GPS y ruta</h2><div class="grid">${reportRowsHtml([["Ruta GPS disponible", routeAvailable(work) ? "Sí" : "No"],["Precisión media GPS", averageGpsAccuracyText(work)],["Puntos originales", String((work.pointsOriginal || []).length)],["Ruta depurada", String((work.pointsClean || []).length)]])}</div>`}
         ${routeSvg || ""}
         ${windSection}
@@ -4096,7 +4154,7 @@
     try{
       const work = normalizeWorkForReport(w, "pdf");
       const blob = window.PAZO_BAION_PDF.createDocument({
-        work:isPruningWork(work) ? {...work,pruningZones:pruningZones(work)} : work,
+        work:isPruningWork(work) ? {...work,pruningZones:pruningZones(work),pruningSegments:pruningSegments(work)} : work,
         completed:workIsCompleted(work),
         activeMs:reportEffectiveActiveMs(work),
         stoppedMs:reportStoppedMs(work),
@@ -4688,7 +4746,7 @@
     $("windReadingBtn").onclick = () => recordAutomaticWind("actualizacion_usuario", {notify:true});
 
     $("backFromPruningZones").onclick = closePruningEditor;
-    $("startPruningZone").onclick = () => {
+    $("startPruningSegment").onclick = () => {
       state.pruningEditor.draft = [];
       updatePruningEditor();
     };
@@ -4696,12 +4754,12 @@
       state.pruningEditor.draft.pop();
       updatePruningEditor();
     };
-    $("cancelPruningZone").onclick = () => {
+    $("cancelPruningSegment").onclick = () => {
       state.pruningEditor.draft = null;
       updatePruningEditor();
     };
-    $("savePruningZone").onclick = savePruningZone;
-    $("removePruningZone").onclick = removePruningZone;
+    $("savePruningSegment").onclick = savePruningSegment;
+    $("removePruningSegment").onclick = removePruningSegment;
     $("finishPruningWork").onclick = finishPruningWork;
     $("finishPausedPruning").onclick = () => openPruningEditor("screen-work");
 

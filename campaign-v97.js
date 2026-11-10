@@ -1,4 +1,4 @@
-/* PAZO BAION GPS · Beta v9.8.2. Archivo local de trabajos y numeración por campaña.
+/* PAZO BAION GPS · Beta v9.8.3. Archivo local de trabajos y numeración por campaña.
    No transmite datos a servidores. No elimina ni modifica el historial v08. */
 (() => {
   'use strict';

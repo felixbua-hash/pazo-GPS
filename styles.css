@@ -1460,3 +1460,12 @@ input:focus,select:focus,textarea:focus{
 .v982-pruning-report .report-cards div:has(#reportRefills),
 .v982-pruning-report .report-cards div:has(#reportWind){display:none!important}
 #screen-work.v982-pruning-work .work-actions{height:auto;flex:0 0 auto}
+
+/* La selección se distingue sobre el satélite por el color, el grosor y la marca. */
+#mapAll .parcel-label:has(.v983-selected-parcel-name){
+  z-index:1000!important;
+  background:#072e35;
+  border:2px solid #37f0f2;
+  color:#fff;
+  font-size:13px;
+}
