@@ -1,22 +1,28 @@
-# PAZO BAION GPS · BETA v9.8.3
+# PAZO BAION GPS · BETA v9.8.4
 
-Versión de evaluación del 10 de noviembre de 2026, basada en la Beta v9.8.2.
+Versión de prueba del 10 de noviembre de 2026, basada en la Beta v9.8.3.
 
-## Selección de parcelas
+## Marcar la poda
 
-Toca una o varias parcelas en el mapa. Las seleccionadas tienen un contorno turquesa grueso, un relleno semitransparente y una etiqueta con su nombre y una marca de verificación. Vuelve a tocar una parcela para quitarla de la selección. La lista inferior refleja las parcelas seleccionadas.
+1. Selecciona la parcela, elige **Poda** y pulsa **Comenzar poda** o **Retomar poda**.
+2. Abre **Marcar tramos podados**. Toca el comienzo y después el fin de la parra o de la parte trabajada. El segundo toque guarda una raya independiente. El siguiente toque inicia otra.
+3. **Guardar avance** archiva los tramos y el tiempo de esta intervención, deja la parcela en curso y permite cambiar de parcela.
+4. Al volver a elegir **Poda** en esa parcela, se abre su ficha pendiente. El mapa distingue los tramos de la jornada de los tramos anteriores.
+5. **Finalizar poda de la parcela** confirma el cierre de toda la parcela. Desde su informe puedes elegir otra parcela y trabajar con la misma configuración de jornada.
 
-## Poda
+El punto azul muestra tu posición en directo si concedes permiso de ubicación. El botón de centrar te lleva a ese punto. La posición del operario se usa solo como referencia visual durante la poda y queda fuera de las fichas, las copias y los informes.
 
-1. Al finalizar la poda, elige «Marcar tramos podados» y pulsa «Dibujar tramo».
-2. Toca el inicio y el fin del tramo. Añade puntos intermedios antes del fin cuando necesites seguir un giro de la parra.
-3. Pulsa «Guardar tramo». Repite el dibujo para otras parras o tramos separados. Para corregir una línea ya guardada, tócala, pulsa «Quitar tramo» y vuelve a dibujarla.
-4. Pulsa «Finalizar poda». La ficha y los mapas de los informes muestran los tramos de la parcela asociados al operario y la jornada.
+En el mapa, el comienzo se marca con un punto verde y el fin con uno ocre. Puedes borrar un comienzo antes del segundo toque o elegir un tramo guardado y quitarlo.
 
-Las superficies de poda guardadas en la v9.8.2 siguen disponibles en sus fichas e informes, identificadas como superficies anteriores.
+## Informe diario
+
+En **Historial → Informe diario de poda**, elige la fecha y el operario. La vista y el PDF reúnen todas las parcelas en las que trabajó ese día. Incluyen un croquis por parcela, los tramos de ese operario, su tiempo activo registrado y el estado de cada parcela al cierre de la fecha consultada.
+
+Las superficies y líneas antiguas siguen en la ficha de parcela. Los tramos anteriores que carecen de fecha u operario propios se consultan en esa ficha.
 
 ## Instalación y prueba
 
-Antes de actualizar, exporta la copia completa JSON desde **Historial → engranaje → Exportar copia completa (JSON)**. Descomprime y sube los 11 archivos de la raíz a la rama publicada del mismo repositorio. Usa el mismo sitio en el navegador para conservar el acceso a los datos locales.
-
-Para verificar en Safari de iPhone, selecciona y deselecciona dos parcelas contiguas. Registra después un tramo recto y otro con un giro. Comprueba que el historial y el PDF muestran ambas líneas de forma independiente.
+- Antes de actualizar, guarda la copia completa desde **Historial → engranaje → Exportar copia completa (JSON)**.
+- Descomprime y sube los 11 archivos de la raíz a la rama publicada del mismo repositorio. Abre la aplicación desde el mismo sitio para acceder a sus datos locales.
+- En Safari de iPhone, marca dos parras contiguas con cuatro toques, guarda el avance, retoma la parcela, ciérrala y empieza otra. Genera el informe de ese día desde el historial.
+- Las pruebas técnicas verificaron el guardado por parejas, la continuidad entre fechas, el tiempo sin sumar el intervalo entre jornadas, la recuperación de tramos, el filtro por operario y el PDF de dos parcelas.

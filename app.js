@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const VERSION = "Beta v9.8.3";
+  const VERSION = "Beta v9.8.4";
   const LS = {
     map: "pbgps_parcel_geojson_v08",
     incidentLayer: "pbgps_incident_layer_geojson_v08",
@@ -26,6 +26,8 @@
     historyScope: null,
     repeatWorkType: "",
     pruningEditor: null,
+    pruningLocation: null,
+    savingPruning: false,
     selectedParcelName: "",
     workType: "",
     dayConfig: null,
@@ -47,6 +49,7 @@
     historyWorkType: "all",
     historyCache: null,
     archiveWriteQueue: Promise.resolve(),
+    archiveReady: Promise.resolve(),
     treatmentDraft: null,
     historyReturnTo: "screen-map-load",
     pendingResumeAfterDay: null,
@@ -115,6 +118,7 @@
       }
       if(document.querySelector('#screen-history.active'))renderHistory();
       if(document.querySelector('#screen-work-type.active'))renderWorkTypeSelection();
+      if(document.querySelector('#screen-pruning-day-report.active')) refreshPruningDayOperators();
     }catch(err){
       console.warn('Archivo IndexedDB no disponible; se conserva historial anterior',err);
       state.historyCache=storage.get(LS.history, []);
@@ -403,6 +407,7 @@
   }
 
   function show(screenId){
+    stopPruningLocation();
     setAppHeight();
     qsa(".screen").forEach(s => s.classList.remove("active"));
     if(screenId !== "screen-report" && $("reportMapShell")) $("reportMapShell").classList.remove("is-expanded");
@@ -817,9 +822,12 @@
     initLists();
   }
 
-  function todayIso(){
-    const d = new Date();
+  function localDayIso(d=new Date()){
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+
+  function todayIso(){
+    return localDayIso();
   }
 
   function formatDayDate(date=new Date()){
@@ -893,10 +901,10 @@
     }
     state.dayConfig = cfg;
     // Si la jornada se preparó desde la ficha de un pendiente, continuar esa ficha.
-    const pendingId = state.pendingResumeAfterDay;
+    const pending = state.pendingResumeAfterDay;
     state.pendingResumeAfterDay = null;
-    if(pendingId && state.reportWork && state.reportWork.id === pendingId && !workIsCompleted(state.reportWork)){
-      resumePendingWorkFromReport();
+    if(pending && state.reportWork && state.reportWork.id === pending.id && !workIsCompleted(state.reportWork)){
+      resumePendingWorkFromReport(pending.editPruning);
       return;
     }
     continueSelectedWorkSetup();
@@ -1204,8 +1212,21 @@
     }
   }
 
-  function continueSelectedWorkSetup(){
-    if(isPruningWork({type:state.workType})) return startWorkShell();
+  async function continueSelectedWorkSetup(){
+    if(isPruningWork({type:state.workType})){
+      const parcel = state.selectedFeature;
+      await state.archiveReady;
+      if(parcel!==state.selectedFeature || !isPruningWork({type:state.workType})) return;
+      const pending = pruningHistoryEntries().filter(w=>!workIsCompleted(w) && workMatchesParcel(w,state.selectedFeature,state.activeLayerSetId))
+        .sort((a,b)=>(lastKnownWorkAt(b) || historicWorkTimestamp(b))-(lastKnownWorkAt(a) || historicWorkTimestamp(a)))[0];
+      if(!pending) return startWorkShell();
+      const resumed = activatePendingWork({...pending,parcelFeature:pending.parcelFeature || state.selectedFeature});
+      if(resumed){
+        state.repeatWorkType = resumed.type;
+        show("screen-work");
+      }
+      return;
+    }
     if(isPhytosanitaryWorkType(state.workType)) openTreatmentSetup();
     else show("screen-gps-calibration");
   }
@@ -1376,6 +1397,7 @@
       }
       drawImportedIncidents(map, "workImportedIncidents");
       updateRouteLayers();
+      if(isPruningWork(state.work)) startPruningLocation();
     });
   }
 
@@ -1478,12 +1500,12 @@
     if(finish) finish.disabled = !!busy;
   }
 
-  function activatePendingWorkFromReport(){
-    const w = getReportWork();
+  function activatePendingWork(w){
     if(!w || workIsCompleted(w)) return null;
     const current = state.work && !workIsCompleted(state.work) ? state.work : storage.get(LS.active, null);
     if(current && current.id !== w.id && !ensureNoUnsecuredWork("retomar otro trabajo")) return null;
-    state.work = clonePlain(w);
+    const activePruning = isPruningWork(w) && current?.id === w.id && !workIsCompleted(current);
+    state.work = clonePlain(activePruning ? current : w);
     const lastPhase = sortedTimelineEvents(state.work).slice(-1)[0]?._kind;
     if(state.work.startedAt && ["trabajando","pendiente"].includes(state.work.status) && (state.work.status === "trabajando" || lastPhase === "start" || lastPhase === "resume" || !lastPhase)){
       state.work.status = "trabajando";
@@ -1493,23 +1515,27 @@
     recoverRouteForReport(state.work);
     // Una ficha pendiente nunca vuelve a iniciar GPS sola.
     state.work.status = state.work.startedAt ? "parado" : "preparado";
+    if(!persistActiveWork()){
+      state.work = activePruning ? current : null;
+      toast("No se pudo guardar la ficha activa en el dispositivo.");
+      return null;
+    }
     state.reportWork = null;
     state.reportOrigin = "work";
     state.reportHistoryIndex = null;
     prepareWorkScreenFromState();
-    if(!persistActiveWork()) return null;
     if(!saveHistorySnapshot(state.work)){
       toast("El trabajo pendiente sigue en memoria activa, pero no se ha podido actualizar el historial.");
     }
     return state.work;
   }
 
-  function resumePendingWorkFromReport(){
+  function resumePendingWorkFromReport(editPruning=false){
     const pending = getReportWork();
     if(!pending || workIsCompleted(pending)) return;
     const day = storage.get(LS.day, null);
     if(!day || day.date !== todayIso()){
-      state.pendingResumeAfterDay = pending.id;
+      state.pendingResumeAfterDay = {id:pending.id,editPruning};
       toast("Para reanudar este trabajo pendiente, confirma primero la configuración de la jornada de hoy. La ficha permanece guardada en el historial.");
       closePreviousDayDialog();
       loadSavedDayConfig();
@@ -1522,24 +1548,25 @@
       show("screen-map-load");
       return;
     }
-    const w = activatePendingWorkFromReport();
+    const w = activatePendingWork(pending);
     if(!w) return;
+    if(isPruningWork(w)){
+      state.repeatWorkType = w.type;
+      if(editPruning) return openPruningEditor("screen-work");
+    }
     show("screen-work");
   }
 
   async function finishPendingWorkFromReport(){
     const w = getReportWork();
     if(!w || workIsCompleted(w)) return;
+    if(isPruningWork(w)) return resumePendingWorkFromReport(true);
     if(!confirm("¿Terminar ahora este trabajo pendiente y generar informe definitivo?")) return;
     setPendingActionBusy(true);
     try{
       // No finalizar otro trabajo si la activación del pendiente fue cancelada o falló.
-      const activated = activatePendingWorkFromReport();
+      const activated = activatePendingWork(w);
       if(!activated || activated.id !== w.id || state.work?.id !== w.id) return;
-      if(isPruningWork(activated)){
-        openPruningEditor("screen-work");
-        return;
-      }
       const now = Date.now();
       if(shouldTrackWindForWork(state.work)) await recordAutomaticWind("fin");
       const p = await resolveEventPosition();
@@ -1677,7 +1704,7 @@
     const addStop = (start, end, ev=null) => {
       start = toMs(start); end = toMs(end);
       if(!start || !end || end < start) return;
-      const interruption = /interrupci[oó]n|reapertura|cambio de parcela\/conjunto/i.test(stopReasonFromEvent(ev));
+      const interruption = ev?.excludedFromStoppedTime || /interrupci[oó]n|reapertura|cambio de parcela\/conjunto/i.test(stopReasonFromEvent(ev));
       const ms = interruption ? 0 : Math.max(0, end - start);
       stoppedMs += ms;
       stops.push({
@@ -1701,12 +1728,12 @@
       if(ev._kind === "start") continue;
 
       if(ev._kind === "stop"){
-        if(phase === "active"){
-          addSegment(cursor, ms, stopReasonFromEvent(ev));
-          phase = "stopped";
-          cursor = ms;
-          stopOpenedBy = ev;
-        }
+        if(phase === "active") addSegment(cursor, ms, stopReasonFromEvent(ev));
+        else if(phase === "stopped" && ev.pruningCheckpoint) addStop(cursor, ms, stopOpenedBy);
+        else continue;
+        phase = "stopped";
+        cursor = ms;
+        stopOpenedBy = ev;
         continue;
       }
 
@@ -1751,7 +1778,7 @@
       segments,
       stops,
       currentActiveMs: phase === "active" && includeOpen ? Math.max(0, endLimit - cursor) : 0,
-      currentStoppedMs: phase === "stopped" && includeOpen ? Math.max(0, endLimit - cursor) : 0
+      currentStoppedMs: phase === "stopped" && includeOpen && !stopOpenedBy?.excludedFromStoppedTime ? Math.max(0, endLimit - cursor) : 0
     };
   }
 
@@ -1942,7 +1969,8 @@
       endAt: null,
       endLabel: null,
       activeMs: 0,
-      closeReason: ""
+      closeReason: "",
+      ...(isPruningWork(state.work) ? {pruningOperator:pruningContext(state.work,now).operator} : {})
     };
     state.work.segments.push(seg);
     state.work.currentSegmentId = seg.id;
@@ -1950,17 +1978,17 @@
     return seg;
   }
 
-  function closeWorkSegment(now=Date.now(), reason=""){
-    if(!state.work) return null;
-    ensureTimeline(state.work);
-    const seg = state.work.segments.find(s => s.id === state.work.currentSegmentId && !s.endAt) || state.work.segments.find(s => !s.endAt);
+  function closeWorkSegment(now=Date.now(), reason="", work=state.work){
+    if(!work) return null;
+    ensureTimeline(work);
+    const seg = work.segments.find(s => s.id === work.currentSegmentId && !s.endAt) || work.segments.find(s => !s.endAt);
     if(!seg) return null;
     seg.endAt = now;
     seg.endLabel = timeLabelFromMs(now);
     seg.activeMs = Math.max(0, now - (seg.startAt || now));
     seg.closeReason = reason;
-    state.work.activeMs = (state.work.activeMs || 0) + seg.activeMs;
-    state.work.currentSegmentId = null;
+    work.activeMs = (work.activeMs || 0) + seg.activeMs;
+    work.currentSegmentId = null;
     return seg;
   }
 
@@ -1992,16 +2020,17 @@
     return Math.max(0, Number(w?.stoppedMs) || 0);
   }
 
-  function markCurrentStopResumed(now=Date.now()){
-    if(!state.work) return;
-    ensureTimeline(state.work);
-    const stop = (state.work.stopLog || []).find(s => s.id === state.work.currentStopId && !s.resumedAt) || (state.work.stopLog || []).slice().reverse().find(s => !s.resumedAt);
+  function markCurrentStopResumed(now=Date.now(), work=state.work){
+    if(!work) return;
+    ensureTimeline(work);
+    const stop = work.stopLog.find(s => s.id === work.currentStopId && !s.resumedAt) || work.stopLog.slice().reverse().find(s => !s.resumedAt);
     if(stop){
       stop.resumedAt = now;
       stop.resumedLabel = timeLabelFromMs(now);
       stop.stoppedMs = stop.excludedFromStoppedTime ? 0 : Math.max(0, now - (stop.at || now));
     }
-    state.work.currentStopId = null;
+    work.currentStopId = null;
+    return stop;
   }
 
   async function resolveEventPosition(){
@@ -2057,7 +2086,7 @@
   function suspendCurrentWork(reason, at=Date.now()){
     if(!state.work || state.work.status !== "trabajando") return;
     if(isPruningWork(state.work)){
-      state.work.pruningCheckpointAt = at;
+      state.work.pruningCheckpointAt = state.pruningEditor?.finishAt || at;
       persistActiveWork();
       return;
     }
@@ -2074,9 +2103,16 @@
     state.lastHeartbeatAt = now;
   }
 
+  function saveActivePruningWork(work){
+    const savedAt = new Date().toISOString();
+    if(!storage.set(LS.active,{...work,savedAt})) return false;
+    work.savedAt = savedAt;
+    return true;
+  }
+
   function persistActiveWork(){
     if(!state.work || workIsCompleted(state.work)) return true;
-    const ok = storage.set(LS.active, state.work);
+    const ok = isPruningWork(state.work) ? saveActivePruningWork(state.work) : storage.set(LS.active,state.work);
     if(!ok && Date.now() - state.lastStorageWarningAt > 60000){
       state.lastStorageWarningAt = Date.now();
       toast("ATENCIÓN: no se ha podido guardar el trabajo activo. Libera espacio del navegador y exporta una copia de seguridad desde el historial. No cierres la aplicación sin asegurar el trabajo.");
@@ -2202,6 +2238,30 @@
       return zone?.type==="Feature" && zone.geometry?.type==="Polygon" && Array.isArray(ring) && ring.length>=4 &&
         ring.every(isMapCoordinate) && sameMapPoint(ring[0],ring.at(-1));
     });
+  }
+
+  function pruningContext(work,at){
+    const date = localDayIso(new Date(at));
+    const day = storage.get(LS.day,null) || state.dayConfig || work.day;
+    return {date,operator:String(day?.operator || work.day?.operator || "Operario sin identificar").trim() || "Operario sin identificar"};
+  }
+
+  function pruningHistoryEntries(){
+    const entries = new Map(getHistoryEntries().filter(w=>isPruningWork(w)).map(w=>[w.id,w]));
+    const active = storage.get(LS.active,null);
+    if(isPruningWork(active)){
+      const archived = entries.get(active.id);
+      if(!archived || !workIsCompleted(archived)) entries.set(active.id,active);
+    }
+    if(isPruningWork(state.work)) entries.set(state.work.id,state.work);
+    return [...entries.values()];
+  }
+
+  function pruningOperators(work){
+    const names = [work.day?.operator,work.pruningClosure?.operator];
+    for(const segment of (work.segments || [])) names.push(segment.pruningOperator);
+    for(const segment of pruningSegments(work)) names.push(segment.properties?.operator);
+    return [...new Set(names.filter(name=>typeof name==="string" && name.trim()))];
   }
 
   function pruningSummary(w){
@@ -2593,9 +2653,9 @@
     });
   }
 
-  function addEvent(type, label, notes="", position=null, atMs=Date.now()){
-    if(!state.work) return null;
-    const p = isPruningWork(state.work) ? position : position || state.currentPos || state.gpsCalibration?.last || null;
+  function addEvent(type, label, notes="", position=null, atMs=Date.now(), work=state.work){
+    if(!work) return null;
+    const p = isPruningWork(work) ? position : position || state.currentPos || state.gpsCalibration?.last || null;
     const ev = {
       id: "ev-" + atMs + "-" + Math.random().toString(16).slice(2),
       at: new Date(atMs).toISOString(),
@@ -2605,8 +2665,8 @@
       lng: isValidRoutePoint(p) ? Number(p.lng) : null,
       accuracy: p?.accuracy != null && Number.isFinite(Number(p.accuracy)) ? Number(p.accuracy) : null
     };
-    state.work.events.push(ev);
-    state.work.lastEventAt = atMs;
+    work.events.push(ev);
+    work.lastEventAt = atMs;
     return ev;
   }
 
@@ -2691,8 +2751,10 @@
     startGpsWatch();
     const now = Date.now();
     const p = await resolveEventPosition();
-    if(state.work.pausedAt) state.work.stoppedMs = (state.work.stoppedMs || 0) + Math.max(0, now - state.work.pausedAt);
-    markCurrentStopResumed(now);
+    const previousStop = markCurrentStopResumed(now);
+    if(state.work.pausedAt && !(isPruningWork(state.work) && previousStop?.excludedFromStoppedTime)){
+      state.work.stoppedMs = (state.work.stoppedMs || 0) + Math.max(0, now - state.work.pausedAt);
+    }
     addEvent("Continuar", "Reanudación", "Continúa el trabajo", p, now);
     state.work.status = "trabajando";
     state.work.pausedAt = null;
@@ -2710,7 +2772,8 @@
     const pruning = isPruningWork(state.work);
     $("screen-work").classList.toggle("v982-pruning-work", pruning);
     $("beginWorkBtn").querySelector("strong").textContent = pruning ? "Comenzar poda" : "Comienzo";
-    $("stopWorkBtn").querySelector("strong").textContent = pruning ? "Pausa o finalizar poda" : "Parada";
+    $("stopWorkBtn").querySelector("strong").textContent = pruning ? "Pausa o avance de poda" : "Parada";
+    $("continueWorkBtn").querySelector("strong").textContent = pruning ? "Retomar poda" : "Continuar";
     $("stopWorkBtn").querySelector("small").textContent = pruning ? "Pausar o marcar tramos podados" : "Detener y registrar motivo";
     $("finishPausedPruning").classList.toggle("hidden", !pruning || state.work.status !== "parado");
   }
@@ -2720,10 +2783,78 @@
     if(!isPruningWork(work) || workIsCompleted(work)) return;
     const parcel = work.parcelFeature || findParcelFeatureByName(work.parcel, work.parcelId);
     if(!parcel) return toast("Carga las capas de la parcela para poder marcar los tramos de poda.");
-    state.pruningEditor = {workId:work.id, parcel, finishAt:Date.now(), returnTo, draft:null, selected:null};
+    const finishAt = Date.now();
+    const context = pruningContext(work,finishAt);
+    if(work.status==="trabajando"){
+      work.pruningCheckpointAt = finishAt;
+      persistActiveWork();
+    }
+    state.pruningEditor = {workId:work.id, parcel, finishAt, returnTo, context, start:null, selecting:false, selected:null};
     $("pruningParcelLabel").textContent = work.parcel;
     show("screen-pruning-zones");
     updatePruningEditor();
+  }
+
+  function stopPruningLocation(){
+    const location = state.pruningLocation;
+    if(!location) return;
+    state.pruningLocation = null;
+    if(location.watchId != null) navigator.geolocation.clearWatch(location.watchId);
+    location.marker?.remove();
+    location.status.classList.add("hidden");
+    location.center.disabled = false;
+  }
+
+  function startPruningLocation(){
+    if(document.hidden || !isPruningWork(state.work) || workIsCompleted(state.work)) return;
+    const editing = !!state.pruningEditor && $("screen-pruning-zones").classList.contains("active");
+    if(!editing && !$("screen-work").classList.contains("active")) return;
+    const map = state.maps[editing ? "pruning" : "work"];
+    if(!map || state.pruningLocation?.map === map) return;
+    stopPruningLocation();
+    const status = $(editing ? "pruningEditorLocationStatus" : "pruningWorkLocationStatus");
+    const center = $(editing ? "centerPruningLocation" : "centerTractor");
+    const location = {map,status,center,watchId:null,marker:null};
+    state.pruningLocation = location;
+    center.disabled = true;
+    status.textContent = "Buscando tu posición…";
+    status.classList.remove("hidden");
+
+    const unavailable = error=>{
+      if(state.pruningLocation !== location) return;
+      location.marker?.remove();
+      location.marker = null;
+      center.disabled = true;
+      status.textContent = error?.code === 1 ? "Permite la ubicación para ver tu posición." : "Posición GPS no disponible.";
+    };
+    if(!navigator.geolocation) return unavailable();
+    try{
+      // Referencia visual de poda. Las coordenadas viven únicamente en el marcador del mapa.
+      location.watchId = navigator.geolocation.watchPosition(({coords})=>{
+        if(state.pruningLocation !== location) return;
+        if(!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) return unavailable();
+        const point = [coords.latitude,coords.longitude];
+        if(location.marker) location.marker.setLatLng(point);
+        else{
+          const pane = map.getPane("pruningLocation") || map.createPane("pruningLocation");
+          pane.style.zIndex = "610";
+          pane.style.pointerEvents = "none";
+          location.marker = L.circleMarker(point,{
+            pane:"pruningLocation",radius:8,color:"#fff",weight:3,fillColor:"#087cf0",fillOpacity:1,interactive:false
+          }).addTo(map);
+        }
+        center.disabled = false;
+        status.textContent = Number.isFinite(coords.accuracy)
+          ? `Tu posición · ±${Math.ceil(coords.accuracy)} m` : "Tu posición";
+      },unavailable,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+    }catch(error){
+      unavailable(error);
+    }
+  }
+
+  function centerPruningLocation(){
+    const location = state.pruningLocation;
+    if(location?.marker) location.map.panTo(location.marker.getLatLng());
   }
 
   function setupPruningMap(){
@@ -2735,16 +2866,11 @@
       if(!map) return;
       const parcel = L.geoJSON(editor.parcel, {style:parcelStyle(true), interactive:false}).addTo(map);
       editor.layers = L.layerGroup().addTo(map);
-      map.on("click", ({latlng}) => {
-        if(!editor.draft) return;
-        const point = [latlng.lng, latlng.lat];
-        if(editor.draft.some(vertex=>sameMapPoint(vertex,point))) return;
-        editor.draft.push(point);
-        updatePruningEditor();
-      });
+      map.on("click", ({latlng}) => markPruningPoint([latlng.lng,latlng.lat]));
       const bounds = parcel.getBounds();
       if(bounds.isValid()) stabilizeMap(map, bounds, [32,32]);
       updatePruningEditor();
+      startPruningLocation();
     });
   }
 
@@ -2781,26 +2907,30 @@
       opposite(crossMapPoints(c,d,a),crossMapPoints(c,d,b));
   }
 
-  function validPruningSegment(points, geometry){
-    if(points.length<2 || !points.every(isMapCoordinate) || points.every(point=>sameMapPoint(point,points[0]))) return false;
+  function pruningParcelBoundaries(geometry){
     const polygons = geometry.type==="MultiPolygon" ? geometry.coordinates : [geometry.coordinates];
-    return polygons.some(rings=>{
-      const [boundary,...holes] = rings.map(polygonEdges);
-      if(!boundary?.length) return false;
-      const inside = point=>pointInRing(point,boundary)>=0 && holes.every(hole=>pointInRing(point,hole)<=0);
+    return polygons.map(rings=>rings.map(polygonEdges));
+  }
+
+  function pointInPruningParcel(point,[boundary,...holes]){
+    return !!boundary?.length && pointInRing(point,boundary)>=0 && holes.every(hole=>pointInRing(point,hole)<=0);
+  }
+
+  function validPruningSegment(points, geometry){
+    if(points.length!==2 || !points.every(isMapCoordinate) || sameMapPoint(points[0],points[1])) return false;
+    const [a,b] = points;
+    return pruningParcelBoundaries(geometry).some(rings=>{
+      const inside = point=>pointInPruningParcel(point,rings);
       if(!points.every(inside)) return false;
-      const borders = [boundary,...holes].flat();
-      return points.slice(1).every((b,index)=>{
-        const a = points[index];
-        if(borders.some(border=>polygonEdgesCross([a,b],border))) return false;
-        // Check every interval when the line touches a boundary vertex or follows a boundary edge.
-        const axis = Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1]) ? 0 : 1;
-        const cuts = [a,b,...borders.map(([vertex])=>vertex).filter(vertex=>pointOnMapSegment(vertex,a,b))]
-          .sort((p,q)=>p[axis]-q[axis]);
-        return cuts.slice(1).every((end,i)=>{
-          const start = cuts[i];
-          return inside([(start[0]+end[0])/2,(start[1]+end[1])/2]);
-        });
+      const borders = rings.flat();
+      if(borders.some(border=>polygonEdgesCross([a,b],border))) return false;
+      // Comprobar cada intervalo cuando la línea pasa por un vértice del perímetro.
+      const axis = Math.abs(b[0]-a[0])>=Math.abs(b[1]-a[1]) ? 0 : 1;
+      const cuts = [a,b,...borders.map(([vertex])=>vertex).filter(vertex=>pointOnMapSegment(vertex,a,b))]
+        .sort((p,q)=>p[axis]-q[axis]);
+      return cuts.slice(1).every((end,i)=>{
+        const start = cuts[i];
+        return inside([(start[0]+end[0])/2,(start[1]+end[1])/2]);
       });
     });
   }
@@ -2810,98 +2940,177 @@
     if(!editor) return;
     const segments = pruningSegments(state.work);
     const zones = pruningZones(state.work);
-    const drawing = Array.isArray(editor.draft);
-    $("pruningInstructions").textContent = drawing
-      ? "Toca el inicio, los giros y el final del tramo."
-      : `${pruningSummary(state.work)} · toca una línea para seleccionarla.`;
-    $("pruningSavedActions").classList.toggle("hidden", drawing);
-    $("pruningDrawingActions").classList.toggle("hidden", !drawing);
-    $("removePruningSegment").disabled = editor.selected === null;
-    $("undoPruningPoint").disabled = !editor.draft?.length;
-    $("savePruningSegment").disabled = !drawing || editor.draft.length < 2;
-    $("finishPruningWork").disabled = drawing || !(segments.length || zones.length);
+    $("pruningInstructions").textContent = state.savingPruning ? "Guardando la ficha de poda…"
+      : editor.selecting ? "Toca el tramo que quieres quitar."
+      : editor.start ? "Toca el fin de esta parra."
+      : `${segments.length} ${segments.length===1 ? "tramo guardado" : "tramos guardados"} · toca el comienzo de una parra.`;
+    $("pruningMarkActions").classList.toggle("hidden",editor.selecting);
+    $("pruningSelectActions").classList.toggle("hidden",!editor.selecting);
+    $("undoPruningPoint").disabled = state.savingPruning || !editor.start;
+    $("selectPruningSegment").disabled = state.savingPruning || !!editor.start || !segments.length;
+    $("removePruningSegment").disabled = state.savingPruning || editor.selected === null;
+    $("savePruningProgress").disabled = state.savingPruning || !!editor.start || editor.selecting;
+    $("finishPruningWork").disabled = $("savePruningProgress").disabled || !(segments.length || zones.length);
     if(!editor.layers) return;
     editor.layers.clearLayers();
     zones.forEach(zone=>{
       L.geoJSON(zone,{style:{color:"#b27325",weight:2,fillOpacity:.20},interactive:false}).addTo(editor.layers);
     });
     segments.forEach((segment,index)=>{
+      const currentDay = segment.properties?.date === editor.context.date;
       const selected = editor.selected === index;
-      L.geoJSON(segment,{style:{color:selected?"#fff1a3":"#f4bc4d",weight:selected?5:3},interactive:!drawing})
+      const color = selected ? "#fff1a3" : currentDay ? "#f4bc4d" : "#ced4da";
+      L.geoJSON(segment,{style:{color,weight:selected?5:3},interactive:editor.selecting})
         .bindTooltip(`Tramo ${index+1}`)
         .on("click",event=>{
           L.DomEvent.stopPropagation(event);
+          if(!editor.selecting) return;
           editor.selected = index;
           updatePruningEditor();
         }).addTo(editor.layers);
+      if(currentDay && !editor.selecting){
+        const points = segment.geometry.coordinates;
+        drawPruningEndpoint(points[0],"#2d855c","Comienzo",editor.layers);
+        drawPruningEndpoint(points.at(-1),"#f4bc4d","Fin",editor.layers);
+      }
     });
-    if(drawing){
-      const vertices = editor.draft.map(([lng,lat])=>[lat,lng]);
-      if(vertices.length>=2) L.polyline(vertices,{color:"#f4bc4d",weight:3,dashArray:"5 4",interactive:false}).addTo(editor.layers);
-      vertices.forEach(vertex=>L.circleMarker(vertex,{radius:4,color:"#f4bc4d",fillOpacity:1,interactive:false}).addTo(editor.layers));
-    }
+    if(editor.start) drawPruningEndpoint(editor.start,"#2d855c","Comienzo",editor.layers);
+  }
+
+  function drawPruningEndpoint([lng,lat],color,label,layer){
+    L.circleMarker([lat,lng],{radius:4,color:"#fff",weight:1,fillColor:color,fillOpacity:1,interactive:false})
+      .bindTooltip(label).addTo(layer);
   }
 
   function storePruningSegments(segments){
     const previous = state.work.pruningSegments;
     state.work.pruningSegments = segments;
-    if(storage.set(LS.active,state.work)) return true;
+    if(saveActivePruningWork(state.work)) return true;
     if(previous === undefined) delete state.work.pruningSegments;
     else state.work.pruningSegments = previous;
-    toast("No se pudo guardar el tramo de poda en el dispositivo. El cambio sigue pendiente.");
+    toast("No se pudo guardar el tramo de poda. Comprueba el almacenamiento y vuelve a intentarlo.");
     return false;
   }
 
-  function savePruningSegment(){
+  function markPruningPoint(point){
     const editor = state.pruningEditor;
-    if(!editor?.draft || state.work?.id !== editor.workId) return;
-    if(!validPruningSegment(editor.draft, editor.parcel.geometry)){
-      return toast("Marca al menos dos puntos distintos. El tramo debe quedar dentro de la parcela.");
+    if(!editor || editor.selecting || state.savingPruning || state.work?.id !== editor.workId || !isMapCoordinate(point)) return;
+    if(!editor.start){
+      const inside = pruningParcelBoundaries(editor.parcel.geometry).some(rings=>pointInPruningParcel(point,rings));
+      if(!inside) return toast("Marca el comienzo dentro de la parcela.");
+      editor.start = point;
+      updatePruningEditor();
+      return;
     }
-    const segment = {type:"Feature",properties:{},geometry:{type:"LineString",coordinates:editor.draft}};
-    const segments = [...pruningSegments(state.work),segment];
-    if(!storePruningSegments(segments)) return;
-    editor.draft = null;
-    editor.selected = segments.length-1;
+    const points = [editor.start,point];
+    if(!validPruningSegment(points,editor.parcel.geometry)){
+      return toast("El fin debe ser distinto del comienzo y el tramo debe quedar dentro de la parcela.");
+    }
+    const segment = {type:"Feature",properties:{...editor.context,markedAt:Date.now()},geometry:{type:"LineString",coordinates:points}};
+    if(!storePruningSegments([...(state.work.pruningSegments || []),segment])) return;
+    editor.start = null;
     updatePruningEditor();
   }
 
   function removePruningSegment(){
     const editor = state.pruningEditor;
-    if(!editor || editor.selected===null || state.work?.id!==editor.workId) return;
-    if(!confirm("¿Quitar el tramo de poda seleccionado?")) return;
-    if(!storePruningSegments(pruningSegments(state.work).filter((segment,index)=>index!==editor.selected))) return;
+    const work = state.work;
+    if(!editor?.selecting || editor.selected===null || work?.id!==editor.workId || state.savingPruning) return;
+    const segment = pruningSegments(work)[editor.selected];
+    if(!segment || !confirm("¿Quitar el tramo de poda seleccionado?")) return;
+    if(!storePruningSegments(work.pruningSegments.filter(item=>item!==segment))) return;
     editor.selected = null;
+    editor.selecting = false;
     updatePruningEditor();
+  }
+
+  function leavePruningEditor(){
+    stopPruningLocation();
+    state.pruningEditor = null;
+    destroyMap("pruning","mapPruning");
   }
 
   function closePruningEditor(){
     const editor = state.pruningEditor;
-    if(!editor) return;
-    if(editor.draft?.length && !confirm("¿Volver y descartar el tramo que estás dibujando?")) return;
-    state.pruningEditor = null;
-    destroyMap("pruning","mapPruning");
+    if(!editor || state.savingPruning) return;
+    if(editor.start && !confirm("¿Volver y descartar este punto de comienzo?")) return;
+    leavePruningEditor();
     show(editor.returnTo);
   }
 
-  function finishPruningWork(){
+  function returnToPruningParcels(work){
+    if(state.selectedParcels.length>1){
+      const parcel = state.selectedParcels.find(feature=>workMatchesParcel(work,feature,state.activeLayerSetId));
+      if(parcel) setCurrentParcel(parcel);
+      show("screen-work-type");
+    }else{
+      show(isValidParcelsGeoJSON(state.parcelsGeoJSON) ? "screen-parcel-select" : "screen-map-load");
+    }
+  }
+
+  function closePruningVisit(work,at,completed,context){
+    const label = completed ? "Poda de la parcela terminada" : "Avance de poda guardado";
+    ensureTimeline(work);
+    work.events = work.events || [];
+    if(work.status==="trabajando") closeWorkSegment(at,label,work);
+    else markCurrentStopResumed(at,work);
+    if(completed){
+      addEvent("Fin de poda",label,"Marcado manual",null,at,work);
+      work.status = "finalizado";
+      work.finishedAt = at;
+      work.pruningClosure = {...context,at};
+      freezeFinalSnapshot(work);
+    }else{
+      if(work.startedAt){
+        const event = addEvent("Parada",label,"Poda de la parcela en curso",null,at,work);
+        event.pruningCheckpoint = true;
+        event.excludedFromStoppedTime = true;
+        const stop = {id:"stop-"+event.id,eventId:event.id,at,reason:label,stoppedMs:0,excludedFromStoppedTime:true};
+        work.stopLog.push(stop);
+        work.currentStopId = stop.id;
+      }
+      work.status = "pendiente";
+      work.pausedAt = at;
+      work.pruningCheckpointAt = at;
+    }
+    work.savedAt = new Date().toISOString();
+    return work;
+  }
+
+  async function savePruningParcel(completed){
     const editor = state.pruningEditor;
     const work = state.work;
-    if(!editor || work?.id!==editor.workId || editor.draft || !(pruningSegments(work).length || pruningZones(work).length) || workIsCompleted(work)) return;
-    const now = editor.finishAt;
-    if(work.status === "trabajando") closeWorkSegment(now,"Fin de poda");
-    addEvent("Fin de poda","Registro de poda confirmado","Marcado manual",null,now);
-    work.status = "finalizado";
-    work.finishedAt = now;
-    freezeFinalSnapshot(work);
-    prepareWorkScreenFromState();
-    const saved = saveFinishedWork();
-    state.reportWork = normalizeWorkForReport(work,"work");
-    state.reportOrigin = "work";
-    state.pruningEditor = null;
-    destroyMap("pruning","mapPruning");
-    show("screen-report");
-    if(!saved) toast("La poda finalizó. Si falla el historial, el trabajo se conserva para recuperación.");
+    if(state.savingPruning || !isPruningWork(work) || workIsCompleted(work) ||
+        (editor && (editor.workId!==work.id || editor.start || editor.selecting))) return;
+    if(completed && !(pruningSegments(work).length || pruningZones(work).length)) return;
+    if(completed && !confirm(`¿Confirmas que toda la parcela «${work.parcel}» está podada?`)) return;
+    state.savingPruning = true;
+    updatePruningEditor();
+    try{
+      const at = editor?.finishAt || Date.now();
+      const snapshot = closePruningVisit(clonePlain(work),at,completed,editor?.context || pruningContext(work,at));
+      if(!await archivePruningSnapshot(snapshot)){
+        toast("No se pudo archivar el avance. La ficha activa se conserva para volver a intentarlo.");
+        return;
+      }
+      const active = storage.get(LS.active,null);
+      if(active?.id === work.id) storage.remove(LS.active);
+      leavePruningEditor();
+      state.reportParentGroup = null;
+      if(completed){
+        state.work = snapshot;
+        state.reportWork = normalizeWorkForReport(snapshot,"work");
+        state.reportOrigin = "work";
+        show("screen-report");
+      }else{
+        state.work = null;
+        state.reportWork = null;
+        returnToPruningParcels(work);
+      }
+    }finally{
+      state.savingPruning = false;
+      updatePruningEditor();
+    }
   }
 
   function updateLiveStats(){
@@ -2968,12 +3177,30 @@
     };
   }
 
-  function saveHistorySnapshot(work){
-    const hist=getHistoryEntries().slice();
-    const snap=serializeWork(work);
-    const idx=hist.findIndex(w=>w.id===snap.id);
-    if(idx>=0)hist[idx]=snap;
+  function historyWithSnapshot(snap){
+    const hist = getHistoryEntries().slice();
+    const index = hist.findIndex(w=>w.id===snap.id);
+    if(index>=0) hist[index]=snap;
     else hist.unshift(snap);
+    return hist;
+  }
+
+  async function archivePruningSnapshot(work){
+    const snap = serializeWork(work);
+    const hist = historyWithSnapshot(snap);
+    if(storage.set(LS.history,hist)){
+      state.historyCache=hist;
+      queueArchiveWrite(snap);
+      return true;
+    }
+    if(!await queueArchiveWrite(snap)) return false;
+    state.historyCache=historyWithSnapshot(snap);
+    return true;
+  }
+
+  function saveHistorySnapshot(work){
+    const snap=serializeWork(work);
+    const hist=historyWithSnapshot(snap);
     state.historyCache=hist;
     queueArchiveWrite(snap);
     return storage.set(LS.history,hist);
@@ -3345,6 +3572,121 @@
     return [...daily.values()].sort((a,b)=>a.date.localeCompare(b.date));
   }
 
+  function pruningParcelKey(work){
+    if(work.parcelLayerSetId && work.parcelId != null) return JSON.stringify([work.parcelLayerSetId,work.parcelId]);
+    if(work.parcelFeature?.geometry) return JSON.stringify(work.parcelFeature.geometry);
+    return work.id;
+  }
+
+  function pruningTimeForDay(work,operator,start,end){
+    const clock = reportClock(work);
+    const segments = work.segments?.length ? work.segments : workTimeline(clonePlain(work),clock).segments;
+    let activeMs = 0;
+    let firstAt = Infinity;
+    for(const segment of segments){
+      if((segment.pruningOperator || work.day?.operator) !== operator) continue;
+      const startedAt = toMs(segment.startAt);
+      const endedAt = toMs(segment.endAt) || (work.status==="trabajando" ? clock : null);
+      if(!startedAt || !endedAt) continue;
+      const from = Math.max(start,startedAt);
+      const to = Math.min(end,endedAt);
+      if(to<=from) continue;
+      activeMs += to-from;
+      firstAt = Math.min(firstAt,from);
+    }
+    return {activeMs,firstAt};
+  }
+
+  function buildPruningDayReport(date,operator,works=pruningHistoryEntries()){
+    const report = {date,operator,parcels:[],activeMs:0,segmentCount:0};
+    const midnight = new Date(`${date}T00:00:00`);
+    const start = midnight.getTime();
+    if(!operator || !Number.isFinite(start) || localDayIso(midnight)!==date) return report;
+    midnight.setDate(midnight.getDate()+1);
+    const end = midnight.getTime();
+    const parcels = new Map();
+    for(const work of works){
+      if(!isPruningWork(work)) continue;
+      const segments = pruningSegments(work).filter(segment=>segment.properties?.date===date && segment.properties?.operator===operator);
+      const {activeMs,firstAt} = pruningTimeForDay(work,operator,start,end);
+      const finishedAt = inferFinishedAt(work);
+      const closure = work.pruningClosure;
+      const closedByOperator = closure?.date===date && closure.operator===operator && !!finishedAt;
+      if(!segments.length && !activeMs && !closedByOperator) continue;
+      const key = pruningParcelKey(work);
+      const parcel = parcels.get(key) || {
+        name:work.parcel || "Parcela sin nombre", parcelFeature:work.parcelFeature || null,
+        completed:false, pruningSegments:[], activeMs:0, firstAt:Infinity
+      };
+      parcel.activeMs += activeMs;
+      parcel.pruningSegments.push(...segments);
+      parcel.parcelFeature ||= work.parcelFeature || null;
+      parcel.completed ||= !!finishedAt && finishedAt < end;
+      parcel.firstAt = Math.min(parcel.firstAt,firstAt,toMs(closure?.at)||Infinity,...segments.map(segment=>toMs(segment.properties?.markedAt)||Infinity));
+      parcels.set(key,parcel);
+    }
+    report.parcels = [...parcels.values()].sort((a,b)=>a.firstAt-b.firstAt || a.name.localeCompare(b.name,"es"));
+    for(const parcel of report.parcels){
+      report.activeMs += parcel.activeMs;
+      report.segmentCount += parcel.pruningSegments.length;
+    }
+    return report;
+  }
+
+  function refreshPruningDayOperators(){
+    const select = $("pruningDayOperator");
+    const chosen = select.value;
+    const current = storage.get(LS.day,null)?.operator || state.dayConfig?.operator || "";
+    const operators = new Set(current ? [current] : []);
+    for(const work of pruningHistoryEntries()){
+      for(const name of pruningOperators(work)) operators.add(name);
+    }
+    select.replaceChildren();
+    const names = [...operators].sort((a,b)=>a.localeCompare(b,"es"));
+    for(const name of names.length ? names : [""]){
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name || "Sin operarios registrados";
+      select.append(option);
+    }
+    select.value = operators.has(chosen) ? chosen : current || names[0] || "";
+    renderPruningDayReport();
+  }
+
+  function openPruningDayReport(){
+    $("pruningDayDate").value ||= todayIso();
+    show("screen-pruning-day-report");
+    refreshPruningDayOperators();
+  }
+
+  function renderPruningDayReport(){
+    const report = buildPruningDayReport($("pruningDayDate").value,$("pruningDayOperator").value);
+    $("downloadPruningDayReport").disabled = !report.parcels.length;
+    $("pruningDaySummary").textContent = report.parcels.length
+      ? `${report.parcels.length} ${report.parcels.length===1 ? "parcela" : "parcelas"} · ${report.segmentCount} ${report.segmentCount===1 ? "tramo" : "tramos"} · ${fmtTime(report.activeMs)} de trabajo`
+      : "No hay poda registrada para esta fecha y operario.";
+    $("pruningDayParcels").innerHTML = report.parcels.map(parcel=>`
+      <article class="v984-day-parcel">
+        <h2>${escapeHtml(parcel.name)}</h2>
+        <p>${parcel.completed ? "Terminada" : "En curso"} · ${parcel.pruningSegments.length} ${parcel.pruningSegments.length===1 ? "tramo" : "tramos"} · ${fmtTime(parcel.activeMs)}</p>
+        ${routeSvgForPrint({...parcel,type:"Poda"})}
+      </article>`).join("");
+  }
+
+  function exportPruningDayReport(){
+    const report = buildPruningDayReport($("pruningDayDate").value,$("pruningDayOperator").value);
+    if(!report.parcels.length) return;
+    if(!window.PAZO_BAION_PDF) return toast("El generador de PDF no está disponible.");
+    try{
+      const blob = window.PAZO_BAION_PDF.createDocument({pruningDay:report});
+      const filename = `PAZO_BAION_PODA_${report.date}_${safeFileNamePart(report.operator)}.pdf`;
+      downloadBlob(filename,blob,"application/pdf");
+    }catch(err){
+      console.error("No se pudo generar el informe diario de poda",err);
+      toast("No se pudo generar el PDF diario de poda. Vuelve a intentarlo.");
+    }
+  }
+
   function dateTimeLabelIfAvailable(x){ return x ? dateTimeLabelFromMs(x) : "—"; }
 
   function reportAverageSpeed(w){
@@ -3395,6 +3737,10 @@
       $("reportStatusChip").style.color = completed ? "#2f7d44" : "#8b520e";
       const pendingActions = $("pendingWorkActions");
       if(pendingActions)pendingActions.classList.toggle('hidden',completed||!!w.isTreatmentGroup);
+      const pruning = isPruningWork(w);
+      $("resumePendingWorkBtn").textContent = pruning ? "Retomar poda" : "Retomar / continuar";
+      $("finishPendingWorkBtn").textContent = pruning ? "Abrir mapa de poda" : "Terminar trabajo";
+      $("nextPruningParcelBtn").classList.toggle("hidden", !(pruning && completed && state.reportOrigin==="work"));
       const finalActions = $("reportFinalActions");
       if(finalActions) finalActions.classList.remove("hidden");
       $("printFinalReportBtn").textContent = completed ? "Generar / guardar PDF" : "PDF provisional";
@@ -3638,7 +3984,7 @@
 
         <div class="report-section-title">Jornada</div>
         <div class="report-list">
-          <div><span>Operario</span><strong>${escapeHtml(day.operator || "—")}</strong></div>
+          <div><span>${isPruningWork(w) ? "Operarios" : "Operario"}</span><strong>${escapeHtml((isPruningWork(w) ? pruningOperators(w).join(", ") : day.operator) || "—")}</strong></div>
           ${isPruningWork(w) ? "" : `<div><span>Tractor</span><strong>${escapeHtml(day.tractor || "—")}</strong></div>
           <div><span>Atomizador / cisterna</span><strong>${escapeHtml(day.sprayer || "—")}</strong></div>`}
           <div><span>Observaciones de jornada</span><strong>${escapeHtml(observations || "Sin observaciones registradas.")}</strong></div>
@@ -4105,7 +4451,7 @@
         <h2>Cabecera</h2><div class="grid">${reportRowsHtml([["Parcela", work.parcel || "—"],["Trabajo", work.type || "—"],["Fecha", dateLabelDMY(reportDateSource(work))],["Estado", workIsCompleted(work) ? "Finalizado" : "Pendiente de terminar"],["Inicio", timeLabelHMS(startMs)],["Fin", timeLabelHMS(endMs)]])}</div>
         <h2>Tiempos y recorrido</h2><div class="grid">${reportRowsHtml([["Tiempo activo", fmtTime(reportEffectiveActiveMs(work))],["Tiempo parado", fmtTime(reportStoppedMs(work))],["Tiempo total/transcurrido", fmtTime(reportTotalMs(work))],["Distancia", ((work.distanceM || 0)/1000).toFixed(2).replace(".", ",") + " km"],["Recargas", String(work.refills || 0)],["Paradas", String(stopCount)],["Incidencias", String((work.incidents || []).length)],["Velocidad GPS media", avgSpeed === null ? "—" : avgSpeed.toFixed(1).replace(".", ",") + " km/h"]])}</div>
         ${isPruningWork(work)
-          ? `<h2>Marcado de poda</h2><div class="grid">${reportRowsHtml([["Registro", pruningSummary(work)],["Operario",work.day?.operator || "—"]])}</div>`
+          ? `<h2>Marcado de poda</h2><div class="grid">${reportRowsHtml([["Registro", pruningSummary(work)],["Operarios",pruningOperators(work).join(", ") || "—"]])}</div>`
           : `<h2>GPS y ruta</h2><div class="grid">${reportRowsHtml([["Ruta GPS disponible", routeAvailable(work) ? "Sí" : "No"],["Precisión media GPS", averageGpsAccuracyText(work)],["Puntos originales", String((work.pointsOriginal || []).length)],["Ruta depurada", String((work.pointsClean || []).length)]])}</div>`}
         ${routeSvg || ""}
         ${windSection}
@@ -4155,6 +4501,7 @@
       const work = normalizeWorkForReport(w, "pdf");
       const blob = window.PAZO_BAION_PDF.createDocument({
         work:isPruningWork(work) ? {...work,pruningZones:pruningZones(work),pruningSegments:pruningSegments(work)} : work,
+        pruningOperators:isPruningWork(work) ? pruningOperators(work) : [],
         completed:workIsCompleted(work),
         activeMs:reportEffectiveActiveMs(work),
         stoppedMs:reportStoppedMs(work),
@@ -4258,6 +4605,27 @@
     } else {
       toast("Existe un trabajo recuperable pendiente de asegurar en el historial. No se ha borrado del almacenamiento activo.");
     }
+  }
+
+  async function recoverPruningWorkToHistory(){
+    const active = storage.get(LS.active,null);
+    if(!isPruningWork(active) || !active.id) return;
+    const archived = getHistoryEntries().find(w=>w.id===active.id);
+    if(workIsCompleted(archived) || (active.savedAt && (archived?.savedAt || "") > active.savedAt)){
+      storage.remove(LS.active);
+      return;
+    }
+    if(!workIsCompleted(active)){
+      const at = Math.max(toMs(active.startedAt)||0,lastKnownWorkAt(active)||Date.now());
+      closePruningVisit(active,at,false,pruningContext(active,at));
+    }
+    if(!await archivePruningSnapshot(active)){
+      toast("La poda recuperable sigue guardada como ficha activa. Retómala antes de empezar otra tarea.");
+      return;
+    }
+    if(storage.get(LS.active,null)?.id===active.id) storage.remove(LS.active);
+    if(document.querySelector("#screen-history.active")) renderHistory();
+    if(document.querySelector("#screen-work-type.active")) renderWorkTypeSelection();
   }
 
   function historicWorkTimestamp(w){
@@ -4567,7 +4935,7 @@
       storage.set(LS.incidentLayer, savedIncidents);
       renderIncidentLayerStatus(savedIncidents);
     }
-    recoverActiveWorkToHistory();
+    if(!isPruningWork(storage.get(LS.active,null))) recoverActiveWorkToHistory();
   }
 
   function goAfterMapReady(){
@@ -4579,6 +4947,12 @@
   }
 
   function bind(){
+    $("openPruningDayReport").onclick = openPruningDayReport;
+    $("backFromPruningDayReport").onclick = () => show("screen-history");
+    $("pruningDayDate").onchange = renderPruningDayReport;
+    $("pruningDayOperator").onchange = renderPruningDayReport;
+    $("downloadPruningDayReport").onclick = exportPruningDayReport;
+    $("nextPruningParcelBtn").onclick = () => returnToPruningParcels(state.work);
     qsa("[data-go]").forEach(b => b.addEventListener("click", () => show(b.dataset.go)));
     qsa("[data-add-list]").forEach(b => b.addEventListener("click", () => addToList(b.dataset.addList)));
     qsa("[data-edit-list]").forEach(b => b.addEventListener("click", () => editListItem(b.dataset.editList)));
@@ -4708,10 +5082,11 @@
       if(state.reportOrigin === "history") {
         if(state.reportParentGroup){const parent=state.reportParentGroup;state.reportParentGroup=null;openReportForWork(parent,'history');}
         else show("screen-history");
-      } else if(workIsCompleted(state.work) && state.selectedParcels.length) show("screen-work-type");
+      } else if(isPruningWork(state.work) && workIsCompleted(state.work)) returnToPruningParcels(state.work);
+      else if(workIsCompleted(state.work) && state.selectedParcels.length) show("screen-work-type");
       else show("screen-work");
     };
-    if($("resumePendingWorkBtn")) $("resumePendingWorkBtn").onclick = resumePendingWorkFromReport;
+    if($("resumePendingWorkBtn")) $("resumePendingWorkBtn").onclick = () => resumePendingWorkFromReport();
     if($("finishPendingWorkBtn")) $("finishPendingWorkBtn").onclick = finishPendingWorkFromReport;
     $("fitAllParcels").onclick = () => {
       const b = getBoundsFromGeoJSON(state.parcelsGeoJSON);
@@ -4732,13 +5107,26 @@
     $("incidentWorkBtn").onclick = () => openIncident("work");
     $("viewDraftReportBtn").onclick = () => { state.reportWork = null; state.reportOrigin = "work"; state.reportHistoryIndex = null; state.reportParentGroup=null; resetReportTabs(); show("screen-report"); };
     $("backFromWork").onclick = () => {
+      const work = state.work;
+      if(isPruningWork(work) && !workIsCompleted(work)){
+        if(work.startedAt || pruningSegments(work).length || pruningZones(work).length){
+          if(confirm("¿Guardar el avance de poda y volver a las parcelas?")) savePruningParcel(false);
+        }else{
+          if(storage.get(LS.active,null)?.id===work.id) storage.remove(LS.active);
+          state.work = null;
+          returnToPruningParcels(work);
+        }
+        return;
+      }
       if(state.work && state.work.status !== "finalizado"){
         if(!confirm("Hay un trabajo en curso. ¿Volver sin finalizar?")) return;
         upsertPendingWorkInHistory();
       }
       show(state.selectedParcels.length ? "screen-work-type" : "screen-parcel-detail");
     };
+    $("centerPruningLocation").onclick = centerPruningLocation;
     $("centerTractor").onclick = () => {
+      if(isPruningWork(state.work)) return centerPruningLocation();
       state.trackingFollow = true;
       if(state.currentPos && state.maps.work) state.maps.work.setView([state.currentPos.lat, state.currentPos.lng], 19);
       else centerWorkMapOnTractor(true);
@@ -4746,21 +5134,22 @@
     $("windReadingBtn").onclick = () => recordAutomaticWind("actualizacion_usuario", {notify:true});
 
     $("backFromPruningZones").onclick = closePruningEditor;
-    $("startPruningSegment").onclick = () => {
-      state.pruningEditor.draft = [];
-      updatePruningEditor();
-    };
     $("undoPruningPoint").onclick = () => {
-      state.pruningEditor.draft.pop();
+      state.pruningEditor.start = null;
       updatePruningEditor();
     };
-    $("cancelPruningSegment").onclick = () => {
-      state.pruningEditor.draft = null;
+    $("selectPruningSegment").onclick = () => {
+      state.pruningEditor.selecting = true;
       updatePruningEditor();
     };
-    $("savePruningSegment").onclick = savePruningSegment;
+    $("cancelPruningSelection").onclick = () => {
+      state.pruningEditor.selecting = false;
+      state.pruningEditor.selected = null;
+      updatePruningEditor();
+    };
     $("removePruningSegment").onclick = removePruningSegment;
-    $("finishPruningWork").onclick = finishPruningWork;
+    $("savePruningProgress").onclick = () => savePruningParcel(false);
+    $("finishPruningWork").onclick = () => savePruningParcel(true);
     $("finishPausedPruning").onclick = () => openPruningEditor("screen-work");
 
     $("cancelStopModal").onclick = closeStopModal;
@@ -4806,15 +5195,27 @@
     window.addEventListener("resize", setAppHeight);
     window.addEventListener("orientationchange", () => setTimeout(setAppHeight, 250));
     document.addEventListener("visibilitychange", () => {
-      if(document.hidden) suspendCurrentWork("Interrupción del navegador");
-      else { state.lastHeartbeatAt = Date.now(); if(state.work) updateLiveStats(); }
+      if(document.hidden){
+        stopPruningLocation();
+        suspendCurrentWork("Interrupción del navegador");
+      }else{
+        state.lastHeartbeatAt = Date.now();
+        if(state.work) updateLiveStats();
+        startPruningLocation();
+      }
     });
-    window.addEventListener("pagehide", () => suspendCurrentWork("Interrupción del navegador"));
+    window.addEventListener("pagehide", () => {
+      stopPruningLocation();
+      suspendCurrentWork("Interrupción del navegador");
+    });
+    window.addEventListener("pageshow", startPruningLocation);
     initLists();
     loadSavedDayConfig();
     bind();
     restoreIfPossible();
-    initWorkArchive();
+    state.archiveReady = initWorkArchive().then(recoverPruningWorkToHistory).catch(err=>{
+      console.warn("No se pudo recuperar la ficha de poda",err);
+    });
 
     setTimeout(async () => {
       await initSavedLayerSets();

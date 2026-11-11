@@ -20,7 +20,7 @@
         <div class="splash-name">PAZO BAION</div>
         <div class="splash-divider" aria-hidden="true"><span></span>●<span></span></div>
         <div class="splash-subtitle">Control GPS de viñedos</div>
-        <div class="splash-version">Beta v9.8.3</div>
+        <div class="splash-version">Beta v9.8.4</div>
       </div>
       <div class="splash-landscape" role="img" aria-label="Vista ornamental de un viñedo"></div>
     </section>
@@ -264,7 +264,7 @@
     <section id="screen-treatment-setup" class="screen">
       <header class="topbar">
         <button id="backFromTreatmentSetup" class="back-btn" type="button" aria-label="Volver a tipo de trabajo">‹</button>
-        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8.3</div></div>
+        <div><div class="brand-title">Tratamiento fitosanitario</div><div class="brand-subtitle">Campaña y número · Beta v9.8.4</div></div>
       </header>
       <main class="panel treatment-panel">
         <h1>Identificar tratamiento</h1>
@@ -365,6 +365,7 @@
 
         <div class="map-wrap work-map clean-map">
           <div id="mapWork" class="map"></div>
+          <div id="pruningWorkLocationStatus" class="pruning-location-status hidden" role="status"></div>
           <div class="map-tools work-map-tools">
             <button id="centerTractor" class="round-btn" title="Centrar posición"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5"/><path d="M15 4h5v5"/><path d="M20 15v5h-5"/><path d="M9 20H4v-5"/></svg></button>
           </div>
@@ -391,19 +392,25 @@
       </header>
       <div class="map-wrap">
         <div id="mapPruning" class="map"></div>
+        <div id="pruningEditorLocationStatus" class="pruning-location-status hidden" role="status"></div>
+        <div class="map-tools">
+          <button id="centerPruningLocation" class="round-btn" type="button" aria-label="Centrar mi posición" title="Centrar mi posición" disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
       </div>
       <footer class="fixed-footer v982-pruning-footer">
         <p id="pruningInstructions" class="footer-info" aria-live="polite"></p>
-        <div id="pruningSavedActions" class="button-row">
-          <button id="startPruningSegment" class="btn primary" type="button">Dibujar tramo</button>
+        <div id="pruningMarkActions" class="button-row">
+          <button id="undoPruningPoint" class="btn ghost" type="button" disabled>Borrar comienzo</button>
+          <button id="selectPruningSegment" class="btn ghost" type="button" disabled>Elegir tramo para quitar</button>
+        </div>
+        <div id="pruningSelectActions" class="button-row hidden">
+          <button id="cancelPruningSelection" class="btn ghost" type="button">Volver a marcar</button>
           <button id="removePruningSegment" class="btn ghost" type="button" disabled>Quitar tramo</button>
         </div>
-        <div id="pruningDrawingActions" class="button-row hidden">
-          <button id="undoPruningPoint" class="btn ghost" type="button">Deshacer</button>
-          <button id="cancelPruningSegment" class="btn ghost" type="button">Cancelar</button>
-          <button id="savePruningSegment" class="btn primary" type="button">Guardar tramo</button>
+        <div class="button-row v984-pruning-finish">
+          <button id="savePruningProgress" class="btn ghost" type="button">Guardar avance</button>
+          <button id="finishPruningWork" class="btn primary" type="button" disabled>Finalizar poda de la parcela</button>
         </div>
-        <button id="finishPruningWork" class="btn primary full" type="button" disabled>Finalizar poda</button>
       </footer>
     </section>
 
@@ -436,6 +443,7 @@
           <button id="printFinalReportBtn" class="btn ghost report-action-btn">Generar / guardar PDF</button>
         </div>
 
+        <button id="nextPruningParcelBtn" class="btn ghost full v984-next-parcel hidden" type="button">Elegir otra parcela</button>
         <details id="reportRecordActions" class="v98-record-actions hidden" aria-label="Acciones de esta ficha">
           <summary>Acciones de esta ficha <span aria-hidden="true">⌄</span></summary>
           <div class="v98-record-buttons">
@@ -482,7 +490,24 @@
           <button class="history-filter" data-history-filter="completed">Completados</button>
         </div>
         <div class="v981-history-title"><h2>Trabajos</h2><button id="openHistoryHelp" class="v981-help-button" type="button" aria-label="Ayuda sobre el historial" title="Consultar ayuda del historial">?</button></div>
+        <button id="openPruningDayReport" class="btn ghost full v984-day-report-entry" type="button">Informe diario de poda</button>
         <div id="historyList" class="history-list" aria-live="polite"></div>
+      </main>
+    </section>
+
+    <section id="screen-pruning-day-report" class="screen">
+      <header class="topbar">
+        <button id="backFromPruningDayReport" class="back-btn" type="button" aria-label="Volver al historial"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
+        <div><div class="brand-title">Informe diario de poda</div><div class="brand-subtitle">Trabajo por fecha y operario</div></div>
+      </header>
+      <main class="panel v984-day-report">
+        <div class="v984-day-filters">
+          <label for="pruningDayDate">Jornada<input id="pruningDayDate" type="date"></label>
+          <label for="pruningDayOperator">Operario<select id="pruningDayOperator"></select></label>
+        </div>
+        <div id="pruningDaySummary" class="footer-info" role="status"></div>
+        <button id="downloadPruningDayReport" class="btn primary full" type="button" disabled>Generar / guardar PDF</button>
+        <div id="pruningDayParcels" class="v984-day-parcels" aria-live="polite"></div>
       </main>
     </section>
 
@@ -490,7 +515,7 @@
     <section id="screen-data-management" class="screen">
       <header class="topbar">
         <button id="backFromDataManagement" class="back-btn" type="button" aria-label="Volver al historial"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6l-6 6 6 6"/></svg></button>
-        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8.3</div></div>
+        <div><div class="brand-title">Gestión de datos</div><div class="brand-subtitle">Copias de seguridad · Beta v9.8.4</div></div>
       </header>
       <main class="panel v98-management-panel">
         <div class="v98-management-intro"><strong>Datos guardados en este dispositivo</strong><p>Estas operaciones afectan a varios trabajos, no a una ficha concreta. Conserva una copia JSON fuera de Safari antes de borrar o cambiar de teléfono.</p></div>

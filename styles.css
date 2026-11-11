@@ -1455,7 +1455,6 @@ input:focus,select:focus,textarea:focus{
 .v982-pruning-work .metric-card:has(#distanceKm),
 .v982-pruning-work .metric-card:has(#liveAccuracy),
 .v982-pruning-work .metric-card:has(#refillCount),
-.v982-pruning-work #centerTractor,
 .v982-pruning-report .report-cards div:has(#reportDistance),
 .v982-pruning-report .report-cards div:has(#reportRefills),
 .v982-pruning-report .report-cards div:has(#reportWind){display:none!important}
@@ -1468,4 +1467,28 @@ input:focus,select:focus,textarea:focus{
   border:2px solid #37f0f2;
   color:#fff;
   font-size:13px;
+}
+
+/* Marcado y partes diarios de poda. */
+#screen-pruning-zones .footer-info{white-space:normal}
+.v984-pruning-finish .btn{min-height:45px;line-height:1.2}
+#screen-pruning-zones #finishPruningWork{flex:1.35}
+.v984-day-report-entry,.v984-next-parcel{min-height:40px!important;flex:0 0 auto}
+.v984-day-report{gap:9px;overflow:hidden}
+.v984-day-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;flex:0 0 auto}
+.v984-day-filters label{display:grid;gap:4px;min-width:0;font-size:12px;font-weight:800}
+.v984-day-filters input,.v984-day-filters select{width:100%;min-width:0;min-height:41px;padding:6px 7px}
+.v984-day-report #downloadPruningDayReport{min-height:44px;flex:0 0 auto}
+.v984-day-parcels{display:grid;gap:8px;align-content:start;overflow:auto;min-height:0}
+.v984-day-parcel{padding:8px;border:1px solid var(--border);border-radius:14px;background:#fffdf6}
+.v984-day-parcel h2{font:700 17px Georgia,serif;margin:0}
+.v984-day-parcel p{margin:3px 0 6px;font-size:12px;color:var(--muted)}
+.v984-day-parcel svg{display:block;width:100%;height:auto}
+.v984-day-parcel .print-map-title,.v984-day-parcel .print-map-legend{font-size:10px;color:var(--muted)}
+
+
+.pruning-location-status{
+  position:absolute;left:10px;top:10px;z-index:1100;max-width:calc(100% - 76px);
+  padding:5px 8px;border-radius:10px;background:rgba(255,253,247,.94);
+  color:var(--green);font-size:12px;font-weight:700;pointer-events:none
 }
